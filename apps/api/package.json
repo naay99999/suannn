@@ -1,19 +1,29 @@
 {
   "name": "api",
   "version": "1.0.50",
+  "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "auth:generate": "bun --env-file=.env.local ./node_modules/.bin/auth generate --config src/plugins/auth/cli.ts --output src/database/schema/auth.ts --yes",
+    "db:generate": "bun --env-file=.env.local ./node_modules/.bin/drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "bun --env-file=.env.local ./node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test",
     "test": "bun test"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.5",
     "@elysiajs/cors": "^1.4.0",
-    "elysia": "1.4.30"
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "^0.45.3",
+    "elysia": "1.4.30",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@workspace/config": "workspace:*",
+    "auth": "^1.7.5",
     "bun-types": "latest",
+    "drizzle-kit": "^0.31.11",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2"
   },

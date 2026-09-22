@@ -133,3 +133,17 @@
     cursor: pointer;
   }
 }
+
+html[data-theme-transition='active']::view-transition-old(root),
+html[data-theme-transition='active']::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-theme-transition='active']::view-transition-new(root) {
+  clip-path: var(--theme-transition-clip-from);
+}
+
+html[data-theme-transition='active']::view-transition-group(root) {
+  animation-duration: var(--theme-transition-duration);
+}

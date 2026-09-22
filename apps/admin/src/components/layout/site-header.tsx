@@ -4,7 +4,7 @@ import { SidebarTrigger } from '@workspace/ui/components/sidebar'
 
 export function SiteHeader() {
   const { pathname } = useLocation()
-  const title = ({ '/dashboard': 'Dashboard', '/products': 'Products', '/orders': 'Orders', '/customers': 'Customers' } as Record<string, string>)[pathname] ?? 'Admin'
+  const title = ({ '/dashboard': 'Dashboard', '/products': 'Products', '/orders': 'Orders', '/customers': 'Customers', '/settings': 'Settings' } as Record<string, string>)[pathname] ?? 'Admin'
 
   return (
     <header className='flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)'>
