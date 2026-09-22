@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, isNotNull } from 'drizzle-orm'
 import type { createDatabase } from '../../database/client'
 import { session, twoFactor, user } from '../../database/schema'
 import type { StaffRole } from '../../plugins/auth/access-control'
@@ -101,8 +101,10 @@ export class StaffRepository implements StaffRepositoryContract {
 
   async resetMfa(actor: StaffActor, targetUserId: string) {
     await this.db.transaction(async (tx) => {
+      const owners = await this.lockActiveOwners(tx)
       const targetRole = await this.lockTargetRole(tx, targetUserId)
       this.assertActorMayTarget(actor, targetUserId, targetRole)
+      if (targetRole === 'owner' && owners.length <= 1) throw new Error('OWNER_INVARIANT')
       await tx.delete(twoFactor).where(eq(twoFactor.userId, targetUserId))
       await tx.delete(session).where(eq(session.userId, targetUserId))
       await tx.update(user).set({
@@ -138,6 +140,7 @@ export class StaffRepository implements StaffRepositoryContract {
       eq(user.accountType, 'staff'),
       eq(user.role, 'owner'),
       eq(user.banned, false),
+      isNotNull(user.staffActivatedAt),
     )).orderBy(asc(user.id)).for('update')
   }
 

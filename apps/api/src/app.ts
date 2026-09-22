@@ -14,6 +14,7 @@ import type { StaffMfaService } from './modules/staff-mfa/service'
 import type { StaffService } from './modules/staff/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
+import type { IdentityReservationLookup } from './plugins/auth'
 import { createCorsPlugin } from './plugins/cors'
 import { createErrorHandlingPlugin } from './plugins/error-handling'
 import { createRequestLoggingPlugin } from './plugins/request-logging'
@@ -109,6 +110,7 @@ export interface AppDependencies {
   staffInvitations: StaffInvitationService
   staffMfa: StaffMfaService
   staff: StaffService
+  identityReservations: IdentityReservationLookup
 }
 
 export async function createApp(config: AppConfig, dependencies: AppDependencies) {
@@ -146,7 +148,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createRequestContextPlugin(config))
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
-    .use(createAuthPlugin(dependencies.auth))
+    .use(createAuthPlugin(dependencies.auth, {
+      identityReservations: dependencies.identityReservations,
+    }))
     .use(createCustomerAuthModule(config, dependencies.customerSignup))
     .use(createStaffInvitationModule(config, dependencies.auth, dependencies.staffInvitations))
     .use(createStaffMfaModule(config, dependencies.auth, dependencies.staffMfa))

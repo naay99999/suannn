@@ -5,6 +5,13 @@ function responseStatus(status: number | string | undefined) {
   return typeof status === 'number' ? status : 200
 }
 
+export function requestLogPath(url: string) {
+  return new URL(url).pathname.replace(
+    /^(\/api\/v1\/auth\/reset-password\/)[^/]+$/,
+    '$1:token',
+  )
+}
+
 export function createRequestLoggingPlugin() {
   const requestStartedAt = new WeakMap<Request, number>()
 
@@ -19,7 +26,7 @@ export function createRequestLoggingPlugin() {
       logRequest({
         level: 'info',
         method: request.method,
-        path: new URL(request.url).pathname,
+        path: requestLogPath(request.url),
         status: responseStatus(set.status),
         durationMs,
         requestId: set.headers['x-request-id']?.toString(),

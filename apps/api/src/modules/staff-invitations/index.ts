@@ -19,9 +19,10 @@ export function createStaffInvitationModule(
       staffAuth: true,
       permission: { staff: ['read'] },
     })
-    .post('/', ({ body, user }) => service.create({
+    .post('/', ({ body, staff, user }) => service.create({
       ...body,
       inviterUserId: user.id,
+      inviterRole: staff.role,
     }), {
       browserMutation: 'admin',
       staffAuth: true,

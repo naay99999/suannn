@@ -52,6 +52,7 @@ const app = await createApp(config, {
     adminUrl: config.adminUrl,
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
+  identityReservations: claims,
 })
 
 app.listen({ hostname: config.host, port: config.port })

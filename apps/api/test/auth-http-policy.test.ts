@@ -3,6 +3,7 @@ import { Elysia } from 'elysia'
 import type { Auth } from '../src/plugins/auth/auth'
 import { createAuthPlugin } from '../src/plugins/auth'
 import { isAllowedAuthRequest } from '../src/plugins/auth/http-policy'
+import { requestLogPath } from '../src/plugins/request-logging'
 
 const base = 'http://localhost/api/v1/auth'
 
@@ -11,6 +12,11 @@ function allowed(method: string, path: string) {
 }
 
 describe('Better Auth HTTP policy', () => {
+  it('redacts password-reset tokens from request log paths', () => {
+    expect(requestLogPath('http://localhost/api/v1/auth/reset-password/raw-secret-token'))
+      .toBe('/api/v1/auth/reset-password/:token')
+  })
+
   it('allows only the pinned method/path pairs', () => {
     const routes = [
       ['GET', '/ok'],
@@ -162,6 +168,57 @@ describe('Better Auth HTTP policy', () => {
     }))
 
     expect(response.status).toBe(400)
+    expect(handled).toBe(0)
+  })
+
+  it('denies ordinary raw auth mutations to restricted staff sessions', async () => {
+    let handled = 0
+    const auth = {
+      handler: async () => {
+        handled += 1
+        return Response.json({ unsafe: true })
+      },
+      api: {
+        getSession: async () => ({
+          session: { id: 'restricted' },
+          user: { id: 'staff-1', accountType: 'staff' },
+        }),
+      },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth))
+    const response = await app.handle(new Request(`${base}/change-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'session=value' },
+      body: JSON.stringify({ currentPassword: 'old', newPassword: 'new' }),
+    }))
+
+    expect(response.status).toBe(403)
+    expect(handled).toBe(0)
+  })
+
+  it('denies staff password-change rotations that could extend the absolute deadline', async () => {
+    let handled = 0
+    const auth = {
+      handler: async () => {
+        handled += 1
+        return Response.json({ unsafe: true })
+      },
+      api: {
+        getSession: async () => ({
+          session: { id: 'active' },
+          user: { id: 'staff-1', accountType: 'staff' },
+          staff: { role: 'support', permissions: [] },
+        }),
+      },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth))
+    const response = await app.handle(new Request(`${base}/change-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: 'session=value' },
+      body: JSON.stringify({ currentPassword: 'old', newPassword: 'new' }),
+    }))
+
+    expect(response.status).toBe(403)
     expect(handled).toBe(0)
   })
 })

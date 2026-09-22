@@ -51,6 +51,7 @@ export class StaffService {
   }
 
   async resetMfa(actor: StaffActor, targetUserId: string) {
+    if (actor.id === targetUserId) throw new Error('SELF_MFA_RESET')
     await this.assertMayTarget(actor, targetUserId)
     await this.repository.resetMfa(actor, targetUserId)
   }

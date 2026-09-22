@@ -80,14 +80,21 @@ describe('Better Auth against the migrated database', () => {
         email: 'customer@example.com',
         password: 'correct horse battery staple',
       },
+      returnHeaders: true,
     })
     const [createdSession] = await database.db.select().from(session)
-      .where(eq(session.userId, signedIn.user.id))
+      .where(eq(session.userId, signedIn.response.user.id))
       .limit(1)
 
     expect(createdSession?.lastActivityAt).toBeInstanceOf(Date)
     expect(createdSession?.absoluteExpiresAt).toBeInstanceOf(Date)
     expect(createdSession!.absoluteExpiresAt!.getTime() - createdSession!.lastActivityAt!.getTime())
       .toBe(8 * 60 * 60 * 1000)
+
+    const current = await auth.api.getSession({
+      headers: new Headers({ cookie: signedIn.headers.get('set-cookie') ?? '' }),
+    })
+
+    expect(current?.staff).toMatchObject({ role: 'support' })
   })
 })

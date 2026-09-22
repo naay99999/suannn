@@ -45,6 +45,9 @@ export class StaffInvitationService {
 
   async create(command: CreateStaffInvitationCommand) {
     if (!isStaffRole(command.role)) throw new Error('INVALID_ROLE')
+    if (command.role === 'owner' && command.inviterUserId !== null && command.inviterRole !== 'owner') {
+      throw new Error('OWNER_REQUIRED')
+    }
 
     const created = await this.dependencies.claims.withEmailClaim(
       command.email,

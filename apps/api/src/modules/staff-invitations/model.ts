@@ -5,6 +5,7 @@ export interface CreateStaffInvitationCommand {
   email: string
   role: StaffRole
   inviterUserId: string | null
+  inviterRole?: StaffRole
 }
 
 export interface AcceptStaffInvitationCommand {

@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import type { createDatabase } from '../../database/client'
-import { identityEmailClaim, user } from '../../database/schema'
+import { identityEmailClaim, staffInvitation, user } from '../../database/schema'
 
 type Database = ReturnType<typeof createDatabase>['db']
 export type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -62,6 +62,22 @@ export class IdentityClaimRepository {
       .where(eq(identityEmailClaim.normalizedEmail, normalizedEmail))
       .limit(1)
 
-    return claim?.state ?? null
+    if (claim) return claim.state
+
+    const [identity] = await db.select({
+      accountType: user.accountType,
+      sourceInvitationId: user.sourceInvitationId,
+      invitationAcceptedAt: staffInvitation.acceptedAt,
+    }).from(user).leftJoin(
+      staffInvitation,
+      eq(user.sourceInvitationId, staffInvitation.id),
+    ).where(eq(user.email, normalizedEmail)).limit(1)
+
+    if (identity?.accountType === 'staff' && identity.sourceInvitationId
+      && !identity.invitationAcceptedAt) {
+      return 'pending_staff'
+    }
+
+    return identity?.accountType ?? null
   }
 }

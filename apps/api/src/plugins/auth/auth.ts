@@ -227,35 +227,43 @@ export function createAuth(
         },
       }),
       customSession(async ({ user, session }) => {
+        const [[persistedUser], [persistedSession]] = await Promise.all([
+          db.select({
+            accountType: schema.user.accountType,
+            role: schema.user.role,
+            banned: schema.user.banned,
+            staffActivatedAt: schema.user.staffActivatedAt,
+          }).from(schema.user).where(eq(schema.user.id, user.id)).limit(1),
+          db.select({
+            lastActivityAt: schema.session.lastActivityAt,
+            absoluteExpiresAt: schema.session.absoluteExpiresAt,
+          }).from(schema.session).where(eq(schema.session.id, session.id)).limit(1),
+        ])
         const extendedUser = user as typeof user & {
           accountType?: AccountType
           role?: Role
           banned?: boolean
           staffActivatedAt?: Date | null
         }
-        const extendedSession = session as typeof session & {
-          lastActivityAt?: Date | null
-          absoluteExpiresAt?: Date | null
-        }
         let staff: {
           role: Exclude<Role, 'customer'>
           permissions: readonly string[]
         } | undefined
 
-        if (extendedUser.accountType === 'staff') {
+        if (persistedUser?.accountType === 'staff') {
           const staffContext = {
             user: {
               id: user.id,
               accountType: 'staff',
-              role: extendedUser.role ?? 'customer',
+              role: (persistedUser.role ?? 'customer') as Role,
               emailVerified: user.emailVerified,
-              staffActivatedAt: extendedUser.staffActivatedAt ?? null,
-              banned: extendedUser.banned ?? false,
+              staffActivatedAt: persistedUser.staffActivatedAt ?? null,
+              banned: persistedUser.banned ?? false,
             },
             session: {
               id: session.id,
-              lastActivityAt: extendedSession.lastActivityAt ?? null,
-              absoluteExpiresAt: extendedSession.absoluteExpiresAt ?? null,
+              lastActivityAt: persistedSession?.lastActivityAt ?? null,
+              absoluteExpiresAt: persistedSession?.absoluteExpiresAt ?? null,
             },
           } satisfies StaffSessionContext
           const validation = validateStaffSession(staffContext)
@@ -287,7 +295,7 @@ export function createAuth(
 
               return rows.length === 1
             },
-          }, session.id, extendedSession.lastActivityAt!, new Date())
+          }, session.id, persistedSession!.lastActivityAt!, new Date())
 
         }
 
@@ -302,7 +310,7 @@ export function createAuth(
             email: user.email,
             emailVerified: user.emailVerified,
             image: user.image ?? null,
-            accountType: extendedUser.accountType ?? 'customer',
+            accountType: persistedUser?.accountType ?? extendedUser.accountType ?? 'customer',
           },
           ...(staff ? { staff } : {}),
         }

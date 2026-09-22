@@ -47,6 +47,7 @@ const app = await createApp(config, {
     store: new DatabaseStaffMfaStore(database.db, audit),
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
+  identityReservations: claims,
 })
 
 afterAll(async () => {

@@ -91,11 +91,21 @@ function tokenFromLastEmail() {
 }
 
 describe('staff invitation lifecycle', () => {
+  it('allows only owners to create owner invitations', async () => {
+    await expect(service.create({
+      email: 'escalation@example.com',
+      role: 'owner',
+      inviterUserId: 'admin-1',
+      inviterRole: 'admin',
+    })).rejects.toThrow('OWNER_REQUIRED')
+  })
+
   it('creates a 48-hour pending reservation and stores only the token hash', async () => {
     const invitation = await service.create({
       email: ' Support@Example.com ',
       role: 'support',
       inviterUserId: 'owner-1',
+      inviterRole: 'owner',
     })
     await Promise.all(backgroundTasks)
     const [stored] = await database.db.select().from(staffInvitation)
@@ -222,6 +232,40 @@ describe('staff invitation lifecycle', () => {
       .where(eq(identityEmailClaim.normalizedEmail, 'retry@example.com'))
     expect(users).toHaveLength(1)
     expect(repairedClaim).toMatchObject({ state: 'staff', userId: users[0]!.id })
+  })
+
+  it('keeps a cancelled partially provisioned staff identity blocked from sign-in', async () => {
+    const invitation = await service.create({
+      email: 'orphan@example.com',
+      role: 'support',
+      inviterUserId: 'owner-1',
+    })
+    await Promise.all(backgroundTasks)
+    const token = tokenFromLastEmail()
+    const failingService = new StaffInvitationService({
+      auth,
+      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now),
+      repository: new StaffInvitationRepository(database.db),
+      emailSender,
+      runInBackground(task) {
+        backgroundTasks.push(task)
+      },
+      adminUrl: config.adminUrl,
+      now: () => now,
+      afterProvision: async () => {
+        throw new Error('SIMULATED_TRANSITION_FAILURE')
+      },
+    })
+
+    await expect(failingService.accept({
+      token,
+      name: 'Orphan Staff',
+      password: 'correct horse battery staple',
+    })).rejects.toThrow('SIMULATED_TRANSITION_FAILURE')
+    await service.cancel(invitation.id, 'owner-1')
+
+    const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now)
+    expect(await claims.findState('orphan@example.com')).toBe('pending_staff')
   })
 
   it('allows only one of two concurrent acceptance transitions', async () => {

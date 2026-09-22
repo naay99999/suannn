@@ -73,7 +73,15 @@ async function prepareAuthRequest(
 
   if (path !== '/sign-in/email' && path !== '/sign-out' && request.headers.has('cookie')) {
     try {
-      await auth.api.getSession({ headers: request.headers })
+      const current = await auth.api.getSession({ headers: request.headers })
+
+      if (current?.user.accountType === 'staff'
+        && (!current.staff || path === '/change-password')) {
+        return jsonResponse(403, {
+          code: 'MFA_ONBOARDING_REQUIRED',
+          message: 'MFA onboarding required',
+        })
+      }
     } catch {
       return jsonResponse(401, {
         code: 'SESSION_EXPIRED',
