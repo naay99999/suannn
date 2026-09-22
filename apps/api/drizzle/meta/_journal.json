@@ -8,6 +8,13 @@
       "when": 1790037380382,
       "tag": "0000_giant_starjammers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790048732200,
+      "tag": "0001_free_veda",
+      "breakpoints": true
     }
   ]
 }
