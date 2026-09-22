@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-22
 
-**Status:** Revised after security review; awaiting written-spec re-review
+**Status:** Revised after second security review; awaiting written-spec re-review
 
 **Scope:** `apps/api` authentication and authorization subsystem
 
@@ -53,9 +53,13 @@ The production deployment is expected to use:
 - Every user has exactly one account type: `customer` or `staff`.
 - An email address cannot be both a customer identity and a staff identity.
 - Staff accounts are invitation-only.
+- A pending staff invitation reserves its email until acceptance, cancellation,
+  or expiry. The identity-claim complexity is retained because this is an
+  explicit business guarantee, not an incidental optimization.
 - Use fixed roles backed by granular permissions.
 - Require TOTP and backup codes for all staff accounts.
-- Use Better Auth's Admin, 2FA, OpenAPI, and built-in rate-limit capabilities.
+- Use Better Auth's Admin, 2FA, Custom Session, OpenAPI, and built-in
+  rate-limit capabilities.
 - Treat the Admin plugin as a server-side primitive; do not expose its raw HTTP
   administration endpoints as backoffice APIs.
 - Route customer sign-up through an application-owned endpoint so it shares
@@ -101,9 +105,6 @@ The API is divided into the following units:
 - `src/plugins/auth/auth.ts` composes Better Auth and its plugins.
 - `src/plugins/auth/access-control.ts` is the canonical permission statement
   and fixed role mapping.
-- `src/plugins/auth/staff-provisioning.ts` exposes a server-only Better Auth
-  provisioning primitive with access to the configured password hasher and
-  internal auth adapter; it has no HTTP route.
 - `src/plugins/auth/index.ts` integrates Better Auth with Elysia and exposes
   a default-deny HTTP endpoint policy plus route guards/macros.
 - `src/modules/customer-auth/` owns the serialized customer sign-up endpoint.
@@ -159,8 +160,10 @@ impersonation, user creation, and administrative paths are not exposed.
 - Raw `/api/v1/auth/sign-up/email` is denied. The storefront calls the
   application-owned customer sign-up route.
 - Email/password sign-in remains a Better Auth endpoint, but a pre-request hook
-  rejects authentication while the normalized email is reserved as
-  `pending_staff`; an invitation cannot temporarily sign in as a customer.
+  rewrites the submitted email to the canonical `normalizeEmail()` result
+  before Better Auth performs its lookup, then rejects authentication while
+  that normalized email is reserved as `pending_staff`; an invitation cannot
+  temporarily sign in as a customer.
 - Only the 2FA challenge endpoints required during sign-in are forwarded
   directly: TOTP verification and backup-code verification. A Better Auth
   request hook rejects `trustDevice: true` on both paths and permits the raw
@@ -171,8 +174,12 @@ impersonation, user creation, and administrative paths are not exposed.
   are denied.
 - Server-only Better Auth APIs are never surfaced by the HTTP adapter.
 
-The Admin plugin supplies schema, access-control helpers, and server APIs. Its
-built-in ACL does not replace Suannn's guards or domain invariants.
+The Admin plugin supplies schema, access-control helpers, and documented server
+APIs. Its built-in ACL does not replace Suannn's guards or domain invariants.
+Code must prefer documented `auth.api` methods over Better Auth internal
+adapters. An internal primitive is allowed only if no documented API can
+preserve a required invariant, and only after a separately reviewed,
+version-pinned compatibility decision with integration coverage.
 
 ## 5. Data Model
 
@@ -206,9 +213,9 @@ server-owned behavior. The generated schema and runtime configuration are both
 reviewed because a database column constraint alone does not stop Better Auth
 from accepting an additional field as API input.
 
-Application services change these fields through narrowly scoped repository
-methods or the server-only staff-provisioning primitive. They do not make a
-field client-writable merely so a server-side Better Auth call can supply it.
+Application services change these fields through documented Better Auth server
+APIs or narrowly scoped repository transitions. They do not make a field
+client-writable merely so trusted server code can supply it.
 
 ### 5.2 Session extensions
 
@@ -234,7 +241,52 @@ cookie caching is explicitly configured with `session.cookieCache.enabled:
 false` so role changes, suspension, MFA resets, and revocation take effect on
 the next request.
 
-### 5.3 Email identity claims
+### 5.3 Authenticated session projection
+
+Browser clients consume an application-owned, explicitly typed session
+projection produced by Better Auth's Custom Session plugin rather than the
+unconstrained Better Auth user/plugin record. The projection contains only:
+
+```ts
+{
+  session: {
+    id: string
+    expiresAt: Date
+  }
+  user: {
+    id: string
+    name: string
+    email: string
+    emailVerified: boolean
+    image: string | null
+    accountType: 'customer' | 'staff'
+  }
+  staff?: {
+    role: 'owner' | 'admin' | 'catalog_manager' | 'fulfillment' | 'support'
+    permissions: ReadonlyArray<string>
+  }
+}
+```
+
+The optional staff projection appears only for an active staff session. Its
+single fixed role and permissions are derived from `access-control.ts`. They
+are UI hints only; the API always reauthorizes against current server-side
+state. The allowlisted Better Auth `/get-session` path resolves to this custom
+endpoint, and the frontends use the matching Custom Session client typing.
+Before returning staff data, the projection applies the same current account,
+activation, idle-time, and absolute-time checks as `staffAuth`. An invalid staff
+session is revoked and returns `401 SESSION_EXPIRED` without staff data rather
+than returning stale role or capability data. The frontends clear their local
+authenticated state on that response.
+
+Session responses never expose ban fields, `sourceInvitationId`,
+`staffActivatedAt`, MFA/plugin internals, `lastActivityAt`,
+`absoluteExpiresAt`, impersonation fields, credential records, tokens, or
+secrets. Application-owned additional fields set `returned: false` unless they
+appear in the DTO above, and plugin-added fields are removed by the explicit
+projection rather than assumed safe because of plugin defaults.
+
+### 5.4 Email identity claims
 
 `identityEmailClaim` is the serialization point for a normalized email. Its
 primary key is the normalized email and its state is exactly one of:
@@ -242,6 +294,21 @@ primary key is the normalized email and its state is exactly one of:
 - `customer`, linked to one customer user;
 - `pending_staff`, linked to one pending invitation and no user;
 - `staff`, linked to one staff user.
+
+The canonical `normalizeEmail()` function is:
+
+```ts
+const normalizeEmail = (email: string) =>
+  email.replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '').toLowerCase()
+```
+
+The normalized value is passed to Better Auth rather than normalizing a second
+time independently. The same function is used by customer sign-up, staff
+invitation, invitation acceptance, sign-in reservation checks, identity claims,
+rate-limit keys, and database lookups. V1 does not strip plus tags, remove dots,
+map provider domains, or apply provider-specific alias rules. It also does not
+add Unicode normalization beyond what Better Auth's accepted email syntax and
+validation already require.
 
 Database check constraints enforce the valid user/invitation reference for
 each state. All identity-creating paths—customer sign-up, staff invitation,
@@ -269,7 +336,7 @@ the unique user email and reconciliation rule keep the email unavailable until
 the active claim is repaired. Public callers still receive the generic sign-up
 response rather than an identity-state-specific error.
 
-### 5.4 Staff invitations
+### 5.5 Staff invitations
 
 `staffInvitation` contains:
 
@@ -290,7 +357,7 @@ may lazily expire an overdue invitation while holding the email lock, then
 release and reclaim the email; an expired reservation never blocks the address
 forever.
 
-### 5.5 Audit logs
+### 5.6 Audit logs
 
 `auditLog` contains:
 
@@ -316,7 +383,7 @@ Routes declare structured resource/action permissions. The initial statement is:
 | --- | --- |
 | `catalog` | `read`, `create`, `update`, `delete`, `publish` |
 | `inventory` | `read`, `adjust` |
-| `order` | `read`, `update`, `cancel`, `fulfill`, `refund` |
+| `order` | `read`, `update-address`, `add-note`, `cancel`, `fulfill`, `refund` |
 | `customer` | `read` |
 | `staff` | `read`, `invite`, `change-role`, `suspend`, `revoke-session`, `reset-mfa` |
 | `audit` | `read` |
@@ -329,8 +396,8 @@ The fixed roles are:
 | `owner` | Every permission, including `settings:manage-owner` |
 | `admin` | Every permission except `settings:manage-owner`; cannot act on an owner |
 | `catalog_manager` | Manage catalog and inventory; read orders |
-| `fulfillment` | Read orders/customers, update and fulfill orders, read/adjust inventory |
-| `support` | Read orders/customers and update/cancel orders; cannot refund |
+| `fulfillment` | Read orders/customers, update address/add notes, fulfill orders, read/adjust inventory |
+| `support` | Read orders/customers, update address/add notes, and cancel orders; cannot refund |
 | `customer` | No backoffice permissions |
 
 The Admin plugin is configured with `defaultRole: 'customer'`. Although the
@@ -346,6 +413,14 @@ accountType = staff     -> role IN
 
 Role changes always replace one role with one role; they never append.
 
+`src/plugins/auth/access-control.ts` is the only manually maintained RBAC
+source of truth. It exports the permission statement and fixed role mapping.
+Better Auth Admin access control, Elysia permission types/checks, role input
+validation, UI capability metadata, and matrix tests are derived from those
+exports. The database account-type/role check constraint intentionally repeats
+only the finite role-name invariant as defense in depth; no second permission
+matrix is maintained in SQL or another module.
+
 The following invariants are separate from the permission matrix:
 
 - at least one active owner must always remain;
@@ -356,7 +431,8 @@ The following invariants are separate from the permission matrix:
 - concurrent owner-management requests must not leave the system without an
   active owner;
 - only owners and admins may refund orders;
-- customer-facing responses never expose auth/plugin fields.
+- customer-facing responses never expose internal auth/plugin fields beyond
+  the explicit authenticated-session DTO.
 
 ## 7. Customer Authentication
 
@@ -375,10 +451,11 @@ emailAndPassword.requireEmailVerification = false
 emailAndPassword.autoSignIn = false
 ```
 
-`customSyntheticUser` supplies the complete response shape, including Admin,
-2FA, and application-owned fields that are normally returned. A new account
-and an existing customer, staff identity, or pending staff claim all receive
-the same public status and response shape with no session token. The frontend
+`customSyntheticUser` supplies the complete public response shape after
+`returned: false` filtering, including any plugin or application-owned fields
+that intentionally remain public. A new account and an existing customer,
+staff identity, or pending staff claim all receive the same public status and
+response shape with no session token. The frontend
 then performs an explicit email/password sign-in. For an occupied or reserved
 email, the wrapper runs the configured password hash before returning the
 synthetic response to reduce timing differences without creating a customer.
@@ -428,11 +505,12 @@ event is audited.
    invitation token with a 48-hour expiry.
 4. Resend sends a link to `admin.example.com`.
 5. The recipient supplies a name and password.
-6. While the claim remains `pending_staff`, the server-only Better Auth
-   provisioning primitive uses the configured password hasher and auth adapter
-   to create the user and credential account with `accountType=staff`, the
-   invitation-assigned role, verified email state, and `sourceInvitationId`.
-   It does not emit the customer sign-up verification email or issue a session.
+6. While the claim remains `pending_staff`, the invitation service calls the
+   documented `auth.api.createUser()` server API without forwarding browser
+   headers. It supplies exactly one role plus `data` containing
+   `accountType=staff`, verified email state, and `sourceInvitationId`. Better
+   Auth performs password hashing, account linking, and database hooks. The
+   call does not use a public Admin HTTP route or issue a session.
 7. The application transaction changes the identity claim to `staff` and
    consumes the invitation. Until that transition commits, the sign-in hook
    rejects the pending email.
@@ -451,14 +529,21 @@ creation, and invitation acceptance cannot claim the same email concurrently.
 Concurrent requests therefore yield exactly one identity owner and at most one
 successful invitation transition.
 
+The application pins this documented server-API behavior with an integration
+test against the installed Better Auth version: custom `data` must persist
+server-owned fields, the password must authenticate, and no public Admin route
+may become reachable. A Better Auth upgrade that breaks this contract blocks
+deployment rather than silently falling back to internal adapter access.
+
 ### 8.3 Sign-in and session policy
 
 After activation, staff sign-in requires email/password followed by TOTP or a
 one-use backup code. Trusted-device bypass is disabled at the server boundary:
 TOTP and backup-code verification reject a request containing
 `trustDevice: true`; omitting the field or sending `false` never creates the
-trusted-device cookie. A staff session starts with `lastActivityAt` set to the
-current time and `absoluteExpiresAt` set eight hours later.
+trusted-device cookie. Completion of a full password-plus-MFA authentication
+establishes `lastActivityAt` at the current time and `absoluteExpiresAt` eight
+hours later.
 
 Staff sessions are rejected and revoked after 30 minutes without activity or at
 the eight-hour absolute deadline. Normal sign-out removes the current session.
@@ -466,10 +551,17 @@ Password reset, suspension, role change, and MFA reset revoke all staff
 sessions. Staff can list and revoke their own sessions. Authorized owners and
 admins can revoke sessions for staff they are allowed to manage.
 
-The Better Auth session-create hook initializes both staff timeout fields on
-every path that can issue or rotate a staff session, including password sign-in,
-TOTP verification, backup-code verification, and TOTP enrollment. `staffAuth`
-rejects and revokes a staff session if either field is missing.
+`absoluteExpiresAt` is anchored to completion of the most recent full staff
+authentication and is never sliding. A refresh or rotation copies the
+predecessor session's absolute expiry exactly; it may update idle activity but
+must not calculate `now + 8 hours`. Only a new password-plus-MFA authentication
+may establish a new eight-hour window.
+
+The Better Auth session-create hook initializes staff timeout fields for a new
+fully authenticated session and preserves them for every rotation path,
+including TOTP enrollment and backup-code regeneration. `staffAuth` rejects and
+revokes a staff session if either field is missing, or if a rotation cannot
+prove and preserve its predecessor's absolute expiry.
 
 ### 8.4 MFA recovery
 
@@ -515,11 +607,12 @@ Resend is a bring-your-own email provider called from Better Auth hooks:
 - the staff invitation sender.
 
 Authentication requests do not await provider delivery, reducing timing side
-channels. Every detached promise is registered with a background-task tracker
-and has an explicit rejection handler; graceful API shutdown gives registered
-email sends an opportunity to settle before closing the process. Logs record
-only the template type, a provider message ID after provider acceptance, and a
-sanitized error. The production sender uses a verified domain.
+channels. V1 uses Better Auth's `advanced.backgroundTasks.handler` for auth
+emails and the same best-effort scheduling policy for application-owned invite
+emails; it does not build a custom task tracker or imply durable delivery. Every
+promise has an explicit rejection handler. Logs record only the template type,
+a provider message ID after provider acceptance, and a sanitized error. The
+production sender uses a verified domain.
 
 Required configuration is:
 
@@ -532,6 +625,8 @@ Production startup fails when required auth or email configuration is absent.
 Delivery failure must be observable and safe to retry through the existing
 resend-verification, password-reset request, or invitation-resend operation.
 No request should create multiple simultaneously valid tokens unnecessarily.
+Process crashes may lose an in-flight V1 email; a transactional outbox or queue
+is a later reliability upgrade if delivery evidence shows it is needed.
 
 ## 10. Security Controls
 
@@ -544,11 +639,37 @@ No request should create multiple simultaneously valid tokens unnecessarily.
 - browser API calls use credentials;
 - CORS and Better Auth trusted origins use exact storefront/admin origins;
 - redirects and callback URLs are checked against the same explicit allowlist;
+- Better Auth CSRF and origin checks remain enabled;
 - `session.cookieCache.enabled` is pinned to `false` for the first release;
 - authorization-sensitive staff state is validated from server-side storage on
   every request.
 
-### 10.2 Rate limiting and abuse resistance
+### 10.2 CSRF policy for application routes
+
+Better Auth's CSRF checks protect Better Auth endpoints only. Every
+application-owned browser mutation route independently applies an Elysia CSRF
+policy before authentication or business logic:
+
+- mutations use `POST`, `PUT`, `PATCH`, or `DELETE`; `GET` and `HEAD` are
+  read-only;
+- request bodies must use `Content-Type: application/json`; unsafe simple
+  content types such as form URL encoding, multipart form data, and plain text
+  are rejected unless a future route has a separately reviewed protocol need;
+- credentialed browser mutations require an `Origin` header whose parsed origin
+  exactly matches the route group's allowlist—storefront routes trust only the
+  configured storefront origin, and staff routes trust only the configured
+  admin origin;
+- a missing, `null`, malformed, or untrusted `Origin` is rejected for these
+  browser routes rather than falling back to permissive behavior;
+- when `Sec-Fetch-Site` is present, `cross-site` is rejected. Fetch Metadata is
+  defense in depth and never replaces the Origin check;
+- CORS never uses wildcard origins with credentials.
+
+CLI maintenance does not reuse browser mutation routes. A future webhook,
+native client, or server-to-server endpoint must define its own non-cookie
+authentication and CSRF applicability instead of bypassing this policy.
+
+### 10.3 Rate limiting and abuse resistance
 
 Better Auth's built-in limiter is enabled explicitly and uses PostgreSQL
 storage so counters are shared across API instances. Sensitive auth endpoints
@@ -568,13 +689,13 @@ IP header only when the deployment proxy is configured to overwrite it;
 Better Auth's trusted proxy/header configuration and the Elysia limiter must
 derive the client IP using the same rule.
 
-### 10.3 Revocation and stale authorization
+### 10.4 Revocation and stale authorization
 
 Role changes, suspension, password reset, and MFA reset revoke relevant
 sessions. Staff authorization reads current server-side state. Permission
 checks must not depend on client claims or a stale cached role.
 
-### 10.4 Server-owned input enforcement
+### 10.5 Server-owned input enforcement
 
 The HTTP policy and Better Auth schemas provide defense in depth:
 
@@ -618,18 +739,19 @@ backoffice users. Staff invitations, role changes, suspension, MFA reset,
 session revocation, owner recovery, product mutation, order status mutation,
 and refund operations always identify actor and target.
 
-In production, the normal application database role has insert and authorized
-read access to audit data but no update/delete privilege. Retention purge runs
-under a separate narrowly scoped database role. If deployment tooling cannot
-separate roles initially, the missing database-level protection is recorded as
-a production hardening gap rather than treating the absence of HTTP mutation
-routes as fully append-only storage.
+For V1, append-only means there is no audit update/delete repository method and
+no HTTP mutation route; application code can only insert and perform authorized
+reads. Separating the production database role from a narrowly scoped
+retention-purge role is Phase 2 hardening and does not block the first release.
+Until that separation exists, documentation must describe audit storage as
+application-append-only rather than database-enforced append-only.
 
 ## 13. Migration and Rollout
 
-1. Configure Admin with `defaultRole: 'customer'`, 2FA, database rate-limit
-   storage, `autoSignIn: false`, a complete synthetic user, disabled cookie
-   cache, and explicit server-owned user/session fields in Better Auth.
+1. Configure Admin with `defaultRole: 'customer'`, 2FA, Custom Session,
+   database rate-limit storage, `autoSignIn: false`, a complete synthetic user,
+   disabled cookie cache, background tasks, and explicit server-owned
+   user/session fields in Better Auth.
 2. Run `bun --filter api auth:generate` and inspect the generated auth schema.
 3. Add identity claim, invitation, application rate-limit, and audit schemas
    outside the generated file, including account-type/role check constraints.
@@ -639,7 +761,8 @@ routes as fully append-only storage.
 7. Create and accept the first owner invitation through the bootstrap CLI.
 8. Verify Resend sender-domain configuration and all callback URLs.
 9. Deploy the Better Auth HTTP allowlist, identity-claim service, application
-   rate limiter, and API guards before exposing admin business endpoints.
+   rate limiter, CSRF/origin middleware, explicit session projection, and API
+   guards before exposing admin business endpoints.
 
 No existing user is promoted to staff by migration. Deployment must be safe if
 no owner exists briefly before the bootstrap command; in that state all staff
@@ -658,7 +781,18 @@ Required coverage includes:
   `sourceInvitationId`, ban, or MFA fields;
 - `update-session` being unable to mutate `lastActivityAt` or
   `absoluteExpiresAt`;
+- session responses matching the explicit DTO and excluding internal user,
+  plugin, MFA, invitation, timeout, and credential fields;
+- `/get-session` revoking and returning `401 SESSION_EXPIRED` without staff
+  data for suspended, inactive, idle-expired, absolute-expired, or malformed
+  staff sessions;
 - default customer role and rejection of arrays, commas, and multi-role input;
+- the generated Better Auth ACL, Elysia permission checks, role validation, UI
+  capability metadata, and role-matrix tests deriving from the one canonical
+  `access-control.ts` definition;
+- customer sign-up, sign-in, invitations, claims, lookups, and rate-limit keys
+  using the same trim-and-lowercase normalization, without plus-tag stripping,
+  dot removal, or provider-specific aliasing;
 - pending staff invitation blocking customer sign-up with the same email while
   returning the generic public response;
 - concurrent staff invitation and customer sign-up yielding exactly one email
@@ -668,7 +802,11 @@ Required coverage includes:
 - invitation conflict, expiry, revocation, resend rotation, and concurrent
   double acceptance;
 - cancelled and expired invitations releasing their email reservation;
-- the server-only staff-provisioning primitive having no reachable HTTP route;
+- `auth.api.createUser()` persisting server-owned staff fields supplied through
+  `data`, creating an authenticating password account, running supported hooks,
+  and issuing no session;
+- the Admin `create-user` HTTP route remaining unreachable even though its
+  documented server API is used internally;
 - direct `/api/v1/auth/admin/*` calls being denied, including with an expired
   custom staff session;
 - onboarding sessions being limited to enrollment operations;
@@ -676,6 +814,8 @@ Required coverage includes:
 - staff sessions with either custom timeout field null being rejected and
   revoked;
 - 30-minute idle and eight-hour absolute staff expiry;
+- refresh, rotation, TOTP enrollment, and backup-code regeneration preserving
+  the predecessor's absolute expiry exactly rather than extending it;
 - session revocation after role change, suspension, password reset, and MFA
   reset;
 - concurrent owner mutations preserving at least one active owner;
@@ -687,8 +827,12 @@ Required coverage includes:
 - raw TOTP/backup-code verification accepting only a pending sign-in challenge,
   not an onboarding or active session;
 - email hooks calling the fake sender and sanitizing logged failures;
+- application-owned browser mutations rejecting non-JSON bodies, missing,
+  `null`, malformed, or untrusted origins, and cross-site Fetch Metadata, while
+  every `GET`/`HEAD` route remains non-mutating;
 - verified-customer guard behavior for the future order-claim integration;
-- append-only audit behavior, metadata redaction, and transactional recording;
+- application-append-only audit behavior, metadata redaction, and
+  transactional recording;
 - Better Auth and application-owned database rate limiting, including delegated
   `auth.api` operations and retry headers;
 - a revoked staff session remaining invalid with cookie caching explicitly
@@ -718,18 +862,24 @@ The subsystem is ready for application integration when:
 - staff cannot use business APIs until email ownership and TOTP enrollment are
   complete;
 - staff sessions obey both timeout rules and are promptly revoked after
-  security-sensitive account changes;
+  security-sensitive account changes, and refresh or rotation never extends
+  the absolute deadline;
 - all backoffice endpoints declare and enforce permissions server-side;
+- application-owned credentialed mutation routes enforce the explicit
+  JSON-and-Origin CSRF policy;
 - raw Better Auth Admin and unsafe 2FA endpoints cannot bypass application
   policy;
 - security-sensitive custom fields cannot be supplied through sign-up or
   session-update input;
+- authenticated session responses expose only the documented DTO and never
+  leak internal plugin or security fields;
 - public duplicate sign-up is generic while unverified customers can still
   sign in through the explicit second request;
 - the fixed role matrix and owner invariants pass automated tests;
 - authentication email is sent through Resend without exposing token material;
 - rate limits work across API instances through PostgreSQL;
-- relevant privileged events appear in redacted, append-only audit logs;
+- relevant privileged events appear in redacted, application-append-only audit
+  logs;
 - the API test, typecheck, and lint commands pass.
 
 ## 16. Verified Better Auth Behaviors
@@ -743,10 +893,25 @@ workspace and the current official documentation:
   `autoSignIn: false`, and plugin fields require a complete synthetic user:
   <https://better-auth.com/docs/authentication/email-password>;
 - the Admin plugin defaults to role `user` and represents multiple roles as a
-  comma-separated string: <https://better-auth.com/docs/plugins/admin>;
+  comma-separated string; its documented `auth.api.createUser()` accepts
+  custom `data`: <https://better-auth.com/docs/plugins/admin>;
 - 2FA verification accepts the client-controlled `trustDevice` option:
   <https://better-auth.com/docs/plugins/2fa>;
 - cookie-cached sessions can remain valid until cache expiry after revocation:
   <https://better-auth.com/docs/concepts/session-management>;
 - calls through `auth.api` do not consume Better Auth's client-facing rate
-  limit: <https://better-auth.com/docs/concepts/rate-limit>.
+  limit: <https://better-auth.com/docs/concepts/rate-limit>;
+- Better Auth applies origin validation, Fetch Metadata checks, safe-method
+  semantics, and non-simple-request protections to its own endpoints:
+  <https://better-auth.com/docs/reference/security>;
+- Better Auth supports delegating detached work to
+  `advanced.backgroundTasks.handler`:
+  <https://better-auth.com/docs/concepts/hooks>;
+- Better Auth's Custom Session plugin replaces `/get-session` with an
+  application-defined typed projection:
+  <https://better-auth.com/docs/concepts/session-management#customizing-session-response>;
+- OWASP treats Origin validation and non-simple JSON requests as practical
+  CSRF defenses, and defines absolute session timeout independently from user
+  activity:
+  <https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html>,
+  <https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html>.
