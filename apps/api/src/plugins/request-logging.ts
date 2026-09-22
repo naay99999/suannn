@@ -22,6 +22,7 @@ export function createRequestLoggingPlugin() {
         path: new URL(request.url).pathname,
         status: responseStatus(set.status),
         durationMs,
+        requestId: set.headers['x-request-id']?.toString(),
       })
     })
 }

@@ -7,6 +7,7 @@ import { createAuthPlugin } from './plugins/auth'
 import { createCorsPlugin } from './plugins/cors'
 import { createErrorHandlingPlugin } from './plugins/error-handling'
 import { createRequestLoggingPlugin } from './plugins/request-logging'
+import { createRequestContextPlugin } from './plugins/request-context'
 
 type AuthOperation = Record<string, unknown>
 type AuthPath = Record<string, AuthOperation>
@@ -115,6 +116,7 @@ export async function createApp(config: AppConfig, auth: Auth) {
       },
     }))
     .use(createCorsPlugin(config))
+    .use(createRequestContextPlugin(config))
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
     .use(createAuthPlugin(auth))

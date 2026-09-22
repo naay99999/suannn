@@ -4,6 +4,7 @@ interface RequestLog {
   path: string
   status: number
   durationMs: number
+  requestId?: string
 }
 
 interface ErrorLog {
