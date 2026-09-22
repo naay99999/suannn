@@ -10,13 +10,70 @@ import { testEnv } from './fixtures'
 const config = loadConfig(testEnv)
 const database = createDatabase(config.databaseUrl)
 const auth = createAuth(config, database.db)
-const app = createApp(config, auth)
+const app = await createApp(config, auth)
 
 afterAll(async () => {
   await database.client.end()
 })
 
 describe('API routes', () => {
+  it('serves generated OpenAPI documentation', async () => {
+    const [documentationResponse, specificationResponse] = await Promise.all([
+      app.handle(new Request('http://localhost/api/v1/docs')),
+      app.handle(new Request('http://localhost/api/v1/openapi.json')),
+    ])
+
+    expect(documentationResponse.status).toBe(200)
+    expect(documentationResponse.headers.get('content-type')).toContain('text/html')
+    const documentation = await documentationResponse.text()
+    expect(documentation).toContain('"url":"/api/v1/openapi.json"')
+    expect(documentation).toContain('"operationTitleSource":"summary"')
+    expect(specificationResponse.status).toBe(200)
+
+    const specification = await specificationResponse.json() as {
+      info: { title: string, description: string, version: string }
+      tags: Array<{ name: string }>
+      paths: Record<string, Record<string, { summary?: string, tags?: string[] }>>
+    }
+
+    expect(specification.info).toEqual({
+      title: 'Suannn API',
+      description: 'HTTP API for Suannn.',
+      version: 'v1',
+    })
+    expect(specification.tags.map(({ name }) => name)).toEqual([
+      'System',
+      'Authentication',
+    ])
+    expect(specification.paths['/api/v1/'].get).toMatchObject({
+      summary: 'Get API information',
+      tags: ['System'],
+    })
+    expect(specification.paths['/api/v1/health'].get).toMatchObject({
+      summary: 'Check API health',
+      tags: ['System'],
+    })
+    expect(specification.paths['/api/v1/auth/sign-up/email'].post.tags).toEqual([
+      'Authentication',
+    ])
+    expect(specification.paths['/api/v1/auth/sign-in/social'].post.summary).toBe('Social sign-in')
+    expect(specification.paths['/api/v1/auth/sign-in/email'].post.tags).toEqual([
+      'Authentication',
+    ])
+    expect(specification.paths['/api/v1/auth/sign-out'].post.tags).toEqual([
+      'Authentication',
+    ])
+    expect(specification.paths['/api/v1/auth/get-session'].get.tags).toEqual([
+      'Authentication',
+    ])
+
+    const authenticationOperations = Object.entries(specification.paths)
+      .filter(([path]) => path.startsWith('/api/v1/auth/'))
+      .flatMap(([, operations]) => Object.values(operations))
+
+    expect(authenticationOperations.every(({ summary }) => Boolean(summary))).toBe(true)
+  })
+
   it('returns the versioned root response', async () => {
     const response = await app.handle(new Request('http://localhost/api/v1'))
 

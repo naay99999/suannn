@@ -1,5 +1,5 @@
-import { useState, type ComponentProps } from 'react'
-import { Link } from 'react-router'
+import { type ComponentProps } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CustomerSupportIcon,
@@ -30,11 +30,20 @@ const navigation = [
   { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon },
   { title: 'Products', url: '/products', icon: ShoppingBag01Icon },
   { title: 'Customers', url: '/customers', icon: UserListIcon },
-  { title: 'Settings', url: '/settings', icon: SettingsIcon },
+  { title: 'Settings', hash: '#settings', icon: SettingsIcon },
 ]
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const { hash, pathname, search } = useLocation()
+  const navigate = useNavigate()
+  const settingsOpen = hash === '#settings'
+  const settingsLocation = { pathname, search, hash: '#settings' }
+
+  function handleSettingsOpenChange(open: boolean) {
+    if (!open && settingsOpen) {
+      navigate({ pathname, search, hash: '' })
+    }
+  }
 
   return (
     <>
@@ -64,7 +73,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton className="cursor-pointer" size="lg" onClick={() => setSettingsOpen(true)}>
+              <SidebarMenuButton className="cursor-pointer" size="lg" render={<Link to={settingsLocation} />}>
                 <Avatar variant="square">
                   <AvatarFallback>S</AvatarFallback>
                 </Avatar>
@@ -78,7 +87,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={handleSettingsOpenChange} />
     </>
   )
 }

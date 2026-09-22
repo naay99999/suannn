@@ -24,8 +24,10 @@ After changing Better Auth plugins or schema options, run `bun --filter api auth
 
 ## Endpoints
 
+- `GET /api/v1/docs` serves the interactive Scalar API reference.
+- `GET /api/v1/openapi.json` serves the generated OpenAPI specification for v1.
 - `GET /api/v1` returns the API welcome response.
 - `GET /api/v1/health` returns `{ "status": "ok" }` for liveness checks.
-- `/api/v1/auth/*` provides Better Auth's email/password signup, signin, signout, and session endpoints.
+- `/api/v1/auth/*` provides Better Auth's email/password signup, signin, signout, and session endpoints. Each enabled Better Auth operation is included in the generated OpenAPI reference.
 
 Errors use `{ "code", "message" }` and never expose internal stack traces to clients.

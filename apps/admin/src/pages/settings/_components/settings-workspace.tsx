@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Menu09Icon, NotificationIcon, PaintBoardIcon, SettingsIcon, UserListIcon } from '@hugeicons/core-free-icons'
+import { NotificationIcon, PaintBoardIcon, SettingsIcon, UserListIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@workspace/ui/components/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Checkbox } from '@workspace/ui/components/checkbox'

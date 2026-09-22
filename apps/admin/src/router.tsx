@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, redirect } from 'react-router'
 import { AdminRouteError } from './pages/error-page'
 import { AdminLayout } from './pages/layout'
 
@@ -10,6 +10,10 @@ export const router = createBrowserRouter([
   {
     path: '*',
     lazy: () => import('./pages/not-found-page'),
+  },
+  {
+    path: 'settings',
+    loader: () => redirect('/dashboard#settings'),
   },
   {
     Component: AdminLayout,
@@ -30,10 +34,6 @@ export const router = createBrowserRouter([
       {
         path: 'customers',
         lazy: () => import('./pages/customers/customers-page'),
-      },
-      {
-        path: 'settings',
-        lazy: () => import('./pages/settings/settings-page'),
       },
     ],
   },

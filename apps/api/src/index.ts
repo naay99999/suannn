@@ -6,7 +6,7 @@ import { createAuth } from './plugins/auth/auth'
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
 const auth = createAuth(config, database.db)
-const app = createApp(config, auth)
+const app = await createApp(config, auth)
 
 app.listen({ hostname: config.host, port: config.port })
 
