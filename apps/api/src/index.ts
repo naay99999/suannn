@@ -53,6 +53,7 @@ const app = await createApp(config, {
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
   identityReservations: claims,
+  limiter,
 })
 
 app.listen({ hostname: config.host, port: config.port })

@@ -5,15 +5,19 @@ import { createAuthMacros } from '../../plugins/auth'
 import type { Auth } from '../../plugins/auth/auth'
 import { staffInvitationModels } from './model'
 import type { StaffInvitationService } from './service'
+import type { RateLimiter } from '../rate-limit/service'
+import { createApplicationRateLimitPlugin } from '../../plugins/application-rate-limit'
 
 export function createStaffInvitationModule(
   config: AppConfig,
   auth: Auth,
   service: StaffInvitationService,
+  limiter: RateLimiter,
 ) {
   return new Elysia({ name: 'staff-invitations', prefix: '/api/v1/staff/invitations' })
     .use(createBrowserMutationPlugin(config))
     .use(createAuthMacros(auth))
+    .use(createApplicationRateLimitPlugin(config, limiter))
     .model(staffInvitationModels)
     .get('/', () => service.list(), {
       staffAuth: true,
@@ -28,16 +32,19 @@ export function createStaffInvitationModule(
       staffAuth: true,
       permission: { staff: ['invite'] },
       body: 'staffInvitation.createBody',
+      applicationRateLimit: { namespace: 'staff-invitation-create', limit: 10, windowSeconds: 60 },
     })
     .post('/:id/resend', ({ params, user }) => service.resend(params.id, user.id), {
       browserMutation: 'admin',
       staffAuth: true,
       permission: { staff: ['invite'] },
+      applicationRateLimit: { namespace: 'staff-invitation-resend', limit: 5, windowSeconds: 60 },
     })
     .post('/:id/cancel', ({ params, user }) => service.cancel(params.id, user.id), {
       browserMutation: 'admin',
       staffAuth: true,
       permission: { staff: ['invite'] },
+      applicationRateLimit: { namespace: 'staff-invitation-cancel', limit: 10, windowSeconds: 60 },
     })
     .post('/accept', async ({ body, set }) => {
       const result = await service.accept(body)
@@ -51,6 +58,7 @@ export function createStaffInvitationModule(
     }, {
       browserMutation: 'admin',
       body: 'staffInvitation.acceptBody',
+      applicationRateLimit: { namespace: 'staff-invitation-accept', limit: 5, windowSeconds: 60 },
     })
 }
 

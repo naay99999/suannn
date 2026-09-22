@@ -1,4 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { Elysia } from 'elysia'
+import { loadConfig } from '../src/config/env'
+import { createApplicationRateLimitPlugin } from '../src/plugins/application-rate-limit'
+import { testEnv } from './fixtures'
 import { applicationRateLimit } from '../src/database/schema'
 import { ApplicationRateLimitRepository } from '../src/modules/rate-limit/repository'
 import { RateLimiter, rateLimitResponse } from '../src/modules/rate-limit/service'
@@ -24,6 +28,32 @@ afterAll(async () => {
 })
 
 describe('application rate limiter', () => {
+  it('stops application mutations before their handler when exhausted', async () => {
+    let handled = 0
+    const limiter = {
+      consume: async () => ({
+        allowed: false,
+        remaining: 0,
+        retryAfterSeconds: 60,
+        resetAt: new Date(),
+      }),
+    }
+    const app = new Elysia()
+      .use(createApplicationRateLimitPlugin(loadConfig(testEnv), limiter))
+      .post('/sensitive', () => {
+        handled += 1
+        return { ok: true }
+      }, {
+        applicationRateLimit: { namespace: 'test', limit: 1, windowSeconds: 60 },
+      })
+    const response = await app.handle(new Request('http://localhost/sensitive', {
+      method: 'POST',
+    }))
+
+    expect(response.status).toBe(429)
+    expect(handled).toBe(0)
+  })
+
   it('shares atomic fixed-window counters across service instances', async () => {
     const now = new Date('2026-09-22T00:00:00.000Z')
     const repository = new ApplicationRateLimitRepository(database.db)

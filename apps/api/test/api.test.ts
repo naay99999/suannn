@@ -25,13 +25,14 @@ const auth = createAuth(config, database.db)
 const audit = new AuditService(new AuditRepository(database.db))
 const emailSender = { send: async () => ({ id: 'test-email' }) }
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
+const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 const app = await createApp(config, {
   auth,
   audit,
   customerSignup: new CustomerSignupService({
     auth,
     claims,
-    limiter: new RateLimiter(new ApplicationRateLimitRepository(database.db)),
+    limiter,
   }),
   staffInvitations: new StaffInvitationService({
     auth,
@@ -48,6 +49,7 @@ const app = await createApp(config, {
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
   identityReservations: claims,
+  limiter,
 })
 
 afterAll(async () => {

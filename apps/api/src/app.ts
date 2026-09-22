@@ -12,6 +12,7 @@ import type { CustomerSignupService } from './modules/customer-auth/service'
 import type { StaffInvitationService } from './modules/staff-invitations/service'
 import type { StaffMfaService } from './modules/staff-mfa/service'
 import type { StaffService } from './modules/staff/service'
+import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
 import type { IdentityReservationLookup } from './plugins/auth'
@@ -111,6 +112,7 @@ export interface AppDependencies {
   staffMfa: StaffMfaService
   staff: StaffService
   identityReservations: IdentityReservationLookup
+  limiter: RateLimiter
 }
 
 export async function createApp(config: AppConfig, dependencies: AppDependencies) {
@@ -152,9 +154,14 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
       identityReservations: dependencies.identityReservations,
     }))
     .use(createCustomerAuthModule(config, dependencies.customerSignup))
-    .use(createStaffInvitationModule(config, dependencies.auth, dependencies.staffInvitations))
-    .use(createStaffMfaModule(config, dependencies.auth, dependencies.staffMfa))
-    .use(createStaffModule(config, dependencies.auth, dependencies.staff))
+    .use(createStaffInvitationModule(
+      config,
+      dependencies.auth,
+      dependencies.staffInvitations,
+      dependencies.limiter,
+    ))
+    .use(createStaffMfaModule(config, dependencies.auth, dependencies.staffMfa, dependencies.limiter))
+    .use(createStaffModule(config, dependencies.auth, dependencies.staff, dependencies.limiter))
     .use(createAuditModule(dependencies.auth, dependencies.audit))
     .use(systemModule)
 }
