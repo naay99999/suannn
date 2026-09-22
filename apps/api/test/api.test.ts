@@ -180,6 +180,24 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/staff/onboarding'].get).toBeDefined()
     expect(specification.paths['/api/v1/staff/'].get).toBeDefined()
     expect(specification.paths['/api/v1/audit/'].get).toBeDefined()
+    const staffRole = specification.paths['/api/v1/staff/{id}/role'].patch as {
+      requestBody?: unknown
+      responses: Record<string, unknown>
+    }
+    expect(staffRole.requestBody).toBeDefined()
+    expect(staffRole.responses['200']).toBeDefined()
+    expect(staffRole.responses['401']).toBeDefined()
+    expect(staffRole.responses['403']).toBeDefined()
+    expect((specification.paths['/api/v1/staff/invitations/{id}/resend'].post as {
+      parameters?: unknown[]
+    }).parameters)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ name: 'id', in: 'path' })]))
+    expect((specification.paths['/api/v1/staff/onboarding/totp'].post as {
+      responses: Record<string, unknown>
+    }).responses['200']).toBeDefined()
+    expect((specification.paths['/api/v1/audit/'].get as {
+      responses: Record<string, unknown>
+    }).responses['200']).toBeDefined()
     expect(specification.paths['/api/v1/auth/admin/set-role']).toBeUndefined()
     expect(specification.paths['/api/v1/auth/two-factor/enable']).toBeUndefined()
   })

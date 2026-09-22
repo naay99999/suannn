@@ -7,6 +7,7 @@ import { staffInvitationModels } from './model'
 import type { StaffInvitationService } from './service'
 import type { RateLimiter } from '../rate-limit/service'
 import { createApplicationRateLimitPlugin } from '../../plugins/application-rate-limit'
+import { httpModels } from '../../shared/http-model'
 
 export function createStaffInvitationModule(
   config: AppConfig,
@@ -19,9 +20,11 @@ export function createStaffInvitationModule(
     .use(createAuthMacros(auth))
     .use(createApplicationRateLimitPlugin(config, limiter))
     .model(staffInvitationModels)
+    .model(httpModels)
     .get('/', () => service.list(), {
       staffAuth: true,
       permission: { staff: ['read'] },
+      response: { 200: 'staffInvitation.listResponse', 401: 'http.error', 403: 'http.error' },
     })
     .post('/', ({ body, staff, user }) => service.create({
       ...body,
@@ -33,18 +36,21 @@ export function createStaffInvitationModule(
       permission: { staff: ['invite'] },
       body: 'staffInvitation.createBody',
       applicationRateLimit: { namespace: 'staff-invitation-create', limit: 10, windowSeconds: 60 },
+      response: { 200: 'staffInvitation.createResponse', 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error', 429: 'http.error' },
     })
     .post('/:id/resend', ({ params, user }) => service.resend(params.id, user.id), {
       browserMutation: 'admin',
       staffAuth: true,
       permission: { staff: ['invite'] },
       applicationRateLimit: { namespace: 'staff-invitation-resend', limit: 5, windowSeconds: 60 },
+      params: 'http.idParams', response: { 200: 'staffInvitation.createResponse', 401: 'http.error', 403: 'http.error', 410: 'http.error', 422: 'http.error', 429: 'http.error' },
     })
     .post('/:id/cancel', ({ params, user }) => service.cancel(params.id, user.id), {
       browserMutation: 'admin',
       staffAuth: true,
       permission: { staff: ['invite'] },
       applicationRateLimit: { namespace: 'staff-invitation-cancel', limit: 10, windowSeconds: 60 },
+      params: 'http.idParams', response: { 200: 'http.empty', 401: 'http.error', 403: 'http.error', 410: 'http.error', 422: 'http.error', 429: 'http.error' },
     })
     .post('/accept', async ({ body, set }) => {
       const result = await service.accept(body)
@@ -59,6 +65,7 @@ export function createStaffInvitationModule(
       browserMutation: 'admin',
       body: 'staffInvitation.acceptBody',
       applicationRateLimit: { namespace: 'staff-invitation-accept', limit: 5, windowSeconds: 60 },
+      response: { 200: 'staffInvitation.acceptResponse', 403: 'http.error', 410: 'http.error', 422: 'http.error', 429: 'http.error' },
     })
 }
 

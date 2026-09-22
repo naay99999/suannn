@@ -8,14 +8,32 @@ export interface StaffActor {
   role: StaffRole
 }
 
+export interface StaffMember {
+  id: string
+  name: string
+  email: string
+  role: StaffRole
+  banned: boolean
+  staffActivatedAt: Date | null
+}
+
+export interface StaffSession {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+  expiresAt: Date
+  ipAddress: string | null
+  userAgent: string | null
+}
+
 export interface StaffRepositoryContract {
-  list(): Promise<unknown[]>
+  list(): Promise<StaffMember[]>
   getRole(userId: string): Promise<StaffRole | null>
   changeRole(actor: StaffActor, targetUserId: string, role: StaffRole): Promise<void>
   setSuspended(actor: StaffActor, targetUserId: string, suspended: boolean, reason?: string): Promise<void>
   revokeSessions(actor: StaffActor, targetUserId: string): Promise<void>
   resetMfa(actor: StaffActor, targetUserId: string): Promise<void>
-  listOwnSessions(userId: string): Promise<unknown[]>
+  listOwnSessions(userId: string): Promise<StaffSession[]>
   revokeOwnSession(userId: string, sessionId: string): Promise<void>
 }
 

@@ -13,8 +13,8 @@ export class StaffRepository implements StaffRepositoryContract {
     private readonly audit: AuditService,
   ) {}
 
-  list() {
-    return this.db.select({
+  async list() {
+    const rows = await this.db.select({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -22,6 +22,12 @@ export class StaffRepository implements StaffRepositoryContract {
       banned: user.banned,
       staffActivatedAt: user.staffActivatedAt,
     }).from(user).where(eq(user.accountType, 'staff')).orderBy(asc(user.email))
+
+    return rows.map((row) => ({
+      ...row,
+      role: row.role as StaffRole,
+      banned: row.banned ?? false,
+    }))
   }
 
   async getRole(userId: string) {

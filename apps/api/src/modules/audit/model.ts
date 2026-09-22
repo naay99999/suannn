@@ -1,3 +1,5 @@
+import { t } from 'elysia'
+
 export const auditMetadataKeys = {
   'staff.invited': ['role'],
   'staff.invitation-resent': [],
@@ -12,6 +14,14 @@ export const auditMetadataKeys = {
   'staff.mfa-reset': [],
   'staff.backup-codes-regenerated': [],
 } as const
+
+const auditRecord = t.Object({
+  id: t.String(), occurredAt: t.Date(), actorUserId: t.Nullable(t.String()), action: t.String(),
+  targetType: t.String(), targetId: t.String(), requestId: t.String(), ipAddress: t.Nullable(t.String()),
+  userAgent: t.Nullable(t.String()), metadata: t.Record(t.String(), t.Unknown()),
+})
+
+export const auditModels = { 'audit.listResponse': t.Array(auditRecord) }
 
 export type AuditAction = keyof typeof auditMetadataKeys
 
