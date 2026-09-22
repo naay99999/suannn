@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm'
+import { and, eq, ne, sql } from 'drizzle-orm'
 import type { createDatabase } from '../../database/client'
 import { session, twoFactor, user } from '../../database/schema'
 import type { AuditService } from '../audit/service'
@@ -7,7 +7,12 @@ import { staffMfaRecoveryEmail } from '../email/templates'
 import type { Auth } from '../../plugins/auth/auth'
 
 export interface StaffMfaStore {
-  activate(userId: string, activatedAt: Date, absoluteExpiresAt: Date): Promise<void>
+  activate(
+    userId: string,
+    sessionToken: string,
+    activatedAt: Date,
+    absoluteExpiresAt: Date,
+  ): Promise<void>
   resetForRecovery(userId: string): Promise<{ email: string }>
 }
 
@@ -19,14 +24,19 @@ export class DatabaseStaffMfaStore implements StaffMfaStore {
     private readonly audit: AuditService,
   ) {}
 
-  async activate(userId: string, activatedAt: Date, absoluteExpiresAt: Date) {
+  async activate(
+    userId: string,
+    sessionToken: string,
+    activatedAt: Date,
+    absoluteExpiresAt: Date,
+  ) {
     await this.db.transaction(async (tx) => {
-      const [latestSession] = await tx.select({ id: session.id }).from(session)
-        .where(eq(session.userId, userId))
-        .orderBy(desc(session.createdAt))
+      const [verifiedSession] = await tx.select({ id: session.id }).from(session)
+        .where(and(eq(session.userId, userId), eq(session.token, sessionToken)))
+        .for('update')
         .limit(1)
 
-      if (!latestSession) throw new Error('MFA_SESSION_ROTATION_NOT_FOUND')
+      if (!verifiedSession) throw new Error('MFA_SESSION_ROTATION_NOT_FOUND')
 
       await tx.update(user).set({ staffActivatedAt: activatedAt }).where(and(
         eq(user.id, userId),
@@ -35,10 +45,10 @@ export class DatabaseStaffMfaStore implements StaffMfaStore {
       await tx.update(session).set({
         lastActivityAt: activatedAt,
         absoluteExpiresAt,
-      }).where(eq(session.id, latestSession.id))
+      }).where(eq(session.id, verifiedSession.id))
       await tx.delete(session).where(and(
         eq(session.userId, userId),
-        ne(session.id, latestSession.id),
+        ne(session.id, verifiedSession.id),
       ))
     })
   }
@@ -130,6 +140,7 @@ export class StaffMfaService {
 
     await this.dependencies.store.activate(
       current.user.id,
+      result.response.token,
       activatedAt,
       new Date(activatedAt.getTime() + 8 * 60 * 60 * 1000),
     )

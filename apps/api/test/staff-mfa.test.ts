@@ -31,7 +31,10 @@ function createHarness(current: typeof restrictedSession | typeof activeSession 
       },
       verifyTOTP: async (input: unknown) => {
         calls.push({ method: 'verify', input })
-        return { token: 'token', user: restrictedSession.user }
+        return {
+          headers: new Headers({ 'set-cookie': 'session=token' }),
+          response: { token: 'token', user: restrictedSession.user },
+        }
       },
       generateBackupCodes: async (input: unknown) => {
         calls.push({ method: 'generate', input })
@@ -44,8 +47,13 @@ function createHarness(current: typeof restrictedSession | typeof activeSession 
     },
   } as unknown as Auth
   const store = {
-    async activate(userId: string, activatedAt: Date, absoluteExpiresAt: Date) {
-      activations.push({ userId, activatedAt, absoluteExpiresAt })
+    async activate(
+      userId: string,
+      sessionToken: string,
+      activatedAt: Date,
+      absoluteExpiresAt: Date,
+    ) {
+      activations.push({ userId, sessionToken, activatedAt, absoluteExpiresAt })
     },
     async resetForRecovery() {
       return { email: 'owner@example.com' }
@@ -90,6 +98,7 @@ describe('staff MFA lifecycle', () => {
     })
     expect(activations).toEqual([{
       userId: 'staff-1',
+      sessionToken: 'token',
       activatedAt: now,
       absoluteExpiresAt: new Date('2026-09-22T18:00:00.000Z'),
     }])
