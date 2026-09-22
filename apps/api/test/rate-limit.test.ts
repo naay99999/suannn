@@ -51,6 +51,8 @@ describe('application rate limiter', () => {
     }))
 
     expect(response.status).toBe(429)
+    expect(response.headers.get('retry-after')).toBe('60')
+    expect(await response.json()).toEqual({ code: 'RATE_LIMITED', message: 'Too many requests' })
     expect(handled).toBe(0)
   })
 

@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import type { AppConfig } from '../config/env'
 import type { RateLimiter } from '../modules/rate-limit/service'
 import { createRequestContextPlugin } from './request-context'
+import { rateLimitResponse } from '../modules/rate-limit/service'
 
 export function createApplicationRateLimitPlugin(
   config: AppConfig,
@@ -16,7 +17,7 @@ export function createApplicationRateLimitPlugin(
         windowSeconds: number
       }) {
         return {
-          async resolve({ request, requestContext, status }) {
+        async resolve({ request, requestContext, set, status }) {
             const result = await limiter.consume({
               namespace: options.namespace,
               subjectHash: new URL(request.url).pathname,
@@ -26,10 +27,10 @@ export function createApplicationRateLimitPlugin(
             })
 
             if (!result.allowed) {
-              return status(429, {
-                code: 'RATE_LIMITED',
-                message: 'Too many requests',
-              })
+              const rejected = rateLimitResponse(result)
+              set.status = rejected.status
+              Object.assign(set.headers, rejected.headers)
+              return status(rejected.status, rejected.body)
             }
           },
         }

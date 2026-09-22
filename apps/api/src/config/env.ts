@@ -21,7 +21,6 @@ export interface AppConfig {
   adminUrl: string
   resendApiKey: string
   authEmailFrom: string
-  auditRetentionDays: number
   trustedProxyHeaders: string[]
 }
 
@@ -80,20 +79,6 @@ function parseTrustedProxyHeaders(value: string | undefined) {
 
     return header
   }))]
-}
-
-function parsePositiveInteger(name: string, value: string | undefined, fallback: number) {
-  if (!value) {
-    return fallback
-  }
-
-  const parsed = Number(value)
-
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`${name} must be a positive integer`)
-  }
-
-  return parsed
 }
 
 function requiredValue(name: string, value: string | undefined) {
@@ -187,7 +172,6 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     adminUrl,
     resendApiKey: requiredValue('RESEND_API_KEY', env.RESEND_API_KEY),
     authEmailFrom: requiredValue('AUTH_EMAIL_FROM', env.AUTH_EMAIL_FROM),
-    auditRetentionDays: parsePositiveInteger('AUDIT_RETENTION_DAYS', env.AUDIT_RETENTION_DAYS, 365),
     trustedProxyHeaders: parseTrustedProxyHeaders(env.TRUSTED_PROXY_HEADERS),
   }
 }

@@ -16,7 +16,7 @@ bun --filter api db:migrate
 
 ## Configuration
 
-Copy `.env.example` to `.env.local`. Set `DATABASE_URL`, a random `BETTER_AUTH_SECRET` of at least 32 characters, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `ADMIN_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`. The sender must be verified in Resend. Defaults include `HOST=0.0.0.0`, `PORT=6767`, and 365-day audit retention.
+Copy `.env.example` to `.env.local`. Set `DATABASE_URL`, a random `BETTER_AUTH_SECRET` of at least 32 characters, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `ADMIN_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`. The sender must be verified in Resend. Defaults include `HOST=0.0.0.0` and `PORT=6767`; audit retention and purge are an external operations responsibility.
 
 For production, set `NODE_ENV=production` and `CORS_ORIGINS` to a comma-separated list of exact frontend origins. Startup fails if the allowlist is absent. These origins are also Better Auth's trusted origins and receive credentialed CORS responses.
 
