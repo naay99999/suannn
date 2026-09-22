@@ -10,6 +10,7 @@ export const auditMetadataKeys = {
   'staff.reactivated': [],
   'staff.sessions-revoked': [],
   'staff.mfa-reset': [],
+  'staff.backup-codes-regenerated': [],
 } as const
 
 export type AuditAction = keyof typeof auditMetadataKeys

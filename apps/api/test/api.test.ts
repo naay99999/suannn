@@ -5,6 +5,7 @@ import { loadConfig } from '../src/config/env'
 import { createDatabase } from '../src/database/client'
 import { createAuth } from '../src/plugins/auth/auth'
 import { createAuthPlugin } from '../src/plugins/auth'
+import { createErrorHandlingPlugin } from '../src/plugins/error-handling'
 import { AuditRepository } from '../src/modules/audit/repository'
 import { AuditService } from '../src/modules/audit/service'
 import { CustomerSignupService } from '../src/modules/customer-auth/service'
@@ -33,6 +34,7 @@ const app = await createApp(config, {
     auth,
     claims,
     limiter,
+    audit,
   }),
   staffInvitations: new StaffInvitationService({
     auth,
@@ -46,6 +48,7 @@ const app = await createApp(config, {
   staffMfa: new StaffMfaService({
     auth,
     store: new DatabaseStaffMfaStore(database.db, audit),
+    audit,
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
   identityReservations: claims,
@@ -57,6 +60,25 @@ afterAll(async () => {
 })
 
 describe('API routes', () => {
+  it('maps expected domain failures without exposing them as HTTP 500', async () => {
+    const domainApp = new Elysia()
+      .use(createErrorHandlingPlugin())
+      .get('/expired-invitation', () => {
+        throw new Error('INVALID_INVITATION')
+      })
+      .get('/owner-invariant', () => {
+        throw new Error('OWNER_INVARIANT')
+      })
+
+    const [expired, conflict] = await Promise.all([
+      domainApp.handle(new Request('http://localhost/expired-invitation')),
+      domainApp.handle(new Request('http://localhost/owner-invariant')),
+    ])
+
+    expect(expired.status).toBe(410)
+    expect(conflict.status).toBe(409)
+  })
+
   it('serves generated OpenAPI documentation', async () => {
     const [documentationResponse, specificationResponse] = await Promise.all([
       app.handle(new Request('http://localhost/api/v1/docs')),

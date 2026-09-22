@@ -34,7 +34,7 @@ const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 const app = await createApp(config, {
   auth,
   audit,
-  customerSignup: new CustomerSignupService({ auth, claims, limiter }),
+  customerSignup: new CustomerSignupService({ auth, claims, limiter, audit }),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
@@ -50,6 +50,7 @@ const app = await createApp(config, {
     emailSender,
     runInBackground,
     adminUrl: config.adminUrl,
+    audit,
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
   identityReservations: claims,

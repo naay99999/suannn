@@ -24,6 +24,10 @@ export class AuditRepository {
     })
   }
 
+  insertStandalone(event: AuditEvent) {
+    return this.insert(this.db, event)
+  }
+
   list(query: { limit: number; actorUserId?: string }) {
     const base = this.db.select().from(auditLog)
     const filtered = query.actorUserId

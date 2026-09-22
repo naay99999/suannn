@@ -99,6 +99,7 @@ interface StaffMfaDependencies {
   emailSender?: EmailSender
   runInBackground?: (task: Promise<unknown>) => void
   adminUrl?: string
+  audit?: AuditService
 }
 
 export class StaffMfaService {
@@ -156,6 +157,16 @@ export class StaffMfaService {
     const result = await this.dependencies.auth.api.generateBackupCodes({
       headers,
       body: { password },
+    })
+
+    await this.dependencies.audit?.recordStandalone({
+      id: crypto.randomUUID(),
+      actorUserId: current.user.id,
+      action: 'staff.backup-codes-regenerated',
+      targetType: 'user',
+      targetId: current.user.id,
+      requestId: crypto.randomUUID(),
+      metadata: {},
     })
 
     return { backupCodes: result.backupCodes }

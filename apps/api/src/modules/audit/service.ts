@@ -13,6 +13,11 @@ export class AuditService {
     await this.repository.insert(writer, event)
   }
 
+  async recordStandalone(event: AuditEvent) {
+    assertAuditMetadata(event)
+    await this.repository.insertStandalone(event)
+  }
+
   listAuthorized(query: { limit: number; actorUserId?: string }, authorized: boolean) {
     if (!authorized) {
       throw new Error('FORBIDDEN')

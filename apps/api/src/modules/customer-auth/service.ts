@@ -5,6 +5,7 @@ import type { IdentityClaimService } from '../identity-claims/service'
 import { hashToken } from '../../shared/crypto'
 import { normalizeEmail } from '../../shared/email'
 import type { CustomerSignupCommand } from './model'
+import type { AuditService } from '../audit/service'
 
 interface SignupDependencies {
   auth: Auth
@@ -19,6 +20,7 @@ interface SignupDependencies {
     }): Promise<RateLimitResult>
   }
   dummyPasswordHash?: (password: string) => Promise<unknown>
+  audit?: AuditService
 }
 
 const publicResponse = { accepted: true, next: 'sign-in' } as const
@@ -44,7 +46,12 @@ export class CustomerSignupService {
       return publicResponse
     }
 
-    return this.dependencies.claims.withEmailClaim(email, async ({ claim, user, claimCustomer }) => {
+    return this.dependencies.claims.withEmailClaim(email, async ({
+      tx,
+      claim,
+      user,
+      claimCustomer,
+    }) => {
       if (claim || user) {
         await this.dummyPasswordHash(command.password)
         return publicResponse
@@ -60,6 +67,15 @@ export class CustomerSignupService {
         })
 
         await claimCustomer(created.user.id)
+        await this.dependencies.audit?.record(tx, {
+          id: crypto.randomUUID(),
+          actorUserId: created.user.id,
+          action: 'customer.created',
+          targetType: 'user',
+          targetId: created.user.id,
+          requestId: crypto.randomUUID(),
+          metadata: {},
+        })
       } catch {
         await this.dummyPasswordHash(command.password)
       }

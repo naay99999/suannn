@@ -127,12 +127,15 @@ export class StaffRepository implements StaffRepositoryContract {
   }
 
   async revokeOwnSession(userId: string, sessionId: string) {
-    const rows = await this.db.delete(session).where(and(
-      eq(session.id, sessionId),
-      eq(session.userId, userId),
-    )).returning({ id: session.id })
+    await this.db.transaction(async (tx) => {
+      const rows = await tx.delete(session).where(and(
+        eq(session.id, sessionId),
+        eq(session.userId, userId),
+      )).returning({ id: session.id })
 
-    if (rows.length !== 1) throw new Error('SESSION_NOT_FOUND')
+      if (rows.length !== 1) throw new Error('SESSION_NOT_FOUND')
+      await this.audit.record(tx, this.event(userId, 'staff.sessions-revoked', sessionId, {}))
+    })
   }
 
   private lockActiveOwners(tx: Parameters<Parameters<Database['transaction']>[0]>[0]) {
