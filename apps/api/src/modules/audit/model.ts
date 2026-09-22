@@ -7,6 +7,8 @@ export const auditMetadataKeys = {
   'auth.sign-in-failed': ['reason'],
   'staff.role-changed': ['previousRole', 'nextRole'],
   'staff.suspended': ['reason'],
+  'staff.reactivated': [],
+  'staff.sessions-revoked': [],
   'staff.mfa-reset': [],
 } as const
 
