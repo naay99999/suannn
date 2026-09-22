@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { loadConfig } from '../src/config/env'
 import { createAuth } from '../src/plugins/auth/auth'
+import { session, user } from '../src/database/schema'
 import { testEnv } from './fixtures'
 import {
   createTestDatabase,
@@ -63,5 +65,29 @@ describe('Better Auth against the migrated database', () => {
         role: 'owner',
       } as never,
     })).rejects.toThrow('role is not allowed to be set')
+  })
+
+  it('initializes a non-sliding staff absolute timeout when authentication creates a session', async () => {
+    await database.db.update(user).set({
+      accountType: 'staff',
+      role: 'support',
+      emailVerified: true,
+      staffActivatedAt: new Date(),
+    }).where(eq(user.email, 'customer@example.com'))
+
+    const signedIn = await auth.api.signInEmail({
+      body: {
+        email: 'customer@example.com',
+        password: 'correct horse battery staple',
+      },
+    })
+    const [createdSession] = await database.db.select().from(session)
+      .where(eq(session.userId, signedIn.user.id))
+      .limit(1)
+
+    expect(createdSession?.lastActivityAt).toBeInstanceOf(Date)
+    expect(createdSession?.absoluteExpiresAt).toBeInstanceOf(Date)
+    expect(createdSession!.absoluteExpiresAt!.getTime() - createdSession!.lastActivityAt!.getTime())
+      .toBe(8 * 60 * 60 * 1000)
   })
 })

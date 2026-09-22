@@ -1,9 +1,11 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { betterAuth } from 'better-auth'
+import { APIError } from 'better-auth/api'
 import { openAPI } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins/admin'
 import { customSession } from 'better-auth/plugins/custom-session'
 import { twoFactor } from 'better-auth/plugins/two-factor'
+import { and, eq } from 'drizzle-orm'
 import type { AppConfig } from '../../config/env'
 import type { createDatabase } from '../../database/client'
 import {
@@ -14,6 +16,8 @@ import {
 import { resetPasswordEmail, verificationEmail } from '../../modules/email/templates'
 import * as schema from '../../database/schema/auth'
 import { accessControl, roles, type AccountType } from './access-control'
+import { capabilitiesFor, type Role } from './access-control'
+import { touchStaffSession, validateStaffSession } from './session-policy'
 
 type Database = ReturnType<typeof createDatabase>['db']
 
@@ -48,6 +52,32 @@ export function createAuth(
       provider: 'pg',
       schema,
     }),
+    databaseHooks: {
+      session: {
+        create: {
+          async before(newSession) {
+            const [account] = await db.select({ accountType: schema.user.accountType })
+              .from(schema.user)
+              .where(eq(schema.user.id, newSession.userId))
+              .limit(1)
+
+            if (account?.accountType !== 'staff') {
+              return { data: newSession }
+            }
+
+            const authenticatedAt = new Date()
+
+            return {
+              data: {
+                ...newSession,
+                lastActivityAt: authenticatedAt,
+                absoluteExpiresAt: new Date(authenticatedAt.getTime() + 8 * 60 * 60 * 1000),
+              },
+            }
+          },
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       autoSignIn: false,
@@ -192,7 +222,65 @@ export function createAuth(
         },
       }),
       customSession(async ({ user, session }) => {
-        const extendedUser = user as typeof user & { accountType?: AccountType }
+        const extendedUser = user as typeof user & {
+          accountType?: AccountType
+          role?: Role
+          banned?: boolean
+          staffActivatedAt?: Date | null
+        }
+        const extendedSession = session as typeof session & {
+          lastActivityAt?: Date | null
+          absoluteExpiresAt?: Date | null
+        }
+        let staff: {
+          role: Exclude<Role, 'customer'>
+          permissions: readonly string[]
+        } | undefined
+
+        if (extendedUser.accountType === 'staff') {
+          const validation = validateStaffSession({
+            user: {
+              id: user.id,
+              accountType: 'staff',
+              role: extendedUser.role ?? 'customer',
+              emailVerified: user.emailVerified,
+              staffActivatedAt: extendedUser.staffActivatedAt ?? null,
+              banned: extendedUser.banned ?? false,
+            },
+            session: {
+              id: session.id,
+              lastActivityAt: extendedSession.lastActivityAt ?? null,
+              absoluteExpiresAt: extendedSession.absoluteExpiresAt ?? null,
+            },
+          })
+
+          if (!validation.valid) {
+            await db.delete(schema.session).where(eq(schema.session.id, session.id))
+            throw new APIError('UNAUTHORIZED', {
+              code: 'SESSION_EXPIRED',
+              message: 'Session expired',
+            })
+          }
+
+          await touchStaffSession({
+            async touchIfUnchanged(sessionId, previous, next) {
+              const rows = await db.update(schema.session)
+                .set({ lastActivityAt: next })
+                .where(and(
+                  eq(schema.session.id, sessionId),
+                  eq(schema.session.lastActivityAt, previous),
+                ))
+                .returning({ id: schema.session.id })
+
+              return rows.length === 1
+            },
+          }, session.id, extendedSession.lastActivityAt!, new Date())
+
+          staff = {
+            role: validation.role,
+            permissions: capabilitiesFor(validation.role),
+          }
+        }
 
         return {
           session: {
@@ -207,6 +295,7 @@ export function createAuth(
             image: user.image ?? null,
             accountType: extendedUser.accountType ?? 'customer',
           },
+          ...(staff ? { staff } : {}),
         }
       }),
       openAPI({
