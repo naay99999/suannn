@@ -6,30 +6,26 @@ import { customSession } from 'better-auth/plugins/custom-session'
 import { twoFactor } from 'better-auth/plugins/two-factor'
 import type { AppConfig } from '../../config/env'
 import type { createDatabase } from '../../database/client'
+import {
+  scheduleBackground,
+  type EmailDeliveryLogger,
+  type EmailSender,
+} from '../../modules/email/sender'
+import { resetPasswordEmail, verificationEmail } from '../../modules/email/templates'
 import * as schema from '../../database/schema/auth'
 import { accessControl, roles, type AccountType } from './access-control'
 
 type Database = ReturnType<typeof createDatabase>['db']
 
-interface AuthEmailMessage {
-  to: string
-  url: string
-}
-
-export interface AuthEmailSender {
-  sendVerificationEmail(message: AuthEmailMessage): Promise<void>
-  sendResetPasswordEmail(message: AuthEmailMessage): Promise<void>
-}
-
 export interface AuthDependencies {
-  emailSender: AuthEmailSender
+  emailSender: EmailSender
   runInBackground(task: Promise<unknown>): void
+  emailLogger?: EmailDeliveryLogger
 }
 
 const unconfiguredDependencies: AuthDependencies = {
   emailSender: {
-    sendVerificationEmail: async () => undefined,
-    sendResetPasswordEmail: async () => undefined,
+    send: async () => ({ id: null }),
   },
   runInBackground(task) {
     void task.catch(() => undefined)
@@ -60,10 +56,18 @@ export function createAuth(
       revokeSessionsOnPasswordReset: true,
       minPasswordLength: 12,
       maxPasswordLength: 256,
-      sendResetPassword: ({ user, url }) => dependencies.emailSender.sendResetPasswordEmail({
-        to: user.email,
-        url,
-      }),
+      sendResetPassword: async ({ user, url }) => {
+        scheduleBackground(
+          dependencies.emailSender.send({
+            to: user.email,
+            template: 'reset-password',
+            ...resetPasswordEmail(url),
+          }),
+          { template: 'reset-password' },
+          dependencies.emailLogger,
+          dependencies.runInBackground,
+        )
+      },
       customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
         ...coreFields,
         ...additionalFields,
@@ -77,10 +81,18 @@ export function createAuth(
     },
     emailVerification: {
       sendOnSignUp: true,
-      sendVerificationEmail: ({ user, url }) => dependencies.emailSender.sendVerificationEmail({
-        to: user.email,
-        url,
-      }),
+      sendVerificationEmail: async ({ user, url }) => {
+        scheduleBackground(
+          dependencies.emailSender.send({
+            to: user.email,
+            template: 'verify-email',
+            ...verificationEmail(url),
+          }),
+          { template: 'verify-email' },
+          dependencies.emailLogger,
+          dependencies.runInBackground,
+        )
+      },
     },
     user: {
       additionalFields: {

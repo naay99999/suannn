@@ -20,3 +20,26 @@ export function logRequest(entry: RequestLog) {
 export function logError(entry: ErrorLog) {
   console.error(JSON.stringify(entry))
 }
+
+const redactedKeys = new Set([
+  'password',
+  'cookie',
+  'sessiontoken',
+  'totpsecret',
+  'backupcodes',
+])
+
+export function sanitizeLogData(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeLogData)
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+      key,
+      redactedKeys.has(key.toLowerCase()) ? '[REDACTED]' : sanitizeLogData(child),
+    ]))
+  }
+
+  return value
+}

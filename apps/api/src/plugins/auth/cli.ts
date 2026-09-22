@@ -7,10 +7,7 @@ const database = createDatabase(config.databaseUrl)
 
 export const auth = createAuth(config, database.db, {
   emailSender: {
-    sendVerificationEmail: async () => {
-      throw new Error('Email delivery is unavailable during schema generation')
-    },
-    sendResetPasswordEmail: async () => {
+    send: async () => {
       throw new Error('Email delivery is unavailable during schema generation')
     },
   },

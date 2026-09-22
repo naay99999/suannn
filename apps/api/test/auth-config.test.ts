@@ -10,8 +10,7 @@ const database = createDatabase(config.databaseUrl)
 const backgroundTasks: Promise<unknown>[] = []
 const dependencies: AuthDependencies = {
   emailSender: {
-    sendVerificationEmail: async () => undefined,
-    sendResetPasswordEmail: async () => undefined,
+    send: async () => ({ id: null }),
   },
   runInBackground(task) {
     backgroundTasks.push(task)

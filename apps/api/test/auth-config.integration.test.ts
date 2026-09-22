@@ -8,10 +8,18 @@ import {
   migrateTestDatabase,
   resetTestDatabase,
 } from './helpers/database'
+import { FakeEmailSender } from './helpers/fakes'
 
 const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
-const auth = createAuth(config, database.db)
+const emailSender = new FakeEmailSender()
+const backgroundTasks: Promise<unknown>[] = []
+const auth = createAuth(config, database.db, {
+  emailSender,
+  runInBackground(task) {
+    backgroundTasks.push(task)
+  },
+})
 let unlockDatabase: (() => Promise<void>) | undefined
 
 beforeAll(async () => {
@@ -38,6 +46,11 @@ describe('Better Auth against the migrated database', () => {
     expect(response.token).toBeNull()
     expect(response.user.email).toBe('customer@example.com')
     expect(response.user.accountType).toBe('customer')
+    await Promise.all(backgroundTasks)
+    expect(emailSender.messages[0]).toMatchObject({
+      to: 'customer@example.com',
+      template: 'verify-email',
+    })
   })
 
   it('does not accept server-owned fields from public signup', async () => {
