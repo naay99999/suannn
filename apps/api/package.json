@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "auth:generate": "bun --env-file=.env.local ./node_modules/.bin/auth generate --config src/plugins/auth/cli.ts --output src/database/schema/auth.ts --yes",
+    "auth:bootstrap-owner": "bun --env-file=.env.local src/cli/bootstrap-owner.ts",
     "db:generate": "bun --env-file=.env.local ./node_modules/.bin/drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "bun --env-file=.env.local ./node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts",
     "typecheck": "tsc --noEmit",

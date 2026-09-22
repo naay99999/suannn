@@ -85,20 +85,8 @@ async function prepareAuthRequest(
   return request
 }
 
-export function createAuthPlugin(
-  auth: Auth,
-  dependencies: AuthHttpDependencies = defaultDependencies,
-) {
-  return new Elysia({ name: 'better-auth' })
-    .all('/api/v1/auth/*', async ({ request }) => {
-      const prepared = await prepareAuthRequest(auth, request, dependencies)
-
-      return prepared instanceof Request ? auth.handler(prepared) : prepared
-    }, {
-      detail: {
-        hide: true,
-      },
-    })
+export function createAuthMacros(auth: Auth) {
+  return new Elysia({ name: 'auth-macros' })
     .macro({
       auth: {
         async resolve({ status, request: { headers } }) {
@@ -158,6 +146,23 @@ export function createAuthPlugin(
             return { user: current.user, session: current.session, staff: current.staff }
           },
         }
+      },
+    })
+}
+
+export function createAuthPlugin(
+  auth: Auth,
+  dependencies: AuthHttpDependencies = defaultDependencies,
+) {
+  return new Elysia({ name: 'better-auth' })
+    .use(createAuthMacros(auth))
+    .all('/api/v1/auth/*', async ({ request }) => {
+      const prepared = await prepareAuthRequest(auth, request, dependencies)
+
+      return prepared instanceof Request ? auth.handler(prepared) : prepared
+    }, {
+      detail: {
+        hide: true,
       },
     })
 }

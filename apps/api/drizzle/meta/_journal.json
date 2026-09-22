@@ -15,6 +15,13 @@
       "when": 1790048732200,
       "tag": "0001_free_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790050220244,
+      "tag": "0002_stiff_ikaris",
+      "breakpoints": true
     }
   ]
 }
