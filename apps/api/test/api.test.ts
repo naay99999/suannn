@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from 'bun:test'
+import { APIError } from 'better-auth/api'
 import { Elysia } from 'elysia'
 import { createApp } from '../src/app'
 import { loadConfig } from '../src/config/env'
@@ -60,6 +61,48 @@ afterAll(async () => {
 })
 
 describe('API routes', () => {
+  it('maps expected Better Auth API errors without exposing their messages', async () => {
+    const authErrorApp = new Elysia()
+      .use(createErrorHandlingPlugin())
+      .get('/invalid', () => {
+        throw new APIError('BAD_REQUEST', { code: 'INVALID_PASSWORD', message: 'sensitive detail' })
+      })
+      .get('/limited', () => {
+        throw new APIError('TOO_MANY_REQUESTS', {
+          code: 'LOCKED',
+          message: 'sensitive detail',
+        }, { 'Retry-After': '30' })
+      })
+
+    const invalid = await authErrorApp.handle(new Request('http://localhost/invalid'))
+    const limited = await authErrorApp.handle(new Request('http://localhost/limited'))
+
+    expect(invalid.status).toBe(400)
+    expect(await invalid.json()).toEqual({
+      code: 'AUTH_REQUEST_INVALID',
+      message: 'Authentication request is invalid',
+    })
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('retry-after')).toBe('30')
+    expect(await limited.json()).toEqual({ code: 'RATE_LIMITED', message: 'Too many requests' })
+  })
+
+  it('treats unknown Better Auth statuses as internal errors', async () => {
+    const errorApp = new Elysia()
+      .use(createErrorHandlingPlugin())
+      .get('/', () => {
+        throw new APIError('IM_A_TEAPOT' as never, { message: 'do not expose me' })
+      })
+
+    const response = await errorApp.handle(new Request('http://localhost/'))
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+    })
+  })
+
   it('maps expected domain failures without exposing them as HTTP 500', async () => {
     const domainApp = new Elysia()
       .use(createErrorHandlingPlugin())

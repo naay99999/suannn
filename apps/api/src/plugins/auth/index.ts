@@ -147,7 +147,13 @@ export function createAuthMacros(auth: Auth) {
           async resolve({ status, request: { headers } }) {
             const current = await auth.api.getSession({ headers })
 
-            if (!current?.staff || !hasPermissions(current.staff.role as Role, requirement)) {
+            if (!current?.staff) {
+              return current
+                ? status(403, { code: 'FORBIDDEN', message: 'Forbidden' })
+                : status(401, { code: 'SESSION_EXPIRED', message: 'Session expired' })
+            }
+
+            if (!hasPermissions(current.staff.role as Role, requirement)) {
               return status(403, { code: 'FORBIDDEN', message: 'Forbidden' })
             }
 
