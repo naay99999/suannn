@@ -118,8 +118,18 @@ export function createAuthPlugin(
         async resolve({ status, request: { headers } }) {
           const current = await auth.api.getSession({ headers })
 
-          if (!current || current.user.accountType !== 'customer' || !current.user.emailVerified) {
-            return status(401)
+          if (!current || current.user.accountType !== 'customer') {
+            return status(401, {
+              code: 'AUTHENTICATION_REQUIRED',
+              message: 'Authentication required',
+            })
+          }
+
+          if (!current.user.emailVerified) {
+            return status(403, {
+              code: 'EMAIL_VERIFICATION_REQUIRED',
+              message: 'Email verification required',
+            })
           }
 
           return { user: current.user, session: current.session }

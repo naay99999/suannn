@@ -133,4 +133,34 @@ describe('staff session policy', () => {
       expect((await app.handle(new Request('http://localhost/staff'))).status).toBe(401)
     }
   })
+
+  it('distinguishes authentication from customer email verification', async () => {
+    const sessions = [
+      null,
+      {
+        session: { id: 'session-1', expiresAt: new Date() },
+        user: {
+          id: 'customer-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+          emailVerified: false,
+          image: null,
+          accountType: 'customer' as const,
+        },
+      },
+    ]
+
+    for (const [index, current] of sessions.entries()) {
+      const auth = {
+        handler: async () => new Response(),
+        api: { getSession: async () => current },
+      } as unknown as Auth
+      const app = new Elysia()
+        .use(createAuthPlugin(auth))
+        .get('/customer', () => ({ ok: true }), { verifiedCustomer: true })
+
+      expect((await app.handle(new Request('http://localhost/customer'))).status)
+        .toBe(index === 0 ? 401 : 403)
+    }
+  })
 })
