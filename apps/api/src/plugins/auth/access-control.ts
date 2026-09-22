@@ -1,5 +1,8 @@
 import { createAccessControl } from 'better-auth/plugins/access'
 import { defaultStatements } from 'better-auth/plugins/admin/access'
+import type { StaffRole } from './model'
+
+export type { StaffRole } from './model'
 
 export const permissions = {
   catalog: ['read', 'create', 'update', 'delete', 'publish'],
@@ -12,7 +15,6 @@ export const permissions = {
 } as const
 
 export type AccountType = 'customer' | 'staff'
-export type StaffRole = 'owner' | 'admin' | 'catalog_manager' | 'fulfillment' | 'support'
 export type Role = StaffRole | 'customer'
 export type Resource = keyof typeof permissions
 export type Action<TResource extends Resource> = typeof permissions[TResource][number]

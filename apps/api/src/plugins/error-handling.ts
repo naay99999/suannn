@@ -1,4 +1,5 @@
 import { Elysia } from 'elysia'
+import { mapAuthApiError } from './auth/api-error'
 import { logError } from '../shared/logger'
 
 const domainErrors: Record<string, { status: 401 | 403 | 404 | 409 | 410 | 422; message: string }> = {
@@ -27,6 +28,18 @@ export function createErrorHandlingPlugin() {
       if (code === 'VALIDATION') {
         set.status = 422
         return { code: 'VALIDATION_ERROR', message: 'Request validation failed' }
+      }
+
+      const authError = mapAuthApiError(error)
+
+      if (authError) {
+        set.status = authError.status
+
+        if (authError.headers) {
+          Object.assign(set.headers, authError.headers)
+        }
+
+        return authError.body
       }
 
       if (error instanceof Error && domainErrors[error.message]) {

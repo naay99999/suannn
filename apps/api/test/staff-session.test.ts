@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
 import type { Auth } from '../src/plugins/auth/auth'
-import { createAuthPlugin } from '../src/plugins/auth'
+import { createAuthMacros, createAuthPlugin } from '../src/plugins/auth'
 import {
   touchStaffSession,
   validateStaffSession,
@@ -132,6 +132,42 @@ describe('staff session policy', () => {
 
       expect((await app.handle(new Request('http://localhost/staff'))).status).toBe(401)
     }
+  })
+
+  it('returns 401 for missing sessions and 403 for insufficient permissions', async () => {
+    const createPermissionApp = (current: unknown) => {
+      const auth = {
+        handler: async () => new Response(),
+        api: { getSession: async () => current },
+      } as unknown as Auth
+
+      return new Elysia()
+        .use(createAuthMacros(auth))
+        .get('/audit', () => ({ ok: true }), { permission: { audit: ['read'] } })
+    }
+
+    const unauthenticated = await createPermissionApp(null)
+      .handle(new Request('http://localhost/audit'))
+    const customer = await createPermissionApp({
+      session: { id: 'session-1', expiresAt: new Date() },
+      user: { accountType: 'customer' },
+    }).handle(new Request('http://localhost/audit'))
+    const activeWithoutPermission = await createPermissionApp({
+      session: { id: 'session-1', expiresAt: new Date() },
+      user: { accountType: 'staff' },
+      staff: { role: 'support', permissions: [] },
+    }).handle(new Request('http://localhost/audit'))
+    const authorized = await createPermissionApp({
+      session: { id: 'session-1', expiresAt: new Date() },
+      user: { accountType: 'staff' },
+      staff: { role: 'owner', permissions: [] },
+    }).handle(new Request('http://localhost/audit'))
+
+    expect(unauthenticated.status).toBe(401)
+    expect(await unauthenticated.json()).toEqual({ code: 'SESSION_EXPIRED', message: 'Session expired' })
+    expect(customer.status).toBe(403)
+    expect(activeWithoutPermission.status).toBe(403)
+    expect(authorized.status).toBe(200)
   })
 
   it('distinguishes authentication from customer email verification', async () => {
