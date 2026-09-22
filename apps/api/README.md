@@ -18,6 +18,18 @@ bun --filter api db:migrate
 
 Copy `.env.example` to `.env.local`. Set `DATABASE_URL`, a random `BETTER_AUTH_SECRET` of at least 32 characters, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `ADMIN_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`. The sender must be verified in Resend. Defaults include `HOST=0.0.0.0` and `PORT=6767`; audit retention and purge are an external operations responsibility.
 
+Integration tests require a dedicated test database:
+
+```bash
+createdb suannn_test
+export TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/suannn_test
+bun --filter api test:unit
+bun --filter api test:integration
+bun --filter api test
+```
+
+Integration tests reset the `public` and `drizzle` schemas, refuse databases whose PostgreSQL name does not end in `_test`, and must never target development or production databases.
+
 For production, set `NODE_ENV=production` and `CORS_ORIGINS` to a comma-separated list of exact frontend origins. Startup fails if the allowlist is absent. These origins are also Better Auth's trusted origins and receive credentialed CORS responses.
 
 Set `TRUSTED_PROXY_HEADERS` only when a trusted edge proxy overwrites every listed header. Never trust a client-preserved forwarding header.

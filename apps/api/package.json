@@ -11,7 +11,9 @@
     "db:migrate": "bun --env-file=.env.local ./node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test",
-    "test": "bun test"
+    "test": "bun run test:unit && bun run test:integration",
+    "test:unit": "bun test test/access-control.test.ts test/api.test.ts test/application-rate-limit.test.ts test/auth-config.test.ts test/auth-http-policy.test.ts test/bootstrap-owner.test.ts test/browser-mutation.test.ts test/config.test.ts test/email.test.ts test/primitives.test.ts test/route-contracts.test.ts test/staff-mfa.test.ts test/staff-session.test.ts",
+    "test:integration": "bun test/require-test-database.ts && bun test test/audit.test.ts test/auth-config.integration.test.ts test/customer-auth.test.ts test/database-schema.test.ts test/identity-claims.test.ts test/rate-limit.test.ts test/staff-admin.test.ts test/staff-invitations.test.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.5",

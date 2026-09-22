@@ -1,10 +1,9 @@
 import { sql } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { createDatabase } from '../../src/database/client'
+import { requireTestDatabaseUrl } from '../require-test-database'
 
-const defaultTestDatabaseUrl = 'postgresql://naay@127.0.0.1:5432/suannn_test'
-
-export function createTestDatabase(url = process.env.TEST_DATABASE_URL ?? defaultTestDatabaseUrl) {
+export function createTestDatabase(url = requireTestDatabaseUrl()) {
   return { ...createDatabase(url), url }
 }
 

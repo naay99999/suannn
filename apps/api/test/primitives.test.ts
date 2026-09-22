@@ -2,8 +2,14 @@ import { describe, expect, it } from 'bun:test'
 import { resolveClientIp } from '../src/shared/client-ip'
 import { createOpaqueToken, hashToken } from '../src/shared/crypto'
 import { normalizeEmail } from '../src/shared/email'
+import { requireTestDatabaseUrl } from './require-test-database'
 
 describe('auth primitives', () => {
+  it('requires an explicit integration database URL', () => {
+    expect(() => requireTestDatabaseUrl({})).toThrow('TEST_DATABASE_URL is required for API integration tests')
+    expect(requireTestDatabaseUrl({ TEST_DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:5432/suannn_test' }))
+      .toBe('postgresql://postgres:postgres@127.0.0.1:5432/suannn_test')
+  })
   it('normalizes only ASCII edge whitespace and case', () => {
     expect(normalizeEmail('\t Alice+shop@Example.COM \r')).toBe('alice+shop@example.com')
     expect(normalizeEmail('john.smith@gmail.com')).not.toBe(normalizeEmail('johnsmith@gmail.com'))
