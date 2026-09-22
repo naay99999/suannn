@@ -11,6 +11,12 @@ describe('API configuration', () => {
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
       betterAuthUrl: testEnv.BETTER_AUTH_URL,
+      storefrontUrl: testEnv.STOREFRONT_URL,
+      adminUrl: testEnv.ADMIN_URL,
+      resendApiKey: testEnv.RESEND_API_KEY,
+      authEmailFrom: testEnv.AUTH_EMAIL_FROM,
+      auditRetentionDays: 365,
+      trustedProxyHeaders: [],
     })
   })
 
@@ -27,6 +33,12 @@ describe('API configuration', () => {
       DATABASE_URL: testEnv.DATABASE_URL,
       BETTER_AUTH_SECRET: testEnv.BETTER_AUTH_SECRET,
       BETTER_AUTH_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      RESEND_API_KEY: 're_production',
+      AUTH_EMAIL_FROM: 'Suannn <auth@example.com>',
+      AUDIT_RETENTION_DAYS: '90',
+      TRUSTED_PROXY_HEADERS: 'X-Forwarded-For, x-real-ip,x-forwarded-for',
     })).toEqual({
       host: '127.0.0.1',
       port: 8080,
@@ -34,6 +46,12 @@ describe('API configuration', () => {
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
       betterAuthUrl: 'https://api.example.com',
+      storefrontUrl: 'https://store.example.com',
+      adminUrl: 'https://admin.example.com',
+      resendApiKey: 're_production',
+      authEmailFrom: 'Suannn <auth@example.com>',
+      auditRetentionDays: 90,
+      trustedProxyHeaders: ['x-forwarded-for', 'x-real-ip'],
     })
   })
 
@@ -43,5 +61,25 @@ describe('API configuration', () => {
     expect(() => loadConfig({ ...testEnv, DATABASE_URL: undefined })).toThrow('DATABASE_URL')
     expect(() => loadConfig({ ...testEnv, BETTER_AUTH_SECRET: 'too-short' })).toThrow('BETTER_AUTH_SECRET')
     expect(() => loadConfig({ ...testEnv, BETTER_AUTH_URL: 'not-a-url' })).toThrow('BETTER_AUTH_URL')
+    expect(() => loadConfig({ ...testEnv, AUDIT_RETENTION_DAYS: '0' })).toThrow('AUDIT_RETENTION_DAYS')
+    expect(() => loadConfig({ ...testEnv, STOREFRONT_URL: 'https://example.com/path' })).toThrow('STOREFRONT_URL')
+    expect(() => loadConfig({ ...testEnv, TRUSTED_PROXY_HEADERS: 'forwarded' })).toThrow('TRUSTED_PROXY_HEADERS')
+  })
+
+  it('requires production browser origins and email delivery settings', () => {
+    const productionEnv = {
+      ...testEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+    }
+
+    expect(() => loadConfig({ ...productionEnv, ADMIN_URL: undefined })).toThrow('ADMIN_URL')
+    expect(() => loadConfig({ ...productionEnv, RESEND_API_KEY: undefined })).toThrow('RESEND_API_KEY')
+    expect(() => loadConfig({
+      ...productionEnv,
+      CORS_ORIGINS: 'https://store.example.com',
+    })).toThrow('ADMIN_URL must be included in CORS_ORIGINS')
   })
 })
