@@ -141,4 +141,27 @@ describe('Better Auth HTTP policy', () => {
     expect(response.status).toBe(400)
     expect(handled).toBe(0)
   })
+
+  it('rejects client-controlled trusted devices for backup codes', async () => {
+    let handled = 0
+    const auth = {
+      handler: async () => {
+        handled += 1
+        return Response.json({ unsafe: true })
+      },
+      api: { getSession: async () => null },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth))
+    const response = await app.handle(new Request(`${base}/two-factor/verify-backup-code`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'better-auth.two_factor=signed-challenge',
+      },
+      body: JSON.stringify({ code: 'backup-code', trustDevice: true }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(handled).toBe(0)
+  })
 })

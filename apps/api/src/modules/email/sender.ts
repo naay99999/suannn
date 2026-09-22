@@ -2,7 +2,11 @@ import { Resend } from 'resend'
 import { logError } from '../../shared/logger'
 import type { EmailContent } from './templates'
 
-export type EmailTemplate = 'verify-email' | 'reset-password' | 'staff-invitation'
+export type EmailTemplate =
+  | 'verify-email'
+  | 'reset-password'
+  | 'staff-invitation'
+  | 'staff-mfa-recovery'
 
 export interface EmailMessage extends EmailContent {
   to: string

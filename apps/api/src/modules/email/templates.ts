@@ -49,3 +49,12 @@ export function invitationEmail(roleName: string, url: string) {
     url,
   )
 }
+
+export function staffMfaRecoveryEmail(url: string) {
+  return linkEmail(
+    'Reset your Suannn Admin MFA',
+    'Your staff MFA was reset through the emergency owner recovery process. Sign in and enroll a new authenticator before using the backoffice.',
+    'Enroll a new authenticator',
+    url,
+  )
+}

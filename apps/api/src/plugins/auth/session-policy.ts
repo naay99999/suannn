@@ -60,6 +60,20 @@ export function validateStaffSession(
   }
 }
 
+export function isRestrictedStaffSession(context: StaffSessionContext, now = new Date()) {
+  const { user, session } = context
+
+  return user.accountType === 'staff'
+    && isStaffRole(user.role)
+    && user.emailVerified
+    && user.staffActivatedAt === null
+    && !user.banned
+    && session.lastActivityAt !== null
+    && session.absoluteExpiresAt !== null
+    && now.getTime() - session.lastActivityAt.getTime() <= idleTimeoutMs
+    && now.getTime() < session.absoluteExpiresAt.getTime()
+}
+
 export interface StaffActivityStore {
   touchIfUnchanged(sessionId: string, previous: Date, next: Date): Promise<boolean>
 }

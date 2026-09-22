@@ -17,7 +17,12 @@ import { resetPasswordEmail, verificationEmail } from '../../modules/email/templ
 import * as schema from '../../database/schema/auth'
 import { accessControl, roles, type AccountType } from './access-control'
 import { capabilitiesFor, type Role } from './access-control'
-import { touchStaffSession, validateStaffSession } from './session-policy'
+import {
+  isRestrictedStaffSession,
+  type StaffSessionContext,
+  touchStaffSession,
+  validateStaffSession,
+} from './session-policy'
 
 type Database = ReturnType<typeof createDatabase>['db']
 
@@ -238,7 +243,7 @@ export function createAuth(
         } | undefined
 
         if (extendedUser.accountType === 'staff') {
-          const validation = validateStaffSession({
+          const staffContext = {
             user: {
               id: user.id,
               accountType: 'staff',
@@ -252,14 +257,22 @@ export function createAuth(
               lastActivityAt: extendedSession.lastActivityAt ?? null,
               absoluteExpiresAt: extendedSession.absoluteExpiresAt ?? null,
             },
-          })
+          } satisfies StaffSessionContext
+          const validation = validateStaffSession(staffContext)
 
           if (!validation.valid) {
-            await db.delete(schema.session).where(eq(schema.session.id, session.id))
-            throw new APIError('UNAUTHORIZED', {
-              code: 'SESSION_EXPIRED',
-              message: 'Session expired',
-            })
+            if (!isRestrictedStaffSession(staffContext)) {
+              await db.delete(schema.session).where(eq(schema.session.id, session.id))
+              throw new APIError('UNAUTHORIZED', {
+                code: 'SESSION_EXPIRED',
+                message: 'Session expired',
+              })
+            }
+          } else {
+            staff = {
+              role: validation.role,
+              permissions: capabilitiesFor(validation.role),
+            }
           }
 
           await touchStaffSession({
@@ -276,10 +289,6 @@ export function createAuth(
             },
           }, session.id, extendedSession.lastActivityAt!, new Date())
 
-          staff = {
-            role: validation.role,
-            permissions: capabilitiesFor(validation.role),
-          }
         }
 
         return {
