@@ -1,11 +1,11 @@
 export const developmentCorsOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:4173',
+  'http://localhost:5183',
+  'http://127.0.0.1:5183',
+  'http://localhost:4183',
   'http://127.0.0.1:4173',
-  'http://localhost:5174',
-  'http://127.0.0.1:5174',
-  'http://localhost:4174',
+  'http://localhost:5184',
+  'http://127.0.0.1:5184',
+  'http://localhost:4184',
   'http://127.0.0.1:4174',
 ]
 

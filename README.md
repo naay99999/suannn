@@ -5,8 +5,8 @@ Suannn is a Bun workspace with an Elysia API, a customer storefront, an administ
 ## Workspace
 
 - `apps/api`: Elysia HTTP API on port 6767
-- `apps/storefront`: customer-facing React/Vite app on port 5173
-- `apps/admin`: administration React/Vite app on port 5174
+- `apps/storefront`: customer-facing React/Vite app on port 5183
+- `apps/admin`: administration React/Vite app on port 5184
 - `packages/ui`: shared UI components, Tailwind theme, and utilities
 - `packages/config`: shared TypeScript and Oxlint configuration
 

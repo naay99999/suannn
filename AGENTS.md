@@ -39,8 +39,8 @@ Install dependencies once from the repository root:
 ```bash
 bun install
 bun run dev              # start API, storefront, and admin in parallel
-bun run dev:storefront   # start only the storefront (port 5173)
-bun run dev:admin        # start only admin (port 5174)
+bun run dev:storefront   # start only the storefront (port 5183)
+bun run dev:admin        # start only admin (port 5184)
 bun run dev:api          # start only API (port 6767)
 bun --filter storefront build
 bun --filter storefront lint

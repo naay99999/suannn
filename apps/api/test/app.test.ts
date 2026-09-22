@@ -66,13 +66,13 @@ describe('API routes', () => {
     const response = await app.handle(new Request('http://localhost/health', {
       method: 'OPTIONS',
       headers: {
-        Origin: 'http://localhost:5173',
+        Origin: 'http://localhost:5183',
         'Access-Control-Request-Method': 'GET',
       },
     }))
 
     expect(response.status).toBe(204)
-    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5183')
   })
 
   it('does not allow unknown CORS origins', async () => {
