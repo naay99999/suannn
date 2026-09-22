@@ -5,12 +5,49 @@ import { loadConfig } from '../src/config/env'
 import { createDatabase } from '../src/database/client'
 import { createAuth } from '../src/plugins/auth/auth'
 import { createAuthPlugin } from '../src/plugins/auth'
+import { AuditRepository } from '../src/modules/audit/repository'
+import { AuditService } from '../src/modules/audit/service'
+import { CustomerSignupService } from '../src/modules/customer-auth/service'
+import { IdentityClaimRepository } from '../src/modules/identity-claims/repository'
+import { IdentityClaimService } from '../src/modules/identity-claims/service'
+import { ApplicationRateLimitRepository } from '../src/modules/rate-limit/repository'
+import { RateLimiter } from '../src/modules/rate-limit/service'
+import { StaffInvitationRepository } from '../src/modules/staff-invitations/repository'
+import { StaffInvitationService } from '../src/modules/staff-invitations/service'
+import { StaffRepository } from '../src/modules/staff/repository'
+import { StaffService } from '../src/modules/staff/service'
+import { DatabaseStaffMfaStore, StaffMfaService } from '../src/modules/staff-mfa/service'
 import { testEnv } from './fixtures'
 
 const config = loadConfig(testEnv)
 const database = createDatabase(config.databaseUrl)
 const auth = createAuth(config, database.db)
-const app = await createApp(config, auth)
+const audit = new AuditService(new AuditRepository(database.db))
+const emailSender = { send: async () => ({ id: 'test-email' }) }
+const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
+const app = await createApp(config, {
+  auth,
+  audit,
+  customerSignup: new CustomerSignupService({
+    auth,
+    claims,
+    limiter: new RateLimiter(new ApplicationRateLimitRepository(database.db)),
+  }),
+  staffInvitations: new StaffInvitationService({
+    auth,
+    claims,
+    repository: new StaffInvitationRepository(database.db),
+    emailSender,
+    runInBackground: (task) => void task,
+    adminUrl: config.adminUrl,
+    audit,
+  }),
+  staffMfa: new StaffMfaService({
+    auth,
+    store: new DatabaseStaffMfaStore(database.db, audit),
+  }),
+  staff: new StaffService(new StaffRepository(database.db, audit)),
+})
 
 afterAll(async () => {
   await database.client.end()
@@ -53,10 +90,8 @@ describe('API routes', () => {
       summary: 'Check API health',
       tags: ['System'],
     })
-    expect(specification.paths['/api/v1/auth/sign-up/email'].post.tags).toEqual([
-      'Authentication',
-    ])
-    expect(specification.paths['/api/v1/auth/sign-in/social'].post.summary).toBe('Social sign-in')
+    expect(specification.paths['/api/v1/auth/sign-up/email']).toBeUndefined()
+    expect(specification.paths['/api/v1/auth/sign-in/social']).toBeUndefined()
     expect(specification.paths['/api/v1/auth/sign-in/email'].post.tags).toEqual([
       'Authentication',
     ])
@@ -72,6 +107,13 @@ describe('API routes', () => {
       .flatMap(([, operations]) => Object.values(operations))
 
     expect(authenticationOperations.every(({ summary }) => Boolean(summary))).toBe(true)
+    expect(specification.paths['/api/v1/customer-auth/sign-up'].post).toBeDefined()
+    expect(specification.paths['/api/v1/staff/invitations/'].get).toBeDefined()
+    expect(specification.paths['/api/v1/staff/onboarding'].get).toBeDefined()
+    expect(specification.paths['/api/v1/staff/'].get).toBeDefined()
+    expect(specification.paths['/api/v1/audit/'].get).toBeDefined()
+    expect(specification.paths['/api/v1/auth/admin/set-role']).toBeUndefined()
+    expect(specification.paths['/api/v1/auth/two-factor/enable']).toBeUndefined()
   })
 
   it('returns the versioned root response', async () => {

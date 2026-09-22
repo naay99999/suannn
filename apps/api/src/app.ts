@@ -2,12 +2,23 @@ import { Elysia } from 'elysia'
 import { openapi } from '@elysia/openapi'
 import type { AppConfig } from './config/env'
 import { systemModule } from './modules/system'
+import { createAuditModule } from './modules/audit'
+import { createCustomerAuthModule } from './modules/customer-auth'
+import { createStaffInvitationModule } from './modules/staff-invitations'
+import { createStaffMfaModule } from './modules/staff-mfa'
+import { createStaffModule } from './modules/staff'
+import type { AuditService } from './modules/audit/service'
+import type { CustomerSignupService } from './modules/customer-auth/service'
+import type { StaffInvitationService } from './modules/staff-invitations/service'
+import type { StaffMfaService } from './modules/staff-mfa/service'
+import type { StaffService } from './modules/staff/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
 import { createCorsPlugin } from './plugins/cors'
 import { createErrorHandlingPlugin } from './plugins/error-handling'
 import { createRequestLoggingPlugin } from './plugins/request-logging'
 import { createRequestContextPlugin } from './plugins/request-context'
+import { isAllowedAuthRequest } from './plugins/auth/http-policy'
 
 type AuthOperation = Record<string, unknown>
 type AuthPath = Record<string, AuthOperation>
@@ -68,7 +79,11 @@ function documentAuthPaths(paths: Record<string, AuthPath>) {
 
   for (const [path, operations] of Object.entries(documentedPaths)) {
     for (const [method, operation] of Object.entries(operations)) {
-      if ('responses' in operation) {
+      const request = new Request(`http://localhost/api/v1/auth${path}`, {
+        method: method.toUpperCase(),
+      })
+
+      if ('responses' in operation && isAllowedAuthRequest(request)) {
         operation.tags = ['Authentication']
         operation.summary = authOperationSummaries[`${method.toUpperCase()} ${path}`]
           ?? fallbackAuthSummary(path, operation)
@@ -76,16 +91,28 @@ function documentAuthPaths(paths: Record<string, AuthPath>) {
     }
   }
 
-  return Object.fromEntries(
-    Object.entries(documentedPaths).map(([path, operations]) => [
-      `/api/v1/auth${path}`,
-      operations,
-    ]),
-  )
+  return Object.fromEntries(Object.entries(documentedPaths).flatMap(([path, operations]) => {
+    const allowed = Object.fromEntries(Object.entries(operations).filter(([method, operation]) =>
+      'responses' in operation && isAllowedAuthRequest(new Request(
+        `http://localhost/api/v1/auth${path}`,
+        { method: method.toUpperCase() },
+      ))))
+
+    return Object.keys(allowed).length > 0 ? [[`/api/v1/auth${path}`, allowed]] : []
+  }))
 }
 
-export async function createApp(config: AppConfig, auth: Auth) {
-  const authOpenApiSchema = await auth.api.generateOpenAPISchema()
+export interface AppDependencies {
+  auth: Auth
+  audit: AuditService
+  customerSignup: CustomerSignupService
+  staffInvitations: StaffInvitationService
+  staffMfa: StaffMfaService
+  staff: StaffService
+}
+
+export async function createApp(config: AppConfig, dependencies: AppDependencies) {
+  const authOpenApiSchema = await dependencies.auth.api.generateOpenAPISchema()
 
   return new Elysia({ name: 'api' })
     .use(openapi({
@@ -119,7 +146,12 @@ export async function createApp(config: AppConfig, auth: Auth) {
     .use(createRequestContextPlugin(config))
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
-    .use(createAuthPlugin(auth))
+    .use(createAuthPlugin(dependencies.auth))
+    .use(createCustomerAuthModule(config, dependencies.customerSignup))
+    .use(createStaffInvitationModule(config, dependencies.auth, dependencies.staffInvitations))
+    .use(createStaffMfaModule(config, dependencies.auth, dependencies.staffMfa))
+    .use(createStaffModule(config, dependencies.auth, dependencies.staff))
+    .use(createAuditModule(dependencies.auth, dependencies.audit))
     .use(systemModule)
 }
 

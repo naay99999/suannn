@@ -29,4 +29,4 @@ This runs linting, type checking, API integration tests, and production frontend
 
 ## API configuration
 
-The API accepts `HOST`, `PORT`, and `CORS_ORIGINS`. In production, set `NODE_ENV=production` and provide a comma-separated `CORS_ORIGINS` allowlist of exact frontend origins. The API refuses to start without it.
+The API requires PostgreSQL, Better Auth secrets/origins, and a verified Resend sender. In production, set `NODE_ENV=production` and provide a comma-separated `CORS_ORIGINS` allowlist of exact frontend origins. The API refuses to start without it. See [`apps/api/README.md`](apps/api/README.md) for migration order, owner bootstrap/recovery, staff MFA onboarding, proxy trust, audit retention, and the V1 email limitation.

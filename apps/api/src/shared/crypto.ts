@@ -1,3 +1,5 @@
+import type {} from '../bun-runtime'
+
 export function createOpaqueToken(bytes = 32) {
   const value = crypto.getRandomValues(new Uint8Array(bytes))
 

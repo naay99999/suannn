@@ -1,3 +1,5 @@
+import type {} from '../../bun-runtime'
+
 import type { createDatabase } from '../../database/client'
 import { normalizeEmail } from '../../shared/email'
 import type { IdentityEmailClaim, User } from './types'
