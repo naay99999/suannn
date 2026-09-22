@@ -8,6 +8,7 @@ coverage/
 *.tsbuildinfo
 *.tsbuildinfo.*
 .vite/
+.worktrees/
 
 # Local environment configuration
 .env
