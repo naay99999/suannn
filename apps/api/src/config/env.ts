@@ -2,11 +2,11 @@ export const developmentCorsOrigins = [
   'http://localhost:5183',
   'http://127.0.0.1:5183',
   'http://localhost:4183',
-  'http://127.0.0.1:4173',
+  'http://127.0.0.1:4183',
   'http://localhost:5184',
   'http://127.0.0.1:5184',
   'http://localhost:4184',
-  'http://127.0.0.1:4174',
+  'http://127.0.0.1:4184',
 ]
 
 export interface AppConfig {
@@ -16,6 +16,7 @@ export interface AppConfig {
   databaseUrl: string
   betterAuthSecret: string
   betterAuthUrl: string
+  secureCookies: boolean
   storefrontUrl: string
   adminUrl: string
   resendApiKey: string
@@ -149,11 +150,14 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     throw new Error('BETTER_AUTH_SECRET must be at least 32 characters')
   }
 
-  const betterAuthUrl = parseUrl(
+  const betterAuthUrl = parseOrigin(
     'BETTER_AUTH_URL',
     requiredValue('BETTER_AUTH_URL', env.BETTER_AUTH_URL),
-    ['http:', 'https:'],
   )
+
+  if (isProduction && !betterAuthUrl.startsWith('https://')) {
+    throw new Error('BETTER_AUTH_URL must use HTTPS in production')
+  }
   const storefrontUrl = parseOrigin(
     'STOREFRONT_URL',
     requiredValue('STOREFRONT_URL', env.STOREFRONT_URL),
@@ -178,6 +182,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     databaseUrl,
     betterAuthSecret,
     betterAuthUrl,
+    secureCookies: isProduction || betterAuthUrl.startsWith('https://'),
     storefrontUrl,
     adminUrl,
     resendApiKey: requiredValue('RESEND_API_KEY', env.RESEND_API_KEY),

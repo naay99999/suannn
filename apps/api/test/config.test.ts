@@ -11,6 +11,7 @@ describe('API configuration', () => {
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
       betterAuthUrl: testEnv.BETTER_AUTH_URL,
+      secureCookies: false,
       storefrontUrl: testEnv.STOREFRONT_URL,
       adminUrl: testEnv.ADMIN_URL,
       resendApiKey: testEnv.RESEND_API_KEY,
@@ -46,6 +47,7 @@ describe('API configuration', () => {
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
       betterAuthUrl: 'https://api.example.com',
+      secureCookies: true,
       storefrontUrl: 'https://store.example.com',
       adminUrl: 'https://admin.example.com',
       resendApiKey: 're_production',
@@ -71,6 +73,7 @@ describe('API configuration', () => {
       ...testEnv,
       NODE_ENV: 'production',
       CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      BETTER_AUTH_URL: 'https://api.example.com',
       STOREFRONT_URL: 'https://store.example.com',
       ADMIN_URL: 'https://admin.example.com',
     }
@@ -81,5 +84,32 @@ describe('API configuration', () => {
       ...productionEnv,
       CORS_ORIGINS: 'https://store.example.com',
     })).toThrow('ADMIN_URL must be included in CORS_ORIGINS')
+  })
+
+  it('rejects insecure or non-origin Better Auth URLs in production', () => {
+    const productionEnv = {
+      ...testEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+    }
+
+    expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'http://api.example.com' }))
+      .toThrow('BETTER_AUTH_URL must use HTTPS in production')
+    expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'https://user@api.example.com' }))
+      .toThrow('BETTER_AUTH_URL must be an HTTP(S) origin without a path')
+    expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'https://api.example.com/auth' }))
+      .toThrow('BETTER_AUTH_URL must be an HTTP(S) origin without a path')
+    expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'https://api.example.com?mode=test' }))
+      .toThrow('BETTER_AUTH_URL must be an HTTP(S) origin without a path')
+    expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'https://api.example.com#auth' }))
+      .toThrow('BETTER_AUTH_URL must be an HTTP(S) origin without a path')
+  })
+
+  it('allows local HTTP auth while deriving secure cookies from HTTPS', () => {
+    expect(loadConfig(testEnv).secureCookies).toBe(false)
+    expect(loadConfig({ ...testEnv, BETTER_AUTH_URL: 'https://api.example.com' }).secureCookies)
+      .toBe(true)
   })
 })

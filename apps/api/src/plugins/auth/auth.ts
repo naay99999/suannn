@@ -46,8 +46,6 @@ export function createAuth(
   db: Database,
   dependencies: AuthDependencies = unconfiguredDependencies,
 ) {
-  const useSecureCookies = config.betterAuthUrl.startsWith('https://')
-
   return betterAuth({
     appName: 'Suannn',
     baseURL: config.betterAuthUrl,
@@ -187,13 +185,13 @@ export function createAuth(
       },
     },
     advanced: {
-      useSecureCookies,
+      useSecureCookies: config.secureCookies,
       disableCSRFCheck: false,
       disableOriginCheck: false,
       trustedProxyHeaders: false,
       defaultCookieAttributes: {
         httpOnly: true,
-        secure: useSecureCookies,
+        secure: config.secureCookies,
         sameSite: 'lax',
       },
       crossSubDomainCookies: {

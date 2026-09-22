@@ -176,6 +176,22 @@ describe('API routes', () => {
     expect(response.headers.get('access-control-allow-credentials')).toBe('true')
   })
 
+  it('allows every configured local preview origin', async () => {
+    for (const origin of [
+      'http://localhost:4183',
+      'http://127.0.0.1:4183',
+      'http://localhost:4184',
+      'http://127.0.0.1:4184',
+    ]) {
+      const response = await app.handle(new Request('http://localhost/api/v1/health', {
+        method: 'OPTIONS',
+        headers: { Origin: origin, 'Access-Control-Request-Method': 'GET' },
+      }))
+
+      expect(response.headers.get('access-control-allow-origin')).toBe(origin)
+    }
+  })
+
   it('does not allow unknown CORS origins', async () => {
     const response = await app.handle(new Request('http://localhost/api/v1/health', {
       method: 'OPTIONS',
