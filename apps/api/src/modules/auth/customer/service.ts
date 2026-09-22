@@ -1,11 +1,11 @@
 import { hashPassword } from 'better-auth/crypto'
-import type { Auth } from '../../plugins/auth/auth'
-import type { RateLimitResult } from '../rate-limit/service'
-import type { IdentityClaimService } from '../identity-claims/service'
-import { hashToken } from '../../shared/crypto'
-import { normalizeEmail } from '../../shared/email'
+import type { Auth } from '../../../plugins/auth/auth'
+import type { RateLimitResult } from '../../rate-limit/service'
+import type { IdentityClaimService } from '../../identity-claims/service'
+import { hashToken } from '../../../shared/crypto'
+import { normalizeEmail } from '../../../shared/email'
 import type { CustomerSignupCommand } from './model'
-import type { AuditService } from '../audit/service'
+import type { AuditService } from '../../audit/service'
 
 interface SignupDependencies {
   auth: Auth

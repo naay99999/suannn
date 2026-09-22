@@ -30,8 +30,7 @@ export function LoginForm({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
       <div className="flex flex-col gap-2 text-center">
-        <p className="text-sm font-medium text-muted-foreground">Suannn Admin</p>
-        <h1 className="text-xl font-bold">Welcome back</h1>
+        <h1 className="text-xl font-bold">Suannn</h1>
         <p className="text-sm text-muted-foreground">Enter your email and password to sign in.</p>
       </div>
       <form onSubmit={handleSubmit(() => undefined)}>

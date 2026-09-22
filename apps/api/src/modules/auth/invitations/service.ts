@@ -1,11 +1,11 @@
-import type { Auth } from '../../plugins/auth/auth'
-import { isStaffRole, type StaffRole } from '../../plugins/auth/access-control'
-import { createOpaqueToken, hashToken } from '../../shared/crypto'
-import type { EmailSender } from '../email/sender'
-import { scheduleBackground } from '../email/sender'
-import { invitationEmail } from '../email/templates'
-import type { IdentityClaimService } from '../identity-claims/service'
-import type { AuditService } from '../audit/service'
+import type { Auth } from '../../../plugins/auth/auth'
+import { isStaffRole, type StaffRole } from '../../../plugins/auth/access-control'
+import { createOpaqueToken, hashToken } from '../../../shared/crypto'
+import type { EmailSender } from '../../email/sender'
+import { scheduleBackground } from '../../email/sender'
+import { invitationEmail } from '../../email/templates'
+import type { IdentityClaimService } from '../../identity-claims/service'
+import type { AuditService } from '../../audit/service'
 import type {
   AcceptStaffInvitationCommand,
   CreateStaffInvitationCommand,

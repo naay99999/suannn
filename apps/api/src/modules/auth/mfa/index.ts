@@ -1,13 +1,13 @@
 import { Elysia } from 'elysia'
-import type { AppConfig } from '../../config/env'
-import { createBrowserMutationPlugin } from '../../plugins/browser-mutation'
-import { createAuthMacros } from '../../plugins/auth'
-import type { Auth } from '../../plugins/auth/auth'
+import type { AppConfig } from '../../../config/env'
+import { createBrowserMutationPlugin } from '../../../plugins/browser-mutation'
+import { createAuthMacros } from '../../../plugins/auth'
+import type { Auth } from '../../../plugins/auth/auth'
 import { staffMfaModels } from './model'
 import type { StaffMfaService } from './service'
-import type { RateLimiter } from '../rate-limit/service'
-import { createApplicationRateLimitPlugin } from '../../plugins/application-rate-limit'
-import { httpModels } from '../../shared/http-model'
+import type { RateLimiter } from '../../rate-limit/service'
+import { createApplicationRateLimitPlugin } from '../../../plugins/application-rate-limit'
+import { httpModels } from '../../../shared/http-model'
 
 export function createStaffMfaModule(
   config: AppConfig,

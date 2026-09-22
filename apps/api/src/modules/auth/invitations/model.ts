@@ -1,6 +1,6 @@
-import type { StaffRole } from '../../plugins/auth/access-control'
+import type { StaffRole } from '../../../plugins/auth/access-control'
 import { t } from 'elysia'
-import { staffRoleSchema } from '../../plugins/auth/model'
+import { staffRoleSchema } from '../../../plugins/auth/model'
 
 const invitation = t.Object({ id: t.String(), email: t.String(), role: staffRoleSchema, expiresAt: t.Date() })
 const invitationListItem = t.Object({

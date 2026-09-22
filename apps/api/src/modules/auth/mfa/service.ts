@@ -1,10 +1,10 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
-import { session, twoFactor, user } from '../../database/schema'
-import type { AuditService } from '../audit/service'
-import { scheduleBackground, type EmailSender } from '../email/sender'
-import { staffMfaRecoveryEmail } from '../email/templates'
-import type { Auth } from '../../plugins/auth/auth'
+import type { createDatabase } from '../../../database/client'
+import { session, twoFactor, user } from '../../../database/schema'
+import type { AuditService } from '../../audit/service'
+import { scheduleBackground, type EmailSender } from '../../email/sender'
+import { staffMfaRecoveryEmail } from '../../email/templates'
+import type { Auth } from '../../../plugins/auth/auth'
 
 export interface StaffMfaStore {
   activate(

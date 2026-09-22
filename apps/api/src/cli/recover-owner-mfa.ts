@@ -1,10 +1,10 @@
-import type { StaffMfaService } from '../modules/staff-mfa/service'
+import type { StaffMfaService } from '../modules/auth/mfa/service'
 import { loadConfig } from '../config/env'
 import { createDatabase } from '../database/client'
 import { AuditRepository } from '../modules/audit/repository'
 import { AuditService } from '../modules/audit/service'
 import { createResendEmailSender } from '../modules/email/sender'
-import { DatabaseStaffMfaStore, StaffMfaService as RuntimeStaffMfaService } from '../modules/staff-mfa/service'
+import { DatabaseStaffMfaStore, StaffMfaService as RuntimeStaffMfaService } from '../modules/auth/mfa/service'
 import { createAuth } from '../plugins/auth/auth'
 
 export async function recoverOwnerMfa(service: StaffMfaService, ownerUserId: string) {

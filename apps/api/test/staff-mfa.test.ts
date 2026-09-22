@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Auth } from '../src/plugins/auth/auth'
-import { StaffMfaService } from '../src/modules/staff-mfa/service'
+import { StaffMfaService } from '../src/modules/auth/mfa/service'
 
 const now = new Date('2026-09-22T10:00:00.000Z')
 const restrictedSession = {

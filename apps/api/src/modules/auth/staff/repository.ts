@@ -1,8 +1,8 @@
 import { and, asc, eq, isNotNull } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
-import { session, twoFactor, user } from '../../database/schema'
-import type { StaffRole } from '../../plugins/auth/access-control'
-import type { AuditService } from '../audit/service'
+import type { createDatabase } from '../../../database/client'
+import { session, twoFactor, user } from '../../../database/schema'
+import type { StaffRole } from '../../../plugins/auth/access-control'
+import type { AuditService } from '../../audit/service'
 import type { StaffActor, StaffRepositoryContract } from './service'
 
 type Database = ReturnType<typeof createDatabase>['db']

@@ -1,7 +1,7 @@
 import {
   isStaffRole,
   type StaffRole,
-} from '../../plugins/auth/access-control'
+} from '../../../plugins/auth/access-control'
 
 export interface StaffActor {
   id: string

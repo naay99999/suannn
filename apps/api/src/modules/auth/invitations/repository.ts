@@ -1,12 +1,12 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
+import type { createDatabase } from '../../../database/client'
 import {
   identityEmailClaim,
   staffInvitation,
   user,
-} from '../../database/schema'
-import type { StaffRole } from '../../plugins/auth/access-control'
-import type { DatabaseTransaction } from '../identity-claims/repository'
+} from '../../../database/schema'
+import type { StaffRole } from '../../../plugins/auth/access-control'
+import type { DatabaseTransaction } from '../../identity-claims/repository'
 
 type Database = ReturnType<typeof createDatabase>['db']
 

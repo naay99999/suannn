@@ -4,6 +4,10 @@
 
 This package is the Bun/Elysia HTTP API. Application composition and the exported `App` type live in `src/app.ts`; `src/index.ts` loads configuration and starts the server. Keep features in `src/modules/<feature>/`, cross-cutting Elysia plugins in `src/plugins/`, configuration in `src/config/`, and database setup and Drizzle schemas in `src/database/`. Shared utilities such as logging belong in `src/shared/`.
 
+Use a feature-based Elysia structure rather than introducing traditional controller classes. An Elysia instance in `index.ts` is the controller and owns routes, HTTP context, validation, and response contracts. Keep business rules in `service.ts`, database access in `repository.ts` when needed, and Elysia/HTTP schemas in `model.ts` (these are not Drizzle database models). The normal dependency direction is `index.ts -> service.ts -> repository.ts`; `index.ts` also references `model.ts`. Services and repositories should not receive or depend on the full Elysia `Context`.
+
+Group related features under a bounded-context directory when useful, for example `src/modules/auth/{customer,staff,invitations,mfa}/`. Keep independent supporting modules such as `audit`, `email`, `identity-claims`, `rate-limit`, and `system` at the top level. Do not create a repository for a feature that has no persistence concerns, and do not combine separate auth features into one large service.
+
 Tests live in `test/` and use `*.test.ts` names (for example, `test/api.test.ts`). Drizzle migration output is committed under `drizzle/`.
 
 ## Build, Test, and Development Commands

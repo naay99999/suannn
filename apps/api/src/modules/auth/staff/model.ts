@@ -1,5 +1,5 @@
 import { t } from 'elysia'
-import { staffRoleSchema } from '../../plugins/auth/model'
+import { staffRoleSchema } from '../../../plugins/auth/model'
 
 const staffMember = t.Object({
   id: t.String(), name: t.String(), email: t.String(), role: staffRoleSchema,

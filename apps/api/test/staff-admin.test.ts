@@ -3,8 +3,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { user } from '../src/database/schema'
 import { AuditRepository } from '../src/modules/audit/repository'
 import { AuditService } from '../src/modules/audit/service'
-import { StaffRepository } from '../src/modules/staff/repository'
-import { StaffService } from '../src/modules/staff/service'
+import { StaffRepository } from '../src/modules/auth/staff/repository'
+import { StaffService } from '../src/modules/auth/staff/service'
 import {
   createTestDatabase,
   lockTestDatabase,
