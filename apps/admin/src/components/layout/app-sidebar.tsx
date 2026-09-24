@@ -1,9 +1,9 @@
 import { type ComponentProps } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CustomerSupportIcon,
-  UnfoldMoreIcon,
   CommandIcon,
   DashboardSquare01Icon,
   ShoppingBag01Icon,
@@ -14,7 +14,8 @@ import {
 import { NavMain } from '@/components/layout/nav-main'
 import { AnimatedThemeToggler } from '@/components/layout/animated-theme-toggler'
 import { SettingsDialog } from '@/pages/settings/_components/settings-dialog'
-import { Avatar, AvatarFallback } from '@workspace/ui/components/avatar'
+import { authSessionQuery } from '@/lib/auth-session'
+import { StaffAccountMenu } from './staff-account-menu'
 import {
   Sidebar,
   SidebarContent,
@@ -34,10 +35,10 @@ const navigation = [
 ]
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
+  const { data: session } = useQuery(authSessionQuery)
   const { hash, pathname, search } = useLocation()
   const navigate = useNavigate()
   const settingsOpen = hash === '#settings'
-  const settingsLocation = { pathname, search, hash: '#settings' }
 
   function handleSettingsOpenChange(open: boolean) {
     if (!open && settingsOpen) {
@@ -72,18 +73,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                 <span>Support</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton className="cursor-pointer" size="lg" render={<Link to={settingsLocation} />}>
-                <Avatar variant="square">
-                  <AvatarFallback>S</AvatarFallback>
-                </Avatar>
-                <span className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">shadcn</span>
-                  <span className="truncate text-xs text-muted-foreground">m@example.com</span>
-                </span>
-                <HugeiconsIcon icon={UnfoldMoreIcon} strokeWidth={2} className="ml-auto" />
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {session?.staff && <SidebarMenuItem><StaffAccountMenu session={session} /></SidebarMenuItem>}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
