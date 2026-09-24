@@ -7,6 +7,7 @@ export type EmailTemplate =
   | 'reset-password'
   | 'staff-invitation'
   | 'staff-mfa-recovery'
+  | 'change-email'
 
 export interface EmailMessage extends EmailContent {
   to: string

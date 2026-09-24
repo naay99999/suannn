@@ -14,6 +14,8 @@ import { CustomerProfileRepository } from '../../src/modules/customer/profile/re
 import { CustomerProfileService } from '../../src/modules/customer/profile/service'
 import { CustomerAddressRepository } from '../../src/modules/customer/addresses/repository'
 import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
+import { CustomerEmailChangeRepository } from '../../src/modules/customer/email-change/repository'
+import { CustomerEmailChangeService } from '../../src/modules/customer/email-change/service'
 import { createCustomerAuthModule } from '../../src/modules/auth/customer'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
@@ -45,6 +47,12 @@ const app = await createApp(config, {
   }),
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
+  customerEmailChange: new CustomerEmailChangeService({
+    repository: new CustomerEmailChangeRepository(database.db),
+    claims,
+    secret: config.betterAuthSecret,
+    emailSender,
+  }),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
@@ -165,6 +173,7 @@ describe('API routes', () => {
       'Customer Registration',
       'Customer Profile',
       'Customer Addresses',
+      'Customer Email Change',
       'Sign-in',
       'Account Recovery',
       'Email Verification',
@@ -291,7 +300,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(45)
+    expect(operations).toHaveLength(46)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

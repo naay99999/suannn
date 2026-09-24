@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { boolean, check, index, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, check, index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 
 export const customerAddress = pgTable('customer_address', {
@@ -27,3 +27,12 @@ export const customerAddress = pgTable('customer_address', {
     .on(table.userId).where(sql`${table.isDefaultBilling} = true`),
   index('customer_address_owner_created_idx').on(table.userId, table.createdAt, table.id),
 ])
+
+export const customerPendingEmailChange = pgTable('customer_pending_email_change', {
+  userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  newEmail: text('new_email').notNull(),
+  codeDigest: text('code_digest').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  failedAttempts: integer('failed_attempts').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})

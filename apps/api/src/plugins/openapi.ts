@@ -15,6 +15,7 @@ export const apiTags = [
   { name: 'Customer Registration', description: 'Create a customer account.' },
   { name: 'Customer Profile', description: 'Read and rename the current customer profile.' },
   { name: 'Customer Addresses', description: 'Manage the current customer addresses.' },
+  { name: 'Customer Email Change', description: 'Request and confirm a customer email change.' },
   { name: 'Sign-in', description: 'Sign in with email and password.' },
   { name: 'Account Recovery', description: 'Change or reset an account password.' },
   { name: 'Email Verification', description: 'Send and complete email verification.' },

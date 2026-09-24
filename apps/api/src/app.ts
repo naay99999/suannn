@@ -6,6 +6,7 @@ import { createAuditModule } from './modules/audit'
 import { createCustomerAuthModule } from './modules/auth/customer'
 import { createCustomerProfileModule } from './modules/customer/profile'
 import { createCustomerAddressModule } from './modules/customer/addresses'
+import { createCustomerEmailChangeModule } from './modules/customer/email-change'
 import { createStaffInvitationAcceptanceModule, createStaffInvitationModule } from './modules/auth/invitations'
 import { createStaffMfaModule } from './modules/auth/mfa'
 import { createStaffModule, createStaffSessionModule } from './modules/auth/staff'
@@ -13,6 +14,7 @@ import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
 import type { CustomerProfileService } from './modules/customer/profile/service'
 import type { CustomerAddressService } from './modules/customer/addresses/service'
+import type { CustomerEmailChangeService } from './modules/customer/email-change/service'
 import type { StaffInvitationService } from './modules/auth/invitations/service'
 import type { StaffMfaService } from './modules/auth/mfa/service'
 import type { StaffService } from './modules/auth/staff/service'
@@ -32,6 +34,7 @@ export interface AppDependencies {
   customerSignup: CustomerSignupService
   customerProfile: CustomerProfileService
   customerAddresses: CustomerAddressService
+  customerEmailChange: CustomerEmailChangeService
   staffInvitations: StaffInvitationService
   staffMfa: StaffMfaService
   staff: StaffService
@@ -71,6 +74,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createCustomerAuthModule(config, dependencies.customerSignup))
     .use(createCustomerProfileModule(config, dependencies.auth, dependencies.customerProfile))
     .use(createCustomerAddressModule(config, dependencies.auth, dependencies.customerAddresses))
+    .use(createCustomerEmailChangeModule(config, dependencies.auth, dependencies.customerEmailChange, dependencies.limiter))
     .use(createStaffInvitationModule(
       config,
       dependencies.auth,

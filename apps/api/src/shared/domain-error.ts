@@ -22,6 +22,7 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
   OWNER_INVARIANT: { status: 409, message: 'At least one active owner is required' },
   EMAIL_UNAVAILABLE: { status: 409, message: 'Email is unavailable' },
+  INVALID_CURRENT_PASSWORD: { status: 422, message: 'Current password is invalid' },
   INVALID_INVITATION: { status: 410, message: 'Invitation is invalid or expired' },
   INVALID_ROLE: { status: 422, message: 'Role is invalid' },
   INVALID_CURSOR: { status: 422, message: 'Pagination cursor is invalid' },

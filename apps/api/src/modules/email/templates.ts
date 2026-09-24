@@ -58,3 +58,11 @@ export function staffMfaRecoveryEmail(url: string) {
     url,
   )
 }
+
+export function changeEmailCodeEmail(code: string): EmailContent {
+  return {
+    subject: 'Confirm your new Suannn email',
+    text: `Use this code to confirm your new email address: ${code}\n\nThis code expires in 10 minutes.`,
+    html: `<p>Use this code to confirm your new email address: <strong>${escapeHtml(code)}</strong></p><p>This code expires in 10 minutes.</p>`,
+  }
+}

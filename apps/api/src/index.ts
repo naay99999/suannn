@@ -9,6 +9,8 @@ import { CustomerProfileRepository } from './modules/customer/profile/repository
 import { CustomerProfileService } from './modules/customer/profile/service'
 import { CustomerAddressRepository } from './modules/customer/addresses/repository'
 import { CustomerAddressService } from './modules/customer/addresses/service'
+import { CustomerEmailChangeRepository } from './modules/customer/email-change/repository'
+import { CustomerEmailChangeService } from './modules/customer/email-change/service'
 import { createResendEmailSender } from './modules/email/sender'
 import { EmailTaskQueue } from './modules/email/sender'
 import { IdentityClaimRepository } from './modules/identity-claims/repository'
@@ -55,6 +57,13 @@ const app = await createApp(config, {
   }),
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
+  customerEmailChange: new CustomerEmailChangeService({
+    repository: new CustomerEmailChangeRepository(database.db),
+    claims,
+    secret: config.betterAuthSecret,
+    emailSender,
+    runInBackground: (task) => emailQueue.enqueue(task),
+  }),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
