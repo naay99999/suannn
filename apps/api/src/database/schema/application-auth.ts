@@ -48,9 +48,13 @@ export const identityEmailClaim = pgTable(
   'identity_email_claim',
   {
     normalizedEmail: text('normalized_email').primaryKey(),
-    state: text('state', { enum: ['customer', 'pending_staff', 'staff'] }).notNull(),
+    state: text('state', { enum: ['customer', 'pending_staff', 'pending_customer', 'staff'] }).notNull(),
     userId: text('user_id').references(() => user.id, { onDelete: 'restrict' }),
     invitationId: text('invitation_id').references(() => staffInvitation.id, { onDelete: 'restrict' }),
+    operationId: text('operation_id'),
+    requestId: text('request_id'),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -63,10 +67,17 @@ export const identityEmailClaim = pgTable(
         ${table.state} in ('customer', 'staff')
         and ${table.userId} is not null
         and ${table.invitationId} is null
+        and ${table.operationId} is null
       ) or (
         ${table.state} = 'pending_staff'
         and ${table.userId} is null
         and ${table.invitationId} is not null
+        and (${table.operationId} is null or ${table.requestId} is not null)
+      ) or (
+        ${table.state} = 'pending_customer'
+        and ${table.userId} is null
+        and ${table.invitationId} is null
+        and ${table.operationId} is not null
       )`,
     ),
   ],

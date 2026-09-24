@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, it } from 'bun:test'
-import { loadConfig } from '../src/config/env'
-import { createDatabase } from '../src/database/client'
-import * as authSchema from '../src/database/schema/auth'
-import { createAuth, type AuthDependencies } from '../src/plugins/auth/auth'
-import { testEnv } from './fixtures'
+import { loadConfig } from '../../src/config/env'
+import { createDatabase } from '../../src/database/client'
+import * as authSchema from '../../src/database/schema/auth'
+import { createAuth, type AuthDependencies } from '../../src/plugins/auth/auth'
+import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
 const database = createDatabase(config.databaseUrl)

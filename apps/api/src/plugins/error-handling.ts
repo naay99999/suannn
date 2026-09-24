@@ -1,21 +1,7 @@
 import { Elysia } from 'elysia'
 import { mapAuthApiError } from './auth/api-error'
 import { logError } from '../shared/logger'
-
-const domainErrors: Record<string, { status: 401 | 403 | 404 | 409 | 410 | 422; message: string }> = {
-  ONBOARDING_SESSION_REQUIRED: { status: 401, message: 'Staff onboarding session required' },
-  ACTIVE_STAFF_SESSION_REQUIRED: { status: 401, message: 'Active staff session required' },
-  OWNER_REQUIRED: { status: 403, message: 'Owner access required' },
-  SELF_ROLE_CHANGE: { status: 403, message: 'Cannot change your own role' },
-  SELF_SUSPEND: { status: 403, message: 'Cannot suspend yourself' },
-  SELF_MFA_RESET: { status: 403, message: 'Cannot reset your own MFA' },
-  STAFF_NOT_FOUND: { status: 404, message: 'Staff member not found' },
-  SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
-  OWNER_INVARIANT: { status: 409, message: 'At least one active owner is required' },
-  EMAIL_UNAVAILABLE: { status: 409, message: 'Email is unavailable' },
-  INVALID_INVITATION: { status: 410, message: 'Invitation is invalid or expired' },
-  INVALID_ROLE: { status: 422, message: 'Role is invalid' },
-}
+import { mapDomainError } from '../shared/domain-error'
 
 export function createErrorHandlingPlugin() {
   return new Elysia({ name: 'error-handling' })
@@ -42,20 +28,27 @@ export function createErrorHandlingPlugin() {
         return authError.body
       }
 
-      if (error instanceof Error && domainErrors[error.message]) {
-        const mapped = domainErrors[error.message]!
-        set.status = mapped.status
-        return { code: error.message, message: mapped.message }
+      const domainError = mapDomainError(error)
+      if (domainError) {
+        set.status = domainError.status
+        if (!(error instanceof Error && error.name === 'DomainError')) {
+          return domainError.body
+        }
+        logError({
+          level: 'error',
+          code: String(domainError.body.code),
+          message: String(domainError.body.code),
+          requestId: set.headers['x-request-id']?.toString(),
+        })
+        return domainError.body
       }
-
-      const errorDetails = error instanceof Error
-        ? { message: error.message, stack: error.stack }
-        : { message: 'Unknown error' }
 
       logError({
         level: 'error',
         code: String(code),
-        ...errorDetails,
+        message: 'Unhandled request error',
+        errorCategory: error instanceof Error ? error.name : 'UnknownError',
+        requestId: set.headers['x-request-id']?.toString(),
       })
 
       set.status = 500

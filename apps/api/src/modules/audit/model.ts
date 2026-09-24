@@ -11,6 +11,7 @@ export const auditMetadataKeys = {
   'staff.reactivated': [],
   'staff.sessions-revoked': [],
   'staff.mfa-reset': [],
+  'staff.mfa-activated': [],
   'staff.backup-codes-regenerated': [],
 } as const
 
@@ -20,7 +21,12 @@ const auditRecord = t.Object({
   userAgent: t.Nullable(t.String()), metadata: t.Record(t.String(), t.Unknown()),
 })
 
-export const auditModels = { 'audit.listResponse': t.Array(auditRecord) }
+export const auditModels = {
+  'audit.listResponse': t.Object({
+    items: t.Array(auditRecord),
+    nextCursor: t.Nullable(t.String({ description: 'Pass this as cursor to load the next page; null at the end.' })),
+  }),
+}
 
 export type AuditAction = keyof typeof auditMetadataKeys
 
@@ -35,6 +41,12 @@ export interface AuditEvent {
   ipAddress?: string | null
   userAgent?: string | null
   metadata: Record<string, unknown>
+}
+
+export interface AuditContext {
+  requestId: string
+  ipAddress: string | null
+  userAgent: string | null
 }
 
 const forbiddenKeys = new Set([

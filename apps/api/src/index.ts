@@ -1,11 +1,12 @@
 import { createApp } from './app'
 import { loadConfig } from './config/env'
-import { createDatabase } from './database/client'
+import { createDatabase, createIdentityLockPool } from './database/client'
 import { createAuth } from './plugins/auth/auth'
 import { AuditRepository } from './modules/audit/repository'
 import { AuditService } from './modules/audit/service'
 import { CustomerSignupService } from './modules/auth/customer/service'
 import { createResendEmailSender } from './modules/email/sender'
+import { EmailTaskQueue } from './modules/email/sender'
 import { IdentityClaimRepository } from './modules/identity-claims/repository'
 import { IdentityClaimService } from './modules/identity-claims/service'
 import { ApplicationRateLimitRepository } from './modules/rate-limit/repository'
@@ -14,33 +15,46 @@ import { StaffInvitationRepository } from './modules/auth/invitations/repository
 import { StaffInvitationService } from './modules/auth/invitations/service'
 import { StaffRepository } from './modules/auth/staff/repository'
 import { StaffService } from './modules/auth/staff/service'
-import { DatabaseStaffMfaStore, StaffMfaService } from './modules/auth/mfa/service'
+import { StaffMfaService } from './modules/auth/mfa/service'
+import { DatabaseStaffMfaStore } from './modules/auth/mfa/repository'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
-const backgroundTasks = new Set<Promise<unknown>>()
+const identityLockPool = createIdentityLockPool(config.databaseUrl)
+const backgroundTasks = new Set<Promise<void>>()
+const emailQueue = new EmailTaskQueue(4, 256)
 const runInBackground = (task: Promise<unknown>) => {
-  backgroundTasks.add(task)
-  void task.finally(() => backgroundTasks.delete(task))
+  const tracked = Promise.resolve(task).then(() => undefined).catch((error: unknown) => {
+    console.error(JSON.stringify({
+      level: 'error', code: 'BACKGROUND_TASK_FAILED',
+      errorCategory: error instanceof Error ? error.name : 'UnknownError',
+    }))
+  }).finally(() => backgroundTasks.delete(tracked))
+  backgroundTasks.add(tracked)
 }
 const emailSender = createResendEmailSender({
   apiKey: config.resendApiKey,
   from: config.authEmailFrom,
 })
-const auth = createAuth(config, database.db, { emailSender, runInBackground })
 const audit = new AuditService(new AuditRepository(database.db))
-const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
-const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
+const auth = createAuth(config, database.db, {
+  emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit,
+})
+const rateLimitRepository = new ApplicationRateLimitRepository(database.db)
+const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
+const limiter = new RateLimiter(rateLimitRepository)
 const app = await createApp(config, {
   auth,
   audit,
-  customerSignup: new CustomerSignupService({ auth, claims, limiter, audit }),
+  customerSignup: new CustomerSignupService({
+    auth, claims, limiter, audit, requireTrustedClientIp: config.requireTrustedClientIp,
+  }),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
     repository: new StaffInvitationRepository(database.db),
     emailSender,
-    runInBackground,
+    runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
     audit,
   }),
@@ -48,9 +62,8 @@ const app = await createApp(config, {
     auth,
     store: new DatabaseStaffMfaStore(database.db, audit),
     emailSender,
-    runInBackground,
+    runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
-    audit,
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
   identityReservations: claims,
@@ -59,8 +72,22 @@ const app = await createApp(config, {
 
 app.listen({ hostname: config.host, port: config.port })
 
+const maintenanceTimer = setInterval(() => {
+  void Promise.all([
+    rateLimitRepository.purgeExpired(),
+    claims.reconcilePendingCustomers(audit),
+  ]).catch((error: unknown) => {
+    console.error(JSON.stringify({
+      level: 'error',
+      code: 'API_MAINTENANCE_FAILED',
+      errorCategory: error instanceof Error ? error.name : 'UnknownError',
+    }))
+  })
+}, 60 * 60 * 1000)
+maintenanceTimer.unref()
+
 console.log(
-  `API running at http://${app.server?.hostname}:${app.server?.port}`,
+  `API running at http://localhost:${app.server?.port}`,
 )
 
 let isShuttingDown = false
@@ -72,9 +99,20 @@ async function shutdown(signal: string) {
 
   isShuttingDown = true
   console.info(JSON.stringify({ level: 'info', event: 'shutdown', signal }))
+  clearInterval(maintenanceTimer)
   await app.stop()
-  await Promise.allSettled(backgroundTasks)
-  await database.client.end()
+  const drained = await emailQueue.drain(15_000)
+  if (!drained) console.error(JSON.stringify({ level: 'error', code: 'EMAIL_SHUTDOWN_TIMEOUT' }))
+  const backgroundDrained = await Promise.race([
+    Promise.allSettled(backgroundTasks).then(() => true),
+    new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 15_000)
+      timeout.unref()
+    }),
+  ])
+  if (!backgroundDrained) console.error(JSON.stringify({ level: 'error', code: 'BACKGROUND_SHUTDOWN_TIMEOUT' }))
+  await identityLockPool.end({ timeout: 15 })
+  await database.client.end({ timeout: 15 })
   process.exit(0)
 }
 

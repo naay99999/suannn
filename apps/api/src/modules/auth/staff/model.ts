@@ -19,6 +19,14 @@ export const staffModels = {
   }, { additionalProperties: false }),
   'staff.member': staffMember,
   'staff.session': staffSession,
-  'staff.memberList': t.Array(staffMember),
-  'staff.sessionList': t.Array(staffSession),
+  'staff.listQuery': t.Object({
+    limit: t.Optional(t.Number({ minimum: 1, maximum: 100, default: 50, description: 'Page size. Defaults to 50; maximum 100.' })),
+    cursor: t.Optional(t.String({ maxLength: 512, description: 'Opaque nextCursor from the previous page.' })),
+  }),
+  'staff.memberList': t.Object({
+    items: t.Array(staffMember), nextCursor: t.Nullable(t.String({ description: 'Pass this as cursor to load the next page; null at the end.' })),
+  }),
+  'staff.sessionList': t.Object({
+    items: t.Array(staffSession), nextCursor: t.Nullable(t.String({ description: 'Pass this as cursor to load the next page; null at the end.' })),
+  }),
 }

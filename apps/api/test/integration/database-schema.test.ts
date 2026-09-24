@@ -5,13 +5,13 @@ import {
   identityEmailClaim,
   staffInvitation,
   user,
-} from '../src/database/schema'
+} from '../../src/database/schema'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined

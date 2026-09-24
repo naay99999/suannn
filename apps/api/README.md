@@ -30,13 +30,15 @@ bun --filter api test
 
 Integration tests reset the `public` and `drizzle` schemas, refuse databases whose PostgreSQL name does not end in `_test`, and must never target development or production databases.
 
-For production, set `NODE_ENV=production` and `CORS_ORIGINS` to a comma-separated list of exact frontend origins. Startup fails if the allowlist is absent. These origins are also Better Auth's trusted origins and receive credentialed CORS responses.
+For production, set `NODE_ENV=production`, `CORS_ORIGINS` to a comma-separated list of exact frontend origins, and `TRUSTED_PROXY_HEADERS` to the header overwritten by the trusted ingress proxy. Startup fails if either setting is absent. Requests without a valid trusted client IP cannot start customer signup. These origins are also Better Auth's trusted origins and receive credentialed CORS responses.
 
 Set `TRUSTED_PROXY_HEADERS` only when a trusted edge proxy overwrites every listed header. Never trust a client-preserved forwarding header.
 
 After changing Better Auth plugins or schema options, run `bun --filter api auth:generate`, then create and apply a Drizzle migration with `db:generate` and `db:migrate`.
 
 Apply migrations before starting the new API. Existing identities are backfilled as customers; no migration promotes an existing user to staff.
+
+Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
 ## Authentication operations
 
@@ -48,7 +50,10 @@ bun --filter api auth:bootstrap-owner -- owner@example.com
 bun --filter api auth:recover-owner-mfa -- <owner-user-id>
 ```
 
-Customers call `POST /api/v1/customer-auth/sign-up`, then sign in through the allowed Better Auth email endpoint. Staff are invitation-only: accept at `POST /api/v1/staff/invitations/accept`, enroll at `POST /api/v1/staff/onboarding/totp`, and verify at `POST /api/v1/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
+Customers call `POST /api/v1/auth/sign-up`, then sign in through the allowed Better Auth email endpoint. Staff are invitation-only: accept at `POST /api/v1/auth/staff/invitations/accept`, enroll at `POST /api/v1/auth/staff/onboarding/totp`, and verify at `POST /api/v1/auth/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
+
+Staff self-service authentication routes, including MFA backup-code regeneration and the current staff member's sessions, live under `/api/v1/auth/staff/`. Administrative operations on other staff members and invitations remain under `/api/v1/staff/`.
+The former `/api/v1/staff/invitations/accept`, `/api/v1/staff/onboarding*`, `/api/v1/staff/mfa/backup-codes/regenerate`, and `/api/v1/staff/sessions*` self-service paths are removed; clients must use the new paths.
 
 Email delivery is best-effort in V1; verification/reset can be requested again and invitations can be resent. A durable transactional outbox is deferred.
 

@@ -5,6 +5,8 @@ export interface CustomerSignupCommand {
   email: string
   password: string
   ip?: string
+  requestId?: string
+  userAgent?: string | null
 }
 
 export const customerAuthModels = {

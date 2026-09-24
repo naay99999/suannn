@@ -137,7 +137,7 @@ export function SettingsWorkspace({ className }: { className?: string }) {
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-4 md:flex-row md:items-center md:gap-2">
           <div className="flex items-center gap-2">
-            <p className="font-medium">Settings / {activeLabel}</p>
+            <p className="font-medium">Account settings / {activeLabel}</p>
           </div>
           <div className="flex gap-1 overflow-x-auto md:hidden" aria-label="Settings navigation">
             {sections.map((section) => (

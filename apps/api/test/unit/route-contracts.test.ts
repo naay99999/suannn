@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import { loadConfig } from '../src/config/env'
-import type { Auth } from '../src/plugins/auth/auth'
-import { createStaffModule } from '../src/modules/auth/staff'
-import type { StaffService } from '../src/modules/auth/staff/service'
-import type { RateLimiter } from '../src/modules/rate-limit/service'
-import { testEnv } from './fixtures'
+import { loadConfig } from '../../src/config/env'
+import type { Auth } from '../../src/plugins/auth/auth'
+import { createStaffModule } from '../../src/modules/auth/staff'
+import type { StaffService } from '../../src/modules/auth/staff/service'
+import type { RateLimiter } from '../../src/modules/rate-limit/service'
+import { testEnv } from '../fixtures'
 
 const auth = {
   handler: async () => new Response(),

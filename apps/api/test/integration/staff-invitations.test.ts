@@ -1,31 +1,33 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { loadConfig } from '../src/config/env'
-import { createAuth } from '../src/plugins/auth/auth'
+import { loadConfig } from '../../src/config/env'
+import { createIdentityLockPool } from '../../src/database/client'
+import { createAuth } from '../../src/plugins/auth/auth'
 import {
   identityEmailClaim,
   session,
   staffInvitation,
   user,
-} from '../src/database/schema'
-import { IdentityClaimRepository } from '../src/modules/identity-claims/repository'
-import { IdentityClaimService } from '../src/modules/identity-claims/service'
-import { StaffInvitationRepository } from '../src/modules/auth/invitations/repository'
-import { StaffInvitationService } from '../src/modules/auth/invitations/service'
-import { hashToken } from '../src/shared/crypto'
-import { AuditRepository } from '../src/modules/audit/repository'
-import { AuditService } from '../src/modules/audit/service'
-import { auditLog } from '../src/database/schema'
-import { testEnv } from './fixtures'
-import { FakeEmailSender } from './helpers/fakes'
+} from '../../src/database/schema'
+import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
+import { IdentityClaimService } from '../../src/modules/identity-claims/service'
+import { StaffInvitationRepository } from '../../src/modules/auth/invitations/repository'
+import { StaffInvitationService } from '../../src/modules/auth/invitations/service'
+import { hashToken } from '../../src/shared/crypto'
+import { AuditRepository } from '../../src/modules/audit/repository'
+import { AuditService } from '../../src/modules/audit/service'
+import { auditLog } from '../../src/database/schema'
+import { testEnv } from '../fixtures'
+import { FakeEmailSender } from '../helpers/fakes'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const database = createTestDatabase()
+const identityLockPool = createIdentityLockPool(database.url)
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
 const emailSender = new FakeEmailSender()
 const backgroundTasks: Promise<unknown>[] = []
@@ -41,11 +43,11 @@ let nextToken = 0
 
 const service = new StaffInvitationService({
   auth,
-  claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now),
+  claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now, identityLockPool),
   repository: new StaffInvitationRepository(database.db),
   emailSender,
   runInBackground(task) {
-    backgroundTasks.push(task)
+    backgroundTasks.push(task())
   },
   adminUrl: config.adminUrl,
   now: () => now,
@@ -79,6 +81,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.allSettled(backgroundTasks)
   await unlockDatabase?.()
+  await identityLockPool.end()
   await database.client.end()
 })
 
@@ -193,14 +196,15 @@ describe('staff invitation lifecycle', () => {
     let failOnce = true
     const failingService = new StaffInvitationService({
       auth,
-      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now),
+      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now, identityLockPool),
       repository: new StaffInvitationRepository(database.db),
       emailSender,
       runInBackground(task) {
-        backgroundTasks.push(task)
+        backgroundTasks.push(task())
       },
       adminUrl: config.adminUrl,
       now: () => now,
+      audit: new AuditService(new AuditRepository(database.db)),
       async afterProvision() {
         if (failOnce) {
           failOnce = false
@@ -244,14 +248,15 @@ describe('staff invitation lifecycle', () => {
     const token = tokenFromLastEmail()
     const failingService = new StaffInvitationService({
       auth,
-      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now),
+      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now, identityLockPool),
       repository: new StaffInvitationRepository(database.db),
       emailSender,
       runInBackground(task) {
-        backgroundTasks.push(task)
+        backgroundTasks.push(task())
       },
       adminUrl: config.adminUrl,
       now: () => now,
+      audit: new AuditService(new AuditRepository(database.db)),
       afterProvision: async () => {
         throw new Error('SIMULATED_TRANSITION_FAILURE')
       },
@@ -264,7 +269,7 @@ describe('staff invitation lifecycle', () => {
     })).rejects.toThrow('SIMULATED_TRANSITION_FAILURE')
     await service.cancel(invitation.id, 'owner-1')
 
-    const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now)
+    const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => now, identityLockPool)
     expect(await claims.findState('orphan@example.com')).toBe('pending_staff')
   })
 

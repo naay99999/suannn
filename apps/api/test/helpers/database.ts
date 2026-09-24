@@ -3,8 +3,8 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { createDatabase } from '../../src/database/client'
 import { requireTestDatabaseUrl } from '../require-test-database'
 
-export function createTestDatabase(url = requireTestDatabaseUrl()) {
-  return { ...createDatabase(url), url }
+export function createTestDatabase(url = requireTestDatabaseUrl(), max = 10) {
+  return { ...createDatabase(url, { max }), url }
 }
 
 type TestDatabase = ReturnType<typeof createTestDatabase>

@@ -1,8 +1,7 @@
-import type { createDatabase } from '../../database/client'
+import type { Database } from '../../database/types'
 import { assertAuditMetadata, type AuditEvent } from './model'
 import type { AuditRepository } from './repository'
 
-type Database = ReturnType<typeof createDatabase>['db']
 type AuditWriter = Pick<Database, 'insert'>
 
 export class AuditService {
@@ -18,7 +17,7 @@ export class AuditService {
     await this.repository.insertStandalone(event)
   }
 
-  listAuthorized(query: { limit: number; actorUserId?: string }, authorized: boolean) {
+  listAuthorized(query: { limit: number; cursor?: string; actorUserId?: string }, authorized: boolean) {
     if (!authorized) {
       throw new Error('FORBIDDEN')
     }

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import type { Auth } from '../src/plugins/auth/auth'
-import { createAuthMacros, createAuthPlugin } from '../src/plugins/auth'
+import type { Auth } from '../../src/plugins/auth/auth'
+import { createAuthMacros, createAuthPlugin } from '../../src/plugins/auth'
 import {
   touchStaffSession,
   validateStaffSession,
   type StaffSessionContext,
-} from '../src/plugins/auth/session-policy'
+} from '../../src/plugins/auth/session-policy'
 
 const now = new Date('2026-09-22T08:00:00.000Z')
 

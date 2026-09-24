@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { AuditRepository } from '../src/modules/audit/repository'
-import { AuditService } from '../src/modules/audit/service'
-import { user } from '../src/database/schema'
+import { AuditRepository } from '../../src/modules/audit/repository'
+import { AuditService } from '../../src/modules/audit/service'
+import { auditLog, user } from '../../src/database/schema'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined
@@ -76,6 +76,27 @@ describe('append-only audit service', () => {
     const users = await database.db.execute(sql`select id from "user" where id = 'rolled-back-user'`)
     const audits = await repository.list({ limit: 10 })
     expect(users).toHaveLength(0)
-    expect(audits).toHaveLength(0)
+    expect(audits.items).toHaveLength(0)
+  })
+
+  it('paginates timestamp ties without dropping or repeating audit rows', async () => {
+    const repository = new AuditRepository(database.db)
+    const occurredAt = new Date('2026-09-23T12:00:00.000Z')
+    await database.db.insert(auditLog).values(['a', 'b', 'c'].map((id) => ({
+      id,
+      action: 'customer.created',
+      targetType: 'user',
+      targetId: id,
+      requestId: `request-${id}`,
+      occurredAt,
+      metadata: {},
+    })))
+    const first = await repository.list({ limit: 2 })
+    const second = await repository.list({ limit: 2, cursor: first.nextCursor ?? undefined })
+
+    expect(first.items).toHaveLength(2)
+    expect(first.nextCursor).toBeString()
+    expect(second.items).toHaveLength(1)
+    expect([...first.items, ...second.items].map((row) => row.id).sort()).toEqual(['a', 'b', 'c'])
   })
 })

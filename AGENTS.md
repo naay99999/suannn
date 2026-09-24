@@ -49,7 +49,7 @@ bun --filter admin lint
 bun --filter @workspace/ui typecheck
 ```
 
-Run `build` and `lint` for every changed frontend; run the shared UI typecheck when changing `packages/ui/`. Frontend builds type-check with TypeScript and produce Vite bundles. There is currently no automated test suite; do not use `apps/api`'s placeholder `test` script as validation.
+Run `build` and `lint` for every changed frontend; run the shared UI typecheck when changing `packages/ui/`. Frontend builds type-check with TypeScript and produce Vite bundles. The API has unit and PostgreSQL integration suites (`bun --filter api test:unit` and `bun --filter api test:integration`); integration tests require a dedicated `TEST_DATABASE_URL` ending in `_test` and reset its schemas.
 
 ## Coding Style and Naming
 

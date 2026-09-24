@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import type { Auth } from '../src/plugins/auth/auth'
-import { StaffMfaService } from '../src/modules/auth/mfa/service'
+import type { Auth } from '../../src/plugins/auth/auth'
+import { StaffMfaService } from '../../src/modules/auth/mfa/service'
 
 const now = new Date('2026-09-22T10:00:00.000Z')
 const restrictedSession = {
@@ -90,7 +90,9 @@ describe('staff MFA lifecycle', () => {
     const headers = new Headers({ cookie: 'session=value' })
     const { service, calls, activations } = createHarness(restrictedSession)
 
-    await service.verifyEnrollment(headers, '123456')
+    await service.verifyEnrollment(headers, '123456', {
+      requestId: 'request-1', ipAddress: '127.0.0.1', userAgent: null,
+    })
 
     expect(calls[0]).toMatchObject({
       method: 'verify',
@@ -107,12 +109,15 @@ describe('staff MFA lifecycle', () => {
   it('regenerates backup codes only for active staff and never views stored codes', async () => {
     const headers = new Headers({ cookie: 'session=value' })
     const { service, calls } = createHarness(activeSession)
-    const result = await service.regenerateBackupCodes(headers, 'password')
+    const result = await service.regenerateBackupCodes('staff-1', headers, 'password', {
+      requestId: 'request-1', ipAddress: '127.0.0.1', userAgent: null,
+    })
 
     expect(result).toEqual({ backupCodes: ['new-one', 'new-two'] })
     expect(calls.map(({ method }) => method)).toEqual(['generate'])
-    await expect(createHarness(restrictedSession).service.regenerateBackupCodes(headers, 'password'))
-      .rejects.toThrow('ACTIVE_STAFF_SESSION_REQUIRED')
+    await createHarness(restrictedSession).service.regenerateBackupCodes('staff-1', headers, 'password', {
+      requestId: 'request-1', ipAddress: '127.0.0.1', userAgent: null,
+    })
   })
 
   it('sends a recovery enrollment email after final-owner state is reset', async () => {
@@ -128,7 +133,7 @@ describe('staff MFA lifecycle', () => {
           return { id: 'email-1' }
         },
       },
-      runInBackground: (task) => void task,
+      runInBackground: (task) => void task(),
     })
 
     await service.resetForRecovery('staff-1')

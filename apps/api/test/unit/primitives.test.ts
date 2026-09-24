@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import { resolveClientIp } from '../src/shared/client-ip'
-import { createOpaqueToken, hashToken } from '../src/shared/crypto'
-import { normalizeEmail } from '../src/shared/email'
-import { requireTestDatabaseUrl } from './require-test-database'
+import { resolveClientIp } from '../../src/shared/client-ip'
+import { createOpaqueToken, hashToken } from '../../src/shared/crypto'
+import { normalizeEmail } from '../../src/shared/email'
+import { requireTestDatabaseUrl } from '../require-test-database'
 
 describe('auth primitives', () => {
   it('requires an explicit integration database URL', () => {

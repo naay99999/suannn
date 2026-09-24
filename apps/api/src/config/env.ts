@@ -22,6 +22,7 @@ export interface AppConfig {
   resendApiKey: string
   authEmailFrom: string
   trustedProxyHeaders: string[]
+  requireTrustedClientIp: boolean
 }
 
 type Environment = Record<string, string | undefined>
@@ -124,6 +125,11 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     throw new Error('CORS_ORIGINS is required when NODE_ENV is production')
   }
 
+  const trustedProxyHeaders = parseTrustedProxyHeaders(env.TRUSTED_PROXY_HEADERS)
+  if (isProduction && trustedProxyHeaders.length === 0) {
+    throw new Error('TRUSTED_PROXY_HEADERS is required when NODE_ENV is production')
+  }
+
   const databaseUrl = parseUrl(
     'DATABASE_URL',
     requiredValue('DATABASE_URL', env.DATABASE_URL),
@@ -172,6 +178,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     adminUrl,
     resendApiKey: requiredValue('RESEND_API_KEY', env.RESEND_API_KEY),
     authEmailFrom: requiredValue('AUTH_EMAIL_FROM', env.AUTH_EMAIL_FROM),
-    trustedProxyHeaders: parseTrustedProxyHeaders(env.TRUSTED_PROXY_HEADERS),
+    trustedProxyHeaders,
+    requireTrustedClientIp: isProduction,
   }
 }

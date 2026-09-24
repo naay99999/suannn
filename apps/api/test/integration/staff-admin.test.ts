@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { and, eq, sql } from 'drizzle-orm'
-import { user } from '../src/database/schema'
-import { AuditRepository } from '../src/modules/audit/repository'
-import { AuditService } from '../src/modules/audit/service'
-import { StaffRepository } from '../src/modules/auth/staff/repository'
-import { StaffService } from '../src/modules/auth/staff/service'
+import { user } from '../../src/database/schema'
+import { AuditRepository } from '../../src/modules/audit/repository'
+import { AuditService } from '../../src/modules/audit/service'
+import { StaffRepository } from '../../src/modules/auth/staff/repository'
+import { StaffService } from '../../src/modules/auth/staff/service'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const owner = { id: 'owner-1', role: 'owner' as const }
 const admin = { id: 'admin-1', role: 'admin' as const }
@@ -18,9 +18,9 @@ const admin = { id: 'admin-1', role: 'admin' as const }
 function harness() {
   const calls: unknown[] = []
   const repository = {
-    list: async () => [],
+    list: async () => ({ items: [], nextCursor: null }),
     getRole: async () => 'support' as const,
-    listOwnSessions: async () => [],
+    listOwnSessions: async () => ({ items: [], nextCursor: null }),
     changeRole: async (...args: unknown[]) => void calls.push(['changeRole', ...args]),
     setSuspended: async (...args: unknown[]) => void calls.push(['setSuspended', ...args]),
     revokeSessions: async (...args: unknown[]) => void calls.push(['revokeSessions', ...args]),

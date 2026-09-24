@@ -9,6 +9,7 @@ export const systemModule = new Elysia({ name: 'system', prefix: '/api/v1' })
       summary: 'Get API information',
       description: 'Returns the API welcome response.',
       tags: ['System'],
+      security: [],
     },
   })
   .get('/health', () => ({ status: 'ok' as const }), {
@@ -17,5 +18,6 @@ export const systemModule = new Elysia({ name: 'system', prefix: '/api/v1' })
       summary: 'Check API health',
       description: 'Returns the liveness status for the API service.',
       tags: ['System'],
+      security: [],
     },
   })

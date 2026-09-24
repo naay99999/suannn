@@ -1,6 +1,6 @@
 import type { CreateStaffInvitationCommand, PublicStaffInvitation } from '../modules/auth/invitations/model'
 import { loadConfig } from '../config/env'
-import { createDatabase } from '../database/client'
+import { createDatabase, createIdentityLockPool } from '../database/client'
 import { createAuth } from '../plugins/auth/auth'
 import { createResendEmailSender } from '../modules/email/sender'
 import { IdentityClaimRepository } from '../modules/identity-claims/repository'
@@ -9,6 +9,7 @@ import { StaffInvitationRepository } from '../modules/auth/invitations/repositor
 import { StaffInvitationService } from '../modules/auth/invitations/service'
 import { AuditRepository } from '../modules/audit/repository'
 import { AuditService } from '../modules/audit/service'
+import { EmailTaskQueue } from '../modules/email/sender'
 
 interface OwnerBootstrapService {
   hasOwner(): Promise<boolean>
@@ -20,7 +21,13 @@ export async function bootstrapOwner(service: OwnerBootstrapService, email: stri
     throw new Error('OWNER_ALREADY_EXISTS')
   }
 
-  return service.create({ email, role: 'owner', inviterUserId: null })
+  const operationId = crypto.randomUUID()
+  return service.create({
+    email,
+    role: 'owner',
+    inviterUserId: null,
+    auditContext: { requestId: operationId, ipAddress: null, userAgent: null },
+  })
 }
 
 if (import.meta.main) {
@@ -32,21 +39,25 @@ if (import.meta.main) {
 
   const config = loadConfig()
   const database = createDatabase(config.databaseUrl)
+  const identityLockPool = createIdentityLockPool(config.databaseUrl)
   const emailSender = createResendEmailSender({
     apiKey: config.resendApiKey,
     from: config.authEmailFrom,
   })
   const backgroundTasks: Promise<unknown>[] = []
+  const emailQueue = new EmailTaskQueue()
   const runInBackground = (task: Promise<unknown>) => {
     backgroundTasks.push(task)
   }
-  const auth = createAuth(config, database.db, { emailSender, runInBackground })
+  const auth = createAuth(config, database.db, {
+    emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task),
+  })
   const service = new StaffInvitationService({
     auth,
-    claims: new IdentityClaimService(database.db, new IdentityClaimRepository()),
+    claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool),
     repository: new StaffInvitationRepository(database.db),
     emailSender,
-    runInBackground,
+    runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
     audit: new AuditService(new AuditRepository(database.db)),
   })
@@ -54,6 +65,7 @@ if (import.meta.main) {
   try {
     const invitation = await bootstrapOwner(service, email)
     await Promise.all(backgroundTasks)
+    await emailQueue.drain(15_000)
     console.info(JSON.stringify({
       event: 'owner-bootstrap-invitation-created',
       invitationId: invitation.id,
@@ -61,6 +73,7 @@ if (import.meta.main) {
       expiresAt: invitation.expiresAt,
     }))
   } finally {
+    await identityLockPool.end({ timeout: 15 })
     await database.client.end()
   }
 }

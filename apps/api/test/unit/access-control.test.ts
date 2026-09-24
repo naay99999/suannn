@@ -8,7 +8,7 @@ import {
   roles,
   type Permission,
   type Role,
-} from '../src/plugins/auth/access-control'
+} from '../../src/plugins/auth/access-control'
 
 const allPermissions: Permission[] = Object.entries(permissions).flatMap(([resource, actions]) =>
   actions.map((action) => `${resource}:${action}` as Permission))

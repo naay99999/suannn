@@ -6,8 +6,9 @@ import { admin } from 'better-auth/plugins/admin'
 import { customSession } from 'better-auth/plugins/custom-session'
 import { twoFactor } from 'better-auth/plugins/two-factor'
 import { and, eq } from 'drizzle-orm'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { AppConfig } from '../../config/env'
-import type { createDatabase } from '../../database/client'
+import type { Database } from '../../database/types'
 import {
   scheduleBackground,
   type EmailDeliveryLogger,
@@ -15,6 +16,8 @@ import {
 } from '../../modules/email/sender'
 import { resetPasswordEmail, verificationEmail } from '../../modules/email/templates'
 import * as schema from '../../database/schema/auth'
+import type { AuditContext } from '../../modules/audit/model'
+import type { AuditService } from '../../modules/audit/service'
 import { accessControl, roles, type AccountType } from './access-control'
 import { capabilitiesFor, type Role } from './access-control'
 import {
@@ -24,12 +27,18 @@ import {
   validateStaffSession,
 } from './session-policy'
 
-type Database = ReturnType<typeof createDatabase>['db']
-
 export interface AuthDependencies {
   emailSender: EmailSender
   runInBackground(task: Promise<unknown>): void
+  enqueueEmailTask?(task: () => Promise<unknown>): void
   emailLogger?: EmailDeliveryLogger
+  audit?: AuditService
+}
+
+const backupCodeAuditContext = new AsyncLocalStorage<{ userId: string; context: AuditContext }>()
+
+export function withBackupCodeAuditContext<T>(userId: string, context: AuditContext, callback: () => Promise<T>) {
+  return backupCodeAuditContext.run({ userId, context }, callback)
 }
 
 const unconfiguredDependencies: AuthDependencies = {
@@ -51,10 +60,34 @@ export function createAuth(
     baseURL: config.betterAuthUrl,
     basePath: '/api/v1/auth',
     secret: config.betterAuthSecret,
-    database: drizzleAdapter(db, {
-      provider: 'pg',
-      schema,
-    }),
+    database: ((options: never) => {
+      const adapter = drizzleAdapter(db, { provider: 'pg', schema })(options)
+      return {
+        ...adapter,
+        async update(input: Parameters<typeof adapter.update>[0]) {
+          const auditContext = backupCodeAuditContext.getStore()
+          if (!auditContext || input.model !== 'twoFactor' || !('backupCodes' in input.update)) {
+            return adapter.update(input)
+          }
+          if (!dependencies.audit) throw new Error('MFA_AUDIT_UNAVAILABLE')
+          return db.transaction(async (tx) => {
+            const transactionalAdapter = drizzleAdapter(tx, { provider: 'pg', schema })(options)
+            const result = await transactionalAdapter.update(input)
+            if (!result) throw new Error('BACKUP_CODE_UPDATE_FAILED')
+            await dependencies.audit!.record(tx, {
+              id: crypto.randomUUID(),
+              actorUserId: auditContext.userId,
+              action: 'staff.backup-codes-regenerated',
+              targetType: 'user',
+              targetId: auditContext.userId,
+              ...auditContext.context,
+              metadata: {},
+            })
+            return result
+          })
+        },
+      }
+    }) as never,
     databaseHooks: {
       session: {
         create: {
@@ -91,14 +124,14 @@ export function createAuth(
       maxPasswordLength: 256,
       sendResetPassword: async ({ user, url }) => {
         scheduleBackground(
-          dependencies.emailSender.send({
+          () => dependencies.emailSender.send({
             to: user.email,
             template: 'reset-password',
             ...resetPasswordEmail(url),
           }),
           { template: 'reset-password' },
           dependencies.emailLogger,
-          dependencies.runInBackground,
+          dependencies.enqueueEmailTask ?? ((task) => dependencies.runInBackground(task())),
         )
       },
       customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
@@ -116,14 +149,14 @@ export function createAuth(
       sendOnSignUp: true,
       sendVerificationEmail: async ({ user, url }) => {
         scheduleBackground(
-          dependencies.emailSender.send({
+          () => dependencies.emailSender.send({
             to: user.email,
             template: 'verify-email',
             ...verificationEmail(url),
           }),
           { template: 'verify-email' },
           dependencies.emailLogger,
-          dependencies.runInBackground,
+          dependencies.enqueueEmailTask ?? ((task) => dependencies.runInBackground(task())),
         )
       },
     },
@@ -225,18 +258,20 @@ export function createAuth(
         },
       }),
       customSession(async ({ user, session }) => {
-        const [[persistedUser], [persistedSession]] = await Promise.all([
-          db.select({
-            accountType: schema.user.accountType,
-            role: schema.user.role,
-            banned: schema.user.banned,
-            staffActivatedAt: schema.user.staffActivatedAt,
-          }).from(schema.user).where(eq(schema.user.id, user.id)).limit(1),
-          db.select({
-            lastActivityAt: schema.session.lastActivityAt,
-            absoluteExpiresAt: schema.session.absoluteExpiresAt,
-          }).from(schema.session).where(eq(schema.session.id, session.id)).limit(1),
-        ])
+        const [persisted] = await db.select({
+          accountType: schema.user.accountType,
+          role: schema.user.role,
+          banned: schema.user.banned,
+          staffActivatedAt: schema.user.staffActivatedAt,
+          sessionId: schema.session.id,
+          lastActivityAt: schema.session.lastActivityAt,
+          absoluteExpiresAt: schema.session.absoluteExpiresAt,
+        }).from(schema.user).leftJoin(schema.session, and(
+          eq(schema.session.userId, schema.user.id),
+          eq(schema.session.id, session.id),
+        )).where(eq(schema.user.id, user.id)).limit(1)
+        const persistedUser = persisted
+        const persistedSession = persisted?.sessionId ? persisted : null
         const extendedUser = user as typeof user & {
           accountType?: AccountType
           role?: Role

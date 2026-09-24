@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { loadConfig } from '../src/config/env'
-import { createAuth } from '../src/plugins/auth/auth'
-import { session, user } from '../src/database/schema'
-import { testEnv } from './fixtures'
+import { loadConfig } from '../../src/config/env'
+import { createAuth } from '../../src/plugins/auth/auth'
+import { session, user } from '../../src/database/schema'
+import { testEnv } from '../fixtures'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
-import { FakeEmailSender } from './helpers/fakes'
+} from '../helpers/database'
+import { FakeEmailSender } from '../helpers/fakes'
 
 const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })

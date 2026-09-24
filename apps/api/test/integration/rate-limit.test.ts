@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import { loadConfig } from '../src/config/env'
-import { createApplicationRateLimitPlugin } from '../src/plugins/application-rate-limit'
-import { testEnv } from './fixtures'
-import { applicationRateLimit } from '../src/database/schema'
-import { ApplicationRateLimitRepository } from '../src/modules/rate-limit/repository'
-import { RateLimiter, rateLimitResponse } from '../src/modules/rate-limit/service'
+import { loadConfig } from '../../src/config/env'
+import { createApplicationRateLimitPlugin } from '../../src/plugins/application-rate-limit'
+import { testEnv } from '../fixtures'
+import { applicationRateLimit } from '../../src/database/schema'
+import { ApplicationRateLimitRepository } from '../../src/modules/rate-limit/repository'
+import { RateLimiter, rateLimitResponse } from '../../src/modules/rate-limit/service'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined
@@ -97,5 +97,36 @@ describe('application rate limiter', () => {
     const serialized = JSON.stringify(rows)
     expect(serialized).not.toContain(email)
     expect(serialized).not.toContain(ip)
+  })
+
+  it('purges expired rows in bounded batches without losing a concurrent consume', async () => {
+    const now = new Date('2026-09-23T12:00:00.000Z')
+    await database.db.insert(applicationRateLimit).values([
+      {
+        keyHash: 'expired-purge-row', namespace: 'signup', count: 8,
+        windowStartedAt: new Date(now.getTime() - 120_000),
+        expiresAt: new Date(now.getTime() - 60_000), updatedAt: now,
+      },
+      {
+        keyHash: 'race-purge-row', namespace: 'signup', count: 3,
+        windowStartedAt: new Date(now.getTime() - 120_000),
+        expiresAt: new Date(now.getTime() - 60_000), updatedAt: now,
+      },
+      {
+        keyHash: 'live-purge-row', namespace: 'signup', count: 1,
+        windowStartedAt: now, expiresAt: new Date(now.getTime() + 60_000), updatedAt: now,
+      },
+    ])
+    const repository = new ApplicationRateLimitRepository(database.db)
+    const [purged] = await Promise.all([
+      repository.purgeExpired(now, 10_000),
+      repository.consume({
+        keyHash: 'race-purge-row', namespace: 'signup', now, windowSeconds: 60,
+      }),
+    ])
+    const rows = await database.db.select().from(applicationRateLimit)
+    expect(purged).toBeLessThanOrEqual(10_000)
+    expect(rows.map((row) => row.keyHash).sort()).toEqual(['live-purge-row', 'race-purge-row'])
+    expect(rows.find((row) => row.keyHash === 'race-purge-row')?.count).toBe(1)
   })
 })

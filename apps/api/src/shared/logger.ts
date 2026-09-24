@@ -11,7 +11,8 @@ interface ErrorLog {
   level: 'error'
   code: string
   message: string
-  stack?: string
+  requestId?: string
+  errorCategory?: string
 }
 
 export function logRequest(entry: RequestLog) {

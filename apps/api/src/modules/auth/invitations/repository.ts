@@ -1,14 +1,12 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
-import type { createDatabase } from '../../../database/client'
+import { and, desc, eq, gt, isNull, lte, lt, or, sql } from 'drizzle-orm'
+import type { Database, DatabaseTransaction } from '../../../database/types'
 import {
   identityEmailClaim,
   staffInvitation,
   user,
 } from '../../../database/schema'
 import type { StaffRole } from '../../../plugins/auth/access-control'
-import type { DatabaseTransaction } from '../../identity-claims/repository'
-
-type Database = ReturnType<typeof createDatabase>['db']
+import { decodeCursor, encodeCursor } from '../../../shared/cursor'
 
 export class StaffInvitationRepository {
   constructor(private readonly db: Database) {}
@@ -29,15 +27,39 @@ export class StaffInvitationRepository {
     return invitation ?? null
   }
 
-  list() {
-    return this.db.select({
+  async list(query: { limit: number; cursor?: string; status?: 'pending' | 'accepted' | 'revoked' | 'expired' }) {
+    const cursor = decodeCursor(query.cursor, ['createdAt', 'id', 'status'])
+    if (cursor && cursor.status !== (query.status ?? 'all')) throw new Error('INVALID_CURSOR')
+    const now = new Date()
+    const statusFilter = query.status === 'pending'
+      ? and(isNull(staffInvitation.acceptedAt), isNull(staffInvitation.revokedAt), gt(staffInvitation.expiresAt, now))
+      : query.status === 'accepted'
+        ? sql`${staffInvitation.acceptedAt} is not null`
+        : query.status === 'revoked'
+          ? sql`${staffInvitation.revokedAt} is not null`
+          : query.status === 'expired'
+            ? and(isNull(staffInvitation.acceptedAt), isNull(staffInvitation.revokedAt), lte(staffInvitation.expiresAt, now))
+            : undefined
+    const rows = await this.db.select({
+      createdAt: staffInvitation.createdAt,
       id: staffInvitation.id,
       email: staffInvitation.normalizedEmail,
       role: staffInvitation.role,
       expiresAt: staffInvitation.expiresAt,
       acceptedAt: staffInvitation.acceptedAt,
       revokedAt: staffInvitation.revokedAt,
-    }).from(staffInvitation).orderBy(desc(staffInvitation.createdAt))
+    }).from(staffInvitation).where(and(
+      statusFilter,
+      cursor ? or(lt(staffInvitation.createdAt, new Date(cursor.createdAt)), and(
+        eq(staffInvitation.createdAt, new Date(cursor.createdAt)), lt(staffInvitation.id, cursor.id),
+      )) : undefined,
+    )).orderBy(desc(staffInvitation.createdAt), desc(staffInvitation.id)).limit(query.limit + 1)
+    const hasMore = rows.length > query.limit
+    const items = rows.slice(0, query.limit).map(({ createdAt: _createdAt, ...row }) => row)
+    const last = rows[Math.min(rows.length, query.limit) - 1]
+    return { items, nextCursor: hasMore && last ? encodeCursor({
+      createdAt: last.createdAt.toISOString(), id: last.id, status: query.status ?? 'all',
+    }) : null }
   }
 
   async createPending(tx: DatabaseTransaction, input: {
@@ -76,6 +98,27 @@ export class StaffInvitationRepository {
     if (rows.length !== 1) throw new Error('INVALID_INVITATION')
   }
 
+  async markAcceptanceOperation(tx: DatabaseTransaction, input: {
+    normalizedEmail: string
+    invitationId: string
+    operationId: string
+    requestId: string
+    ipAddress: string | null
+    userAgent: string | null
+  }) {
+    return tx.update(identityEmailClaim).set({
+      operationId: input.operationId,
+      requestId: input.requestId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    }).where(and(
+      eq(identityEmailClaim.normalizedEmail, input.normalizedEmail),
+      eq(identityEmailClaim.invitationId, input.invitationId),
+      eq(identityEmailClaim.state, 'pending_staff'),
+      isNull(identityEmailClaim.operationId),
+    )).returning()
+  }
+
   async cancel(tx: DatabaseTransaction, id: string, revokedAt: Date) {
     const rows = await tx.update(staffInvitation).set({ revokedAt }).where(and(
       eq(staffInvitation.id, id),
@@ -109,6 +152,10 @@ export class StaffInvitationRepository {
       state: 'staff',
       userId: input.userId,
       invitationId: null,
+      operationId: null,
+      requestId: null,
+      ipAddress: null,
+      userAgent: null,
       updatedAt: input.acceptedAt,
     }).where(and(
       eq(identityEmailClaim.normalizedEmail, input.normalizedEmail),

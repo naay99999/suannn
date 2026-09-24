@@ -2,10 +2,12 @@ import {
   isStaffRole,
   type StaffRole,
 } from '../../../plugins/auth/access-control'
+import type { AuditContext } from '../../audit/model'
 
 export interface StaffActor {
   id: string
   role: StaffRole
+  auditContext?: AuditContext
 }
 
 export interface StaffMember {
@@ -27,21 +29,21 @@ export interface StaffSession {
 }
 
 export interface StaffRepositoryContract {
-  list(): Promise<StaffMember[]>
+  list(query: { limit: number; cursor?: string }): Promise<{ items: StaffMember[]; nextCursor: string | null }>
   getRole(userId: string): Promise<StaffRole | null>
   changeRole(actor: StaffActor, targetUserId: string, role: StaffRole): Promise<void>
   setSuspended(actor: StaffActor, targetUserId: string, suspended: boolean, reason?: string): Promise<void>
   revokeSessions(actor: StaffActor, targetUserId: string): Promise<void>
   resetMfa(actor: StaffActor, targetUserId: string): Promise<void>
-  listOwnSessions(userId: string): Promise<StaffSession[]>
-  revokeOwnSession(userId: string, sessionId: string): Promise<void>
+  listOwnSessions(userId: string, query: { limit: number; cursor?: string }): Promise<{ items: StaffSession[]; nextCursor: string | null }>
+  revokeOwnSession(userId: string, sessionId: string, auditContext?: AuditContext): Promise<void>
 }
 
 export class StaffService {
   constructor(private readonly repository: StaffRepositoryContract) {}
 
-  list() {
-    return this.repository.list()
+  list(query: { limit: number; cursor?: string }) {
+    return this.repository.list(query)
   }
 
   async changeRole(actor: StaffActor, targetUserId: string, input: unknown) {
@@ -74,12 +76,12 @@ export class StaffService {
     await this.repository.resetMfa(actor, targetUserId)
   }
 
-  listOwnSessions(userId: string) {
-    return this.repository.listOwnSessions(userId)
+  listOwnSessions(userId: string, query: { limit: number; cursor?: string }) {
+    return this.repository.listOwnSessions(userId, query)
   }
 
-  revokeOwnSession(userId: string, sessionId: string) {
-    return this.repository.revokeOwnSession(userId, sessionId)
+  revokeOwnSession(userId: string, sessionId: string, auditContext?: AuditContext) {
+    return this.repository.revokeOwnSession(userId, sessionId, auditContext)
   }
 
   private async assertMayTarget(actor: StaffActor, targetUserId: string) {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import { loadConfig } from '../src/config/env'
-import { createBrowserMutationPlugin } from '../src/plugins/browser-mutation'
-import { createRequestContextPlugin } from '../src/plugins/request-context'
-import { testEnv } from './fixtures'
+import { loadConfig } from '../../src/config/env'
+import { createBrowserMutationPlugin } from '../../src/plugins/browser-mutation'
+import { createRequestContextPlugin } from '../../src/plugins/request-context'
+import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
 

@@ -11,15 +11,21 @@ export interface RequestContext {
 }
 
 export function createRequestContextPlugin(config: AppConfig) {
+  const contexts = new WeakMap<Request, RequestContext>()
+
   return new Elysia({ name: 'request-context' })
-    .derive({ as: 'global' }, ({ request, set }) => {
+    .onRequest(({ request, set }) => {
       const requestContext: RequestContext = {
         requestId: crypto.randomUUID(),
         clientIp: resolveClientIp(request, config.trustedProxyHeaders),
         userAgent: request.headers.get('user-agent')?.slice(0, maximumUserAgentLength) ?? null,
       }
 
+      contexts.set(request, requestContext)
       set.headers['x-request-id'] = requestContext.requestId
+    })
+    .derive({ as: 'global' }, ({ request }) => {
+      const requestContext = contexts.get(request)!
 
       return { requestContext }
     })

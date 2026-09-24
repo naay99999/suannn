@@ -1,9 +1,9 @@
-import { desc, eq } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
+import { and, desc, eq, lt, or } from 'drizzle-orm'
+import type { Database } from '../../database/types'
 import { auditLog } from '../../database/schema'
 import type { AuditEvent } from './model'
+import { decodeCursor, encodeCursor } from '../../shared/cursor'
 
-type Database = ReturnType<typeof createDatabase>['db']
 type AuditWriter = Pick<Database, 'insert'>
 
 export class AuditRepository {
@@ -28,12 +28,23 @@ export class AuditRepository {
     return this.insert(this.db, event)
   }
 
-  list(query: { limit: number; actorUserId?: string }) {
-    const base = this.db.select().from(auditLog)
-    const filtered = query.actorUserId
-      ? base.where(eq(auditLog.actorUserId, query.actorUserId))
-      : base
-
-    return filtered.orderBy(desc(auditLog.occurredAt)).limit(query.limit)
+  async list(query: { limit: number; cursor?: string; actorUserId?: string }) {
+    const keys = query.actorUserId ? ['occurredAt', 'id', 'actorUserId'] : ['occurredAt', 'id']
+    const cursor = decodeCursor(query.cursor, keys)
+    if (query.actorUserId && cursor && cursor.actorUserId !== query.actorUserId) throw new Error('INVALID_CURSOR')
+    const rows = await this.db.select().from(auditLog).where(and(
+      query.actorUserId ? eq(auditLog.actorUserId, query.actorUserId) : undefined,
+      cursor ? or(lt(auditLog.occurredAt, new Date(cursor.occurredAt)), and(
+        eq(auditLog.occurredAt, new Date(cursor.occurredAt)), lt(auditLog.id, cursor.id),
+      )) : undefined,
+    )).orderBy(desc(auditLog.occurredAt), desc(auditLog.id)).limit(query.limit + 1)
+    const hasMore = rows.length > query.limit
+    const items = rows.slice(0, query.limit)
+    const last = items.at(-1)
+    return { items, nextCursor: hasMore && last ? encodeCursor({
+      occurredAt: last.occurredAt.toISOString(),
+      id: last.id,
+      ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
+    }) : null }
   }
 }

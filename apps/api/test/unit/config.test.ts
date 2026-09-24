@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import { developmentCorsOrigins, loadConfig } from '../src/config/env'
-import { testEnv } from './fixtures'
+import { developmentCorsOrigins, loadConfig } from '../../src/config/env'
+import { testEnv } from '../fixtures'
 
 describe('API configuration', () => {
   it('uses safe local defaults outside production', () => {
@@ -17,6 +17,7 @@ describe('API configuration', () => {
       resendApiKey: testEnv.RESEND_API_KEY,
       authEmailFrom: testEnv.AUTH_EMAIL_FROM,
       trustedProxyHeaders: [],
+      requireTrustedClientIp: false,
     })
   })
 
@@ -51,6 +52,7 @@ describe('API configuration', () => {
       resendApiKey: 're_production',
       authEmailFrom: 'Suannn <auth@example.com>',
       trustedProxyHeaders: ['x-forwarded-for', 'x-real-ip'],
+      requireTrustedClientIp: true,
     })
   })
 
@@ -72,9 +74,12 @@ describe('API configuration', () => {
       BETTER_AUTH_URL: 'https://api.example.com',
       STOREFRONT_URL: 'https://store.example.com',
       ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
     }
 
     expect(() => loadConfig({ ...productionEnv, ADMIN_URL: undefined })).toThrow('ADMIN_URL')
+    expect(() => loadConfig({ ...productionEnv, TRUSTED_PROXY_HEADERS: undefined }))
+      .toThrow('TRUSTED_PROXY_HEADERS')
     expect(() => loadConfig({ ...productionEnv, RESEND_API_KEY: undefined })).toThrow('RESEND_API_KEY')
     expect(() => loadConfig({
       ...productionEnv,
@@ -89,6 +94,7 @@ describe('API configuration', () => {
       CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
       STOREFRONT_URL: 'https://store.example.com',
       ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
     }
 
     expect(() => loadConfig({ ...productionEnv, BETTER_AUTH_URL: 'http://api.example.com' }))

@@ -16,10 +16,10 @@ export function createRequestLoggingPlugin() {
   const requestStartedAt = new WeakMap<Request, number>()
 
   return new Elysia({ name: 'request-logging' })
-    .onBeforeHandle({ as: 'global' }, ({ request }) => {
+    .onRequest(({ request }) => {
       requestStartedAt.set(request, performance.now())
     })
-    .onAfterResponse({ as: 'global' }, ({ request, set }) => {
+    .onAfterResponse({ as: 'global' }, ({ request, set, response }) => {
       const startedAt = requestStartedAt.get(request)
       const durationMs = startedAt === undefined ? 0 : Math.round(performance.now() - startedAt)
 
@@ -27,7 +27,7 @@ export function createRequestLoggingPlugin() {
         level: 'info',
         method: request.method,
         path: requestLogPath(request.url),
-        status: responseStatus(set.status),
+        status: response instanceof Response ? response.status : responseStatus(set.status),
         durationMs,
         requestId: set.headers['x-request-id']?.toString(),
       })

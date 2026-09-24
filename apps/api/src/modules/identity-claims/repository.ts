@@ -1,9 +1,8 @@
-import { eq, sql } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
+import { and, eq, sql } from 'drizzle-orm'
+import type { Database, DatabaseTransaction } from '../../database/types'
 import { identityEmailClaim, staffInvitation, user } from '../../database/schema'
 
-type Database = ReturnType<typeof createDatabase>['db']
-export type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0]
+export type { DatabaseTransaction } from '../../database/types'
 
 export class IdentityClaimRepository {
   async tryLock(tx: DatabaseTransaction, lockKey: string) {
@@ -54,6 +53,57 @@ export class IdentityClaimRepository {
     input: { normalizedEmail: string; state: 'customer' | 'staff'; userId: string },
   ) {
     return tx.insert(identityEmailClaim).values(input).onConflictDoNothing()
+  }
+
+  async reserveCustomer(tx: DatabaseTransaction, input: {
+    normalizedEmail: string
+    operationId: string
+    requestId: string
+    ipAddress: string | null
+    userAgent: string | null
+    now: Date
+  }) {
+    const rows = await tx.insert(identityEmailClaim).values({
+      normalizedEmail: input.normalizedEmail,
+      state: 'pending_customer',
+      operationId: input.operationId,
+      requestId: input.requestId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+      createdAt: input.now,
+      updatedAt: input.now,
+    }).onConflictDoNothing().returning({ normalizedEmail: identityEmailClaim.normalizedEmail })
+    return rows.length === 1
+  }
+
+  async finalizeCustomer(tx: DatabaseTransaction, input: {
+    normalizedEmail: string
+    operationId: string
+    userId: string
+    now: Date
+  }) {
+    const rows = await tx.update(identityEmailClaim).set({
+      state: 'customer',
+      userId: input.userId,
+      operationId: null,
+      requestId: null,
+      ipAddress: null,
+      userAgent: null,
+      updatedAt: input.now,
+    }).where(and(
+      eq(identityEmailClaim.normalizedEmail, input.normalizedEmail),
+      eq(identityEmailClaim.state, 'pending_customer'),
+      eq(identityEmailClaim.operationId, input.operationId),
+    )).returning({ normalizedEmail: identityEmailClaim.normalizedEmail })
+    return rows.length === 1
+  }
+
+  deleteCustomerReservation(tx: DatabaseTransaction, normalizedEmail: string, operationId: string) {
+    return tx.delete(identityEmailClaim).where(and(
+      eq(identityEmailClaim.normalizedEmail, normalizedEmail),
+      eq(identityEmailClaim.state, 'pending_customer'),
+      eq(identityEmailClaim.operationId, operationId),
+    ))
   }
 
   async findState(db: Database, normalizedEmail: string) {

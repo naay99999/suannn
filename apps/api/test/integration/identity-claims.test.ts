@@ -1,18 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { identityEmailClaim, user } from '../src/database/schema'
+import { identityEmailClaim, user } from '../../src/database/schema'
 import {
   emailAdvisoryLockKey,
   IdentityClaimService,
-} from '../src/modules/identity-claims/service'
-import { IdentityClaimRepository } from '../src/modules/identity-claims/repository'
-import { normalizeEmail } from '../src/shared/email'
+} from '../../src/modules/identity-claims/service'
+import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
+import { normalizeEmail } from '../../src/shared/email'
 import {
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
   resetTestDatabase,
-} from './helpers/database'
+} from '../helpers/database'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined

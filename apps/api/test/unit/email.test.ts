@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  EmailTaskQueue,
   createResendEmailSender,
   scheduleBackground,
-} from '../src/modules/email/sender'
+} from '../../src/modules/email/sender'
 import {
   invitationEmail,
   resetPasswordEmail,
   verificationEmail,
-} from '../src/modules/email/templates'
-import { sanitizeLogData } from '../src/shared/logger'
-import { FakeEmailSender } from './helpers/fakes'
+} from '../../src/modules/email/templates'
+import { sanitizeLogData } from '../../src/shared/logger'
+import { FakeEmailSender } from '../helpers/fakes'
 
 describe('authentication email', () => {
   it('builds verification, reset, and invitation messages', () => {
@@ -43,14 +44,14 @@ describe('authentication email', () => {
     const callbackUrl = 'https://store.example/verify?token=secret'
 
     scheduleBackground(
-      Promise.reject(new Error(`provider rejected ${callbackUrl}`)),
+      () => Promise.reject(new Error(`provider rejected ${callbackUrl}`)),
       { template: 'verify-email' },
       {
         error(entry) {
           entries.push(entry)
         },
       },
-      (task) => tasks.push(task),
+      (task) => tasks.push(task()),
     )
 
     await expect(Promise.all(tasks)).resolves.toEqual([undefined])
@@ -95,5 +96,26 @@ describe('authentication email', () => {
       template: 'reset-password',
       ...resetPasswordEmail('https://store.example/reset?token=secret'),
     })).resolves.toEqual({ id: 'provider-id' })
+  })
+
+  it('bounds active email delivery, waiting work, and drain time', async () => {
+    const queue = new EmailTaskQueue(1, 1)
+    let finishFirst!: () => void
+    let active = 0
+    let maximumActive = 0
+    const first = new Promise<void>((resolve) => { finishFirst = resolve })
+    const tracked = (wait?: Promise<void>) => async () => {
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await wait
+      active -= 1
+    }
+    queue.enqueue(tracked(first))
+    queue.enqueue(tracked())
+    queue.enqueue(tracked())
+    expect(await queue.drain(5)).toBe(false)
+    finishFirst()
+    expect(await queue.drain(100)).toBe(true)
+    expect(maximumActive).toBe(1)
   })
 })

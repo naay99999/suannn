@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import { createApplicationRateLimitPlugin } from '../src/plugins/application-rate-limit'
-import { loadConfig } from '../src/config/env'
-import { testEnv } from './fixtures'
+import { createApplicationRateLimitPlugin } from '../../src/plugins/application-rate-limit'
+import { loadConfig } from '../../src/config/env'
+import { testEnv } from '../fixtures'
 
 describe('application rate-limit plugin', () => {
   it('returns retry metadata when exhausted before the handler', async () => {

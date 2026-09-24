@@ -4,12 +4,16 @@ import { createDatabase } from '../database/client'
 import { AuditRepository } from '../modules/audit/repository'
 import { AuditService } from '../modules/audit/service'
 import { createResendEmailSender } from '../modules/email/sender'
-import { DatabaseStaffMfaStore, StaffMfaService as RuntimeStaffMfaService } from '../modules/auth/mfa/service'
+import { StaffMfaService as RuntimeStaffMfaService } from '../modules/auth/mfa/service'
+import { DatabaseStaffMfaStore } from '../modules/auth/mfa/repository'
 import { createAuth } from '../plugins/auth/auth'
+import { EmailTaskQueue } from '../modules/email/sender'
 
 export async function recoverOwnerMfa(service: StaffMfaService, ownerUserId: string) {
   if (!ownerUserId) throw new Error('OWNER_USER_ID_REQUIRED')
-  await service.resetForRecovery(ownerUserId)
+  await service.resetForRecovery(ownerUserId, {
+    requestId: crypto.randomUUID(), ipAddress: null, userAgent: null,
+  })
   return { recovered: true as const, ownerUserId }
 }
 
@@ -27,6 +31,7 @@ if (import.meta.main) {
     from: config.authEmailFrom,
   })
   const backgroundTasks: Promise<unknown>[] = []
+  const emailQueue = new EmailTaskQueue()
   const auth = createAuth(config, database.db, {
     emailSender,
     runInBackground: (task) => backgroundTasks.push(task),
@@ -37,12 +42,13 @@ if (import.meta.main) {
     store: new DatabaseStaffMfaStore(database.db, audit),
     emailSender,
     adminUrl: config.adminUrl,
-    runInBackground: (task) => backgroundTasks.push(task),
+    runInBackground: (task) => emailQueue.enqueue(task),
   })
 
   try {
     const result = await recoverOwnerMfa(service, ownerUserId)
     await Promise.all(backgroundTasks)
+    await emailQueue.drain(15_000)
     console.info(JSON.stringify({ event: 'owner-mfa-recovered', ...result }))
   } finally {
     await database.client.end()

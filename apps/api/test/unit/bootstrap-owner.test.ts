@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { bootstrapOwner } from '../src/cli/bootstrap-owner'
+import { bootstrapOwner } from '../../src/cli/bootstrap-owner'
 
 describe('owner bootstrap', () => {
   it('creates an owner invitation without accepting a password', async () => {
@@ -12,11 +12,14 @@ describe('owner bootstrap', () => {
       },
     }, ' Owner@Example.com ')
 
-    expect(calls).toEqual([{
+    expect(calls).toEqual([expect.objectContaining({
       email: ' Owner@Example.com ',
       role: 'owner',
       inviterUserId: null,
-    }])
+      auditContext: expect.objectContaining({ ipAddress: null, userAgent: null }),
+    })])
+    expect((calls[0] as { auditContext: { requestId: string } }).auditContext.requestId)
+      .toMatch(/^[0-9a-f-]{36}$/)
     expect(result.id).toBe('invite-1')
   })
 

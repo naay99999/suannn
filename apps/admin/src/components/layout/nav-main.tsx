@@ -13,34 +13,28 @@ import {
 type NavigationItem = {
   title: string
   icon: typeof DashboardSquare01Icon
-  url?: string
-  hash?: string
+  url: string
 }
 
 export function NavMain({ items }: { items: NavigationItem[] }) {
-  const { hash, pathname, search } = useLocation()
+  const { pathname } = useLocation()
   const { setOpenMobile } = useSidebar()
-  const settingsOpen = hash === '#settings'
 
   return (
     <SidebarGroup>
       <SidebarGroupContent>
         <SidebarMenu aria-label="Admin navigation">
           {items.map((item) => {
-            const isHashNavigation = item.hash !== undefined
-            const isActive = isHashNavigation
-              ? hash === item.hash
-              : !settingsOpen && (item.url === '/' ? pathname === '/' : pathname === item.url || pathname.startsWith(`${item.url}/`))
-            const to = isHashNavigation
-              ? { pathname, search, hash: item.hash }
-              : item.url!
+            const isActive = item.url === '/'
+              ? pathname === '/'
+              : pathname === item.url || pathname.startsWith(`${item.url}/`)
 
             return (
-              <SidebarMenuItem key={item.url ?? item.hash}>
+              <SidebarMenuItem key={item.url}>
                 <SidebarMenuButton
                   tooltip={item.title}
                   isActive={isActive}
-                  render={<NavLink to={to} end={item.url === '/'} />}
+                  render={<NavLink to={item.url} end={item.url === '/'} />}
                   onClick={() => setOpenMobile(false)}
                 >
                   <HugeiconsIcon icon={item.icon} strokeWidth={2} />

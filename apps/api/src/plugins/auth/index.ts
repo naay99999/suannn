@@ -5,7 +5,7 @@ import { authRelativePath, isAllowedAuthRequest } from './http-policy'
 import { hasPermissions, type PermissionRequirement, type Role } from './access-control'
 
 export interface IdentityReservationLookup {
-  findState(normalizedEmail: string): Promise<'customer' | 'pending_staff' | 'staff' | null>
+  findState(normalizedEmail: string): Promise<'customer' | 'pending_staff' | 'pending_customer' | 'staff' | null>
 }
 
 export interface AuthHttpDependencies {
@@ -22,6 +22,22 @@ function jsonResponse(status: number, body: Record<string, string>) {
   return Response.json(body, { status })
 }
 
+async function readJsonObject(request: Request): Promise<Record<string, unknown> | Response> {
+  let body: unknown
+
+  try {
+    body = await request.clone().json()
+  } catch {
+    return jsonResponse(400, { code: 'INVALID_JSON', message: 'Invalid JSON body' })
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return jsonResponse(400, { code: 'INVALID_BODY', message: 'Request body must be an object' })
+  }
+
+  return body as Record<string, unknown>
+}
+
 async function prepareAuthRequest(
   auth: Auth,
   request: Request,
@@ -34,13 +50,14 @@ async function prepareAuthRequest(
   const path = authRelativePath(request)
 
   if (request.method === 'POST' && path === '/sign-in/email') {
-    const body = await request.clone().json() as { email?: unknown }
+    const body = await readJsonObject(request)
+    if (body instanceof Response) return body
 
     if (typeof body.email === 'string') {
       const email = normalizeEmail(body.email)
       const state = await dependencies.identityReservations.findState(email)
 
-      if (state === 'pending_staff') {
+      if (state === 'pending_staff' || state === 'pending_customer') {
         return jsonResponse(401, {
           code: 'INVALID_EMAIL_OR_PASSWORD',
           message: 'Invalid email or password',
@@ -58,7 +75,8 @@ async function prepareAuthRequest(
     path === '/two-factor/verify-totp'
     || path === '/two-factor/verify-backup-code'
   )) {
-    const body = await request.clone().json() as { trustDevice?: unknown }
+    const body = await readJsonObject(request)
+    if (body instanceof Response) return body
     const cookie = request.headers.get('cookie') ?? ''
     const hasChallengeCookie = /(?:^|;\s*)(?:__Secure-)?better-auth\.two_factor=/.test(cookie)
     const activeSession = await auth.api.getSession({ headers: request.headers })
@@ -71,7 +89,8 @@ async function prepareAuthRequest(
     }
   }
 
-  if (path !== '/sign-in/email' && path !== '/sign-out' && request.headers.has('cookie')) {
+  if (path !== '/sign-in/email' && path !== '/sign-out' && path !== '/get-session'
+    && request.headers.has('cookie')) {
     try {
       const current = await auth.api.getSession({ headers: request.headers })
 

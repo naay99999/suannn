@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import type { Auth } from '../src/plugins/auth/auth'
-import { createAuthPlugin } from '../src/plugins/auth'
-import { isAllowedAuthRequest } from '../src/plugins/auth/http-policy'
-import { requestLogPath } from '../src/plugins/request-logging'
+import type { Auth } from '../../src/plugins/auth/auth'
+import { createAuthPlugin } from '../../src/plugins/auth'
+import { isAllowedAuthRequest } from '../../src/plugins/auth/http-policy'
+import { requestLogPath } from '../../src/plugins/request-logging'
 
 const base = 'http://localhost/api/v1/auth'
 
@@ -123,6 +123,39 @@ describe('Better Auth HTTP policy', () => {
       message: 'Invalid email or password',
     })
     expect(handled).toBe(0)
+  })
+
+  it('returns 400 for malformed JSON and non-object auth bodies', async () => {
+    const auth = {
+      handler: async () => Response.json({ ok: true }),
+      api: { getSession: async () => null },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth))
+
+    for (const path of ['/sign-in/email', '/two-factor/verify-totp']) {
+      for (const body of ['{', 'null', '[]', '"text"', '42']) {
+        const response = await app.handle(new Request(`${base}${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body,
+        }))
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({ code: expect.any(String), message: expect.any(String) })
+      }
+    }
+  })
+
+  it('does not preflight /get-session before forwarding to Better Auth', async () => {
+    let lookups = 0
+    let handled = 0
+    const auth = {
+      handler: async () => { handled += 1; return Response.json({ user: null }) },
+      api: { getSession: async () => { lookups += 1; return null } },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth))
+    await app.handle(new Request(`${base}/get-session`, { headers: { cookie: 'session=expired' } }))
+    expect(handled).toBe(1)
+    expect(lookups).toBe(0)
   })
 
   it('rejects client-controlled trusted devices before verification', async () => {

@@ -1,7 +1,5 @@
 import { sql } from 'drizzle-orm'
-import type { createDatabase } from '../../database/client'
-
-type Database = ReturnType<typeof createDatabase>['db']
+import type { Database } from '../../database/types'
 
 export interface RateLimitCounter {
   count: number
@@ -56,5 +54,29 @@ export class ApplicationRateLimitRepository {
       count: Number(row.count),
       expiresAt: row.expiresAt instanceof Date ? row.expiresAt : new Date(row.expiresAt),
     }
+  }
+
+  async purgeExpired(now = new Date(), limit = 10_000) {
+    return this.db.transaction(async (tx) => {
+      const [lock] = await tx.execute<{ acquired: boolean }>(sql`
+        select pg_try_advisory_xact_lock(4_981_221) as acquired
+      `)
+      if (!lock?.acquired) return 0
+
+      const rows = await tx.execute(sql`
+        with expired as (
+          select "key_hash" from "application_rate_limit"
+          where "expires_at" <= ${now.toISOString()}::timestamptz
+          order by "expires_at"
+          limit ${Math.min(Math.max(limit, 1), 10_000)}
+          for update skip locked
+        )
+        delete from "application_rate_limit" target
+        using expired
+        where target."key_hash" = expired."key_hash"
+        returning target."key_hash"
+      `)
+      return rows.length
+    })
   }
 }

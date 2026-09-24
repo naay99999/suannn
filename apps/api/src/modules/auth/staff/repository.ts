@@ -1,11 +1,11 @@
-import { and, asc, eq, isNotNull } from 'drizzle-orm'
-import type { createDatabase } from '../../../database/client'
+import { and, asc, desc, eq, isNotNull, lt, or, gt } from 'drizzle-orm'
+import type { Database, DatabaseTransaction } from '../../../database/types'
 import { session, twoFactor, user } from '../../../database/schema'
 import type { StaffRole } from '../../../plugins/auth/access-control'
 import type { AuditService } from '../../audit/service'
+import type { AuditContext } from '../../audit/model'
 import type { StaffActor, StaffRepositoryContract } from './service'
-
-type Database = ReturnType<typeof createDatabase>['db']
+import { decodeCursor, encodeCursor } from '../../../shared/cursor'
 
 export class StaffRepository implements StaffRepositoryContract {
   constructor(
@@ -13,7 +13,8 @@ export class StaffRepository implements StaffRepositoryContract {
     private readonly audit: AuditService,
   ) {}
 
-  async list() {
+  async list(query: { limit: number; cursor?: string }) {
+    const cursor = decodeCursor(query.cursor, ['email', 'id'])
     const rows = await this.db.select({
       id: user.id,
       name: user.name,
@@ -21,13 +22,21 @@ export class StaffRepository implements StaffRepositoryContract {
       role: user.role,
       banned: user.banned,
       staffActivatedAt: user.staffActivatedAt,
-    }).from(user).where(eq(user.accountType, 'staff')).orderBy(asc(user.email))
+    }).from(user).where(and(
+      eq(user.accountType, 'staff'),
+      cursor ? or(gt(user.email, cursor.email), and(eq(user.email, cursor.email), gt(user.id, cursor.id))) : undefined,
+    )).orderBy(asc(user.email), asc(user.id)).limit(query.limit + 1)
+    const hasMore = rows.length > query.limit
+    const page = rows.slice(0, query.limit)
 
-    return rows.map((row) => ({
+    return { items: page.map((row) => ({
       ...row,
       role: row.role as StaffRole,
       banned: row.banned ?? false,
-    }))
+    })), nextCursor: hasMore && page.length ? encodeCursor({
+      email: page.at(-1)!.email,
+      id: page.at(-1)!.id,
+    }) : null }
   }
 
   async getRole(userId: string) {
@@ -58,7 +67,7 @@ export class StaffRepository implements StaffRepositoryContract {
       await this.audit.record(tx, this.event(actor.id, 'staff.role-changed', targetUserId, {
         previousRole: target.role,
         nextRole: role,
-      }))
+      }, actor.auditContext))
     })
   }
 
@@ -92,6 +101,7 @@ export class StaffRepository implements StaffRepositoryContract {
         suspended ? 'staff.suspended' : 'staff.reactivated',
         targetUserId,
         suspended ? { reason } : {},
+        actor.auditContext,
       ))
     })
   }
@@ -101,7 +111,7 @@ export class StaffRepository implements StaffRepositoryContract {
       const targetRole = await this.lockTargetRole(tx, targetUserId)
       this.assertActorMayTarget(actor, targetUserId, targetRole)
       await tx.delete(session).where(eq(session.userId, targetUserId))
-      await this.audit.record(tx, this.event(actor.id, 'staff.sessions-revoked', targetUserId, {}))
+      await this.audit.record(tx, this.event(actor.id, 'staff.sessions-revoked', targetUserId, {}, actor.auditContext))
     })
   }
 
@@ -117,22 +127,36 @@ export class StaffRepository implements StaffRepositoryContract {
         twoFactorEnabled: false,
         staffActivatedAt: null,
       }).where(eq(user.id, targetUserId))
-      await this.audit.record(tx, this.event(actor.id, 'staff.mfa-reset', targetUserId, {}))
+      await this.audit.record(tx, this.event(actor.id, 'staff.mfa-reset', targetUserId, {}, actor.auditContext))
     })
   }
 
-  listOwnSessions(userId: string) {
-    return this.db.select({
+  async listOwnSessions(userId: string, query: { limit: number; cursor?: string }) {
+    const cursor = decodeCursor(query.cursor, ['createdAt', 'id'])
+    const now = new Date()
+    const rows = await this.db.select({
       id: session.id,
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
       expiresAt: session.expiresAt,
       ipAddress: session.ipAddress,
       userAgent: session.userAgent,
-    }).from(session).where(eq(session.userId, userId)).orderBy(asc(session.createdAt))
+    }).from(session).where(and(
+      eq(session.userId, userId),
+      gt(session.expiresAt, now),
+      cursor ? or(lt(session.createdAt, new Date(cursor.createdAt)), and(
+        eq(session.createdAt, new Date(cursor.createdAt)), lt(session.id, cursor.id),
+      )) : undefined,
+    )).orderBy(desc(session.createdAt), desc(session.id)).limit(query.limit + 1)
+    const hasMore = rows.length > query.limit
+    const items = rows.slice(0, query.limit)
+    const last = items.at(-1)
+    return { items, nextCursor: hasMore && last ? encodeCursor({
+      createdAt: last.createdAt.toISOString(), id: last.id,
+    }) : null }
   }
 
-  async revokeOwnSession(userId: string, sessionId: string) {
+  async revokeOwnSession(userId: string, sessionId: string, auditContext?: AuditContext) {
     await this.db.transaction(async (tx) => {
       const rows = await tx.delete(session).where(and(
         eq(session.id, sessionId),
@@ -140,11 +164,14 @@ export class StaffRepository implements StaffRepositoryContract {
       )).returning({ id: session.id })
 
       if (rows.length !== 1) throw new Error('SESSION_NOT_FOUND')
-      await this.audit.record(tx, this.event(userId, 'staff.sessions-revoked', sessionId, {}))
+      await this.audit.record(tx, {
+        ...this.event(userId, 'staff.sessions-revoked', sessionId, {}, auditContext),
+        targetType: 'session',
+      })
     })
   }
 
-  private lockActiveOwners(tx: Parameters<Parameters<Database['transaction']>[0]>[0]) {
+  private lockActiveOwners(tx: DatabaseTransaction) {
     return tx.select({ id: user.id }).from(user).where(and(
       eq(user.accountType, 'staff'),
       eq(user.role, 'owner'),
@@ -154,7 +181,7 @@ export class StaffRepository implements StaffRepositoryContract {
   }
 
   private async lockTargetRole(
-    tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+    tx: DatabaseTransaction,
     targetUserId: string,
   ) {
     const [target] = await tx.select({ role: user.role }).from(user).where(and(
@@ -183,6 +210,7 @@ export class StaffRepository implements StaffRepositoryContract {
       | 'staff.sessions-revoked' | 'staff.mfa-reset',
     targetId: string,
     metadata: Record<string, unknown>,
+    auditContext?: AuditContext,
   ) {
     return {
       id: crypto.randomUUID(),
@@ -190,7 +218,9 @@ export class StaffRepository implements StaffRepositoryContract {
       action,
       targetType: 'user',
       targetId,
-      requestId: crypto.randomUUID(),
+      requestId: auditContext?.requestId ?? crypto.randomUUID(),
+      ipAddress: auditContext?.ipAddress,
+      userAgent: auditContext?.userAgent,
       metadata,
     } as const
   }

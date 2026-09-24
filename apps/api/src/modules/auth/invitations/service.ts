@@ -6,6 +6,7 @@ import { scheduleBackground } from '../../email/sender'
 import { invitationEmail } from '../../email/templates'
 import type { IdentityClaimService } from '../../identity-claims/service'
 import type { AuditService } from '../../audit/service'
+import type { AuditContext } from '../../audit/model'
 import type {
   AcceptStaffInvitationCommand,
   CreateStaffInvitationCommand,
@@ -18,12 +19,12 @@ interface StaffInvitationDependencies {
   claims: IdentityClaimService
   repository: StaffInvitationRepository
   emailSender: EmailSender
-  runInBackground(task: Promise<unknown>): void
+  runInBackground(task: () => Promise<unknown>): void
   adminUrl: string
   now?: () => Date
   createToken?: () => string
   createId?: () => string
-  audit?: AuditService
+  audit: AuditService
   afterProvision?: () => Promise<void>
 }
 
@@ -72,13 +73,15 @@ export class StaffInvitationService {
           createdAt: now,
           expiresAt: invitation.expiresAt,
         })
-        await this.dependencies.audit?.record(tx, {
+        await this.dependencies.audit.record(tx, {
           id: crypto.randomUUID(),
           actorUserId: command.inviterUserId,
           action: 'staff.invited',
           targetType: 'staff_invitation',
           targetId: invitation.id,
-          requestId: crypto.randomUUID(),
+          requestId: command.auditContext?.requestId ?? crypto.randomUUID(),
+          ipAddress: command.auditContext?.ipAddress,
+          userAgent: command.auditContext?.userAgent,
           metadata: { role: command.role },
         })
 
@@ -90,7 +93,7 @@ export class StaffInvitationService {
     return created.invitation
   }
 
-  async resend(id: string, _actorUserId: string) {
+  async resend(id: string, _actorUserId: string, auditContext?: AuditContext) {
     const current = await this.dependencies.repository.findById(id)
     if (!current) throw new Error('INVALID_INVITATION')
 
@@ -104,13 +107,15 @@ export class StaffInvitationService {
         const token = this.createToken()
         const expiresAt = new Date(this.now().getTime() + 48 * 60 * 60 * 1000)
         await this.dependencies.repository.rotate(tx, { id, tokenHash: hashToken(token), expiresAt })
-        await this.dependencies.audit?.record(tx, {
+        await this.dependencies.audit.record(tx, {
           id: crypto.randomUUID(),
           actorUserId: _actorUserId,
           action: 'staff.invitation-resent',
           targetType: 'staff_invitation',
           targetId: id,
-          requestId: crypto.randomUUID(),
+          requestId: auditContext?.requestId ?? crypto.randomUUID(),
+          ipAddress: auditContext?.ipAddress,
+          userAgent: auditContext?.userAgent,
           metadata: {},
         })
 
@@ -130,19 +135,21 @@ export class StaffInvitationService {
     return rotated.invitation
   }
 
-  async cancel(id: string, _actorUserId: string) {
+  async cancel(id: string, _actorUserId: string, auditContext?: AuditContext) {
     const current = await this.dependencies.repository.findById(id)
     if (!current) throw new Error('INVALID_INVITATION')
 
     await this.dependencies.claims.withEmailClaim(current.normalizedEmail, async ({ tx }) => {
       await this.dependencies.repository.cancel(tx, id, this.now())
-      await this.dependencies.audit?.record(tx, {
+      await this.dependencies.audit.record(tx, {
         id: crypto.randomUUID(),
         actorUserId: _actorUserId,
         action: 'staff.invitation-cancelled',
         targetType: 'staff_invitation',
         targetId: id,
-        requestId: crypto.randomUUID(),
+        requestId: auditContext?.requestId ?? crypto.randomUUID(),
+        ipAddress: auditContext?.ipAddress,
+        userAgent: auditContext?.userAgent,
         metadata: {},
       })
     })
@@ -155,66 +162,79 @@ export class StaffInvitationService {
       throw new Error('INVALID_INVITATION')
     }
 
-    const credentials = await this.dependencies.claims.withEmailClaim(
-      initial.normalizedEmail,
-      async ({ tx, claim, user }) => {
-        const invitation = await this.dependencies.repository.findById(initial.id, tx)
+    const credentials = await this.dependencies.claims.withEmailOperation(initial.normalizedEmail, async () => {
+      const { claim, user: existingUser } = await this.dependencies.claims.inspectEmail(initial.normalizedEmail)
+      const invitation = await this.dependencies.repository.findById(initial.id)
+      if (!invitation || invitation.tokenHash !== hashToken(command.token)
+        || invitation.acceptedAt || invitation.revokedAt || invitation.expiresAt <= this.now()
+        || claim?.state !== 'pending_staff' || claim.invitationId !== invitation.id) {
+        throw new Error('INVALID_INVITATION')
+      }
 
-        if (!invitation || invitation.tokenHash !== hashToken(command.token)
-          || invitation.acceptedAt || invitation.revokedAt || invitation.expiresAt <= this.now()
-          || claim?.state !== 'pending_staff' || claim.invitationId !== invitation.id) {
+      const proposedOperationId = crypto.randomUUID()
+      const staged = await this.dependencies.claims.transaction((tx) =>
+        this.dependencies.repository.markAcceptanceOperation(tx, {
+          normalizedEmail: invitation.normalizedEmail,
+          invitationId: invitation.id,
+          operationId: proposedOperationId,
+          requestId: command.auditContext?.requestId ?? proposedOperationId,
+          ipAddress: command.auditContext?.ipAddress ?? null,
+          userAgent: command.auditContext?.userAgent ?? null,
+        }))
+      const operation = staged[0] ?? claim
+      const auditContext = {
+        requestId: operation?.requestId ?? command.auditContext?.requestId ?? proposedOperationId,
+        ipAddress: operation?.ipAddress ?? command.auditContext?.ipAddress ?? null,
+        userAgent: operation?.userAgent ?? command.auditContext?.userAgent ?? null,
+      }
+
+      let staffUser = existingUser
+      if (!staffUser) {
+        await this.dependencies.auth.api.createUser({
+          body: {
+            email: invitation.normalizedEmail,
+            password: command.password,
+            name: command.name,
+            role: invitation.role,
+            data: {
+              accountType: 'staff',
+              emailVerified: true,
+              staffActivatedAt: null,
+              sourceInvitationId: invitation.id,
+            },
+          },
+        })
+        staffUser = await this.dependencies.claims.findUserByEmail(invitation.normalizedEmail)
+        await this.dependencies.afterProvision?.()
+      }
+
+      if (!staffUser || staffUser.sourceInvitationId !== invitation.id
+        || staffUser.accountType !== 'staff' || staffUser.role !== invitation.role) {
+        throw new Error('INVITATION_PROVISIONING_CONFLICT')
+      }
+
+      await this.dependencies.claims.transaction(async (tx) => {
+        const current = await this.dependencies.repository.findById(invitation.id, tx)
+        if (!current || current.acceptedAt || current.revokedAt || current.expiresAt <= this.now()) {
           throw new Error('INVALID_INVITATION')
         }
-
-        let staffUser = user
-
-        if (!staffUser) {
-          await this.dependencies.auth.api.createUser({
-            body: {
-              email: invitation.normalizedEmail,
-              password: command.password,
-              name: command.name,
-              role: invitation.role,
-              data: {
-                accountType: 'staff',
-                emailVerified: true,
-                staffActivatedAt: null,
-                sourceInvitationId: invitation.id,
-              },
-            },
-          })
-          staffUser = await this.dependencies.repository.findUserByEmail(
-            tx,
-            invitation.normalizedEmail,
-          ) as typeof user
-          await this.dependencies.afterProvision?.()
-        }
-
-        if (staffUser?.sourceInvitationId !== invitation.id
-          || staffUser.accountType !== 'staff'
-          || staffUser.role !== invitation.role) {
-          throw new Error('INVITATION_PROVISIONING_CONFLICT')
-        }
-
         await this.dependencies.repository.finalizeAcceptance(tx, {
           invitationId: invitation.id,
           normalizedEmail: invitation.normalizedEmail,
-          userId: staffUser.id,
+          userId: staffUser!.id,
           acceptedAt: this.now(),
         })
-        await this.dependencies.audit?.record(tx, {
-          id: crypto.randomUUID(),
-          actorUserId: staffUser.id,
-          action: 'staff.invitation-accepted',
-          targetType: 'staff_invitation',
+        await this.dependencies.audit.record(tx, {
+          id: crypto.randomUUID(), actorUserId: staffUser!.id,
+          action: 'staff.invitation-accepted', targetType: 'staff_invitation',
           targetId: invitation.id,
-          requestId: crypto.randomUUID(),
+          ...auditContext,
           metadata: { role: invitation.role },
         })
+      })
 
-        return { email: invitation.normalizedEmail, userId: staffUser.id }
-      },
-    )
+      return { email: invitation.normalizedEmail, userId: staffUser.id }
+    })
 
     const signedIn = await this.dependencies.auth.api.signInEmail({
       body: {
@@ -231,8 +251,8 @@ export class StaffInvitationService {
     return this.dependencies.repository.hasOwner()
   }
 
-  list() {
-    return this.dependencies.repository.list()
+  list(query: { limit: number; cursor?: string; status?: 'pending' | 'accepted' | 'revoked' | 'expired' }) {
+    return this.dependencies.repository.list(query)
   }
 
   private sendInvitation({ invitation, token }: InvitationWithToken) {
@@ -241,7 +261,7 @@ export class StaffInvitationService {
     const template = invitationEmail(invitation.role, url.toString())
 
     scheduleBackground(
-      this.dependencies.emailSender.send({
+      () => this.dependencies.emailSender.send({
         to: invitation.email,
         template: 'staff-invitation',
         ...template,

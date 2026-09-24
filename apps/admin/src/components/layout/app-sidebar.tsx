@@ -30,7 +30,7 @@ const navigation = [
   { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon },
   { title: 'Products', url: '/products', icon: ShoppingBag01Icon },
   { title: 'Customers', url: '/customers', icon: UserListIcon },
-  { title: 'Settings', hash: '#settings', icon: SettingsIcon },
+  { title: 'Settings', url: '/settings', icon: SettingsIcon },
 ]
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
