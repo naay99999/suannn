@@ -3,7 +3,15 @@ import { eq } from 'drizzle-orm'
 import { Elysia } from 'elysia'
 import { loadConfig } from '../../src/config/env'
 import { createIdentityLockPool } from '../../src/database/client'
-import { applicationRateLimit, customerPendingEmailChange, identityEmailClaim, session, staffInvitation, user } from '../../src/database/schema'
+import { auditLog, applicationRateLimit, customerPendingEmailChange, identityEmailClaim, session, staffInvitation, user } from '../../src/database/schema'
+import { CustomerSignupService } from '../../src/modules/auth/customer/service'
+import { StaffInvitationService } from '../../src/modules/auth/invitations/service'
+import { StaffInvitationRepository } from '../../src/modules/auth/invitations/repository'
+import type { AuditEvent } from '../../src/modules/audit/model'
+import type { DatabaseTransaction } from '../../src/database/types'
+import { AuditService } from '../../src/modules/audit/service'
+import { AuditRepository } from '../../src/modules/audit/repository'
+import { digestEmailChangeCode } from '../../src/modules/customer/email-change/code'
 import { CustomerEmailChangeRepository } from '../../src/modules/customer/email-change/repository'
 import { CustomerEmailChangeService } from '../../src/modules/customer/email-change/service'
 import { createCustomerEmailChangeModule } from '../../src/modules/customer/email-change'
@@ -26,6 +34,7 @@ const emailSender = { send: async (message: { to: string; text: string }) => {
 } }
 const auth = createAuth(config, database.db, { emailSender, runInBackground: () => undefined })
 const service = new CustomerEmailChangeService({
+  audit: new AuditService(new AuditRepository(database.db)),
   repository: new CustomerEmailChangeRepository(database.db),
   claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), lockPool),
   secret: config.betterAuthSecret,
@@ -142,4 +151,336 @@ describe('customer email change request persistence', () => {
     expect(fourth.headers.get('retry-after')).toBeTruthy()
     expect(await fourth.json()).toEqual({ code: 'RATE_LIMITED', message: 'Too many requests' })
   })
+})
+
+
+const confirmInput = { clientIp: '127.0.0.1', requestId: 'request-2', code: '12345678' }
+
+async function confirmationFixture() {
+  const userId = crypto.randomUUID()
+  const sessionId = crypto.randomUUID()
+  const oldEmail = `${userId}@old.example.com`
+  const newEmail = `${userId}@new.example.com`
+  await database.db.insert(user).values({
+    id: userId, name: 'Customer', email: oldEmail, emailVerified: false,
+    createdAt: new Date(), updatedAt: new Date(), accountType: 'customer', role: 'customer',
+  })
+  await database.db.insert(identityEmailClaim).values({ normalizedEmail: oldEmail, state: 'customer', userId })
+  await database.db.insert(session).values([sessionId, crypto.randomUUID()].map((id) => ({
+    id, userId, token: id, createdAt: new Date(), updatedAt: new Date(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  })))
+  await database.db.insert(customerPendingEmailChange).values({
+    userId, newEmail, codeDigest: digestEmailChangeCode(config.betterAuthSecret, userId, confirmInput.code),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  })
+  const read = async () => ({
+    user: (await database.db.select().from(user).where(eq(user.id, userId)))[0]!,
+    oldClaim: (await database.db.select().from(identityEmailClaim).where(eq(identityEmailClaim.normalizedEmail, oldEmail)))[0] ?? null,
+    newClaim: (await database.db.select().from(identityEmailClaim).where(eq(identityEmailClaim.normalizedEmail, newEmail)))[0] ?? null,
+    pending: (await database.db.select().from(customerPendingEmailChange).where(eq(customerPendingEmailChange.userId, userId)))[0] ?? null,
+    sessions: await database.db.select().from(session).where(eq(session.userId, userId)),
+    audits: await database.db.select().from(auditLog).where(eq(auditLog.targetId, userId)),
+  })
+  return { userId, sessionId, oldEmail, newEmail, read, input: { ...confirmInput, userId, sessionId } }
+}
+
+describe('customer email confirmation persistence', () => {
+  it('atomically transfers the claim, verifies email, consumes code and revokes every session', async () => {
+    const f = await confirmationFixture()
+    expect(await service.confirm(f.input)).toEqual({ changed: true })
+    const after = await f.read()
+    expect(after.user.email).toBe(f.newEmail)
+    expect(after.user.emailVerified).toBe(true)
+    expect(after.oldClaim).toBeNull()
+    expect(after.newClaim).toMatchObject({ userId: f.userId, state: 'customer' })
+    expect(after.pending).toBeNull()
+    expect(after.sessions).toHaveLength(0)
+    expect(after.audits).toHaveLength(1)
+    expect(after.audits[0]).toMatchObject({ action: 'customer.email-changed', metadata: {}, requestId: 'request-2' })
+    await expect(service.confirm(f.input)).rejects.toThrow('EMAIL_CHANGE_CODE_INVALID')
+  })
+
+  it('rejects an expired code without changing identity', async () => {
+    const f = await confirmationFixture()
+    await database.db.update(customerPendingEmailChange).set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(customerPendingEmailChange.userId, f.userId))
+    await expect(service.confirm(f.input)).rejects.toThrow('EMAIL_CHANGE_CODE_EXPIRED')
+    expect((await f.read()).user.email).toBe(f.oldEmail)
+  })
+
+  it('commits five incorrect attempts and rejects even the correct sixth code', async () => {
+    const f = await confirmationFixture()
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await expect(service.confirm({ ...f.input, code: '00000000' })).rejects.toThrow('EMAIL_CHANGE_CODE_INVALID')
+      expect((await f.read()).pending?.failedAttempts).toBe(attempt)
+    }
+    await expect(service.confirm(f.input)).rejects.toThrow('EMAIL_CHANGE_CODE_INVALID')
+    const after = await f.read()
+    expect(after.pending?.failedAttempts).toBe(5)
+    expect(after.user.email).toBe(f.oldEmail)
+    expect(after.sessions).toHaveLength(2)
+  })
+
+  it('invalidates the old code after replacement', async () => {
+    const f = await confirmationFixture()
+    await new CustomerEmailChangeRepository(database.db).upsertPending(database.db as never, {
+      userId: f.userId, newEmail: f.newEmail,
+      codeDigest: digestEmailChangeCode(config.betterAuthSecret, f.userId, '87654321'),
+      expiresAt: new Date(Date.now() + 600_000), failedAttempts: 0,
+    })
+    await expect(service.confirm(f.input)).rejects.toThrow('EMAIL_CHANGE_CODE_INVALID')
+    expect(await service.confirm({ ...f.input, code: '87654321' })).toEqual({ changed: true })
+  })
+
+  it.each(['claim', 'user'])('rejects a new address occupied in the %s table', async (kind) => {
+    const f = await confirmationFixture()
+    if (kind === 'claim') {
+      await database.db.insert(identityEmailClaim).values({ normalizedEmail: f.newEmail, state: 'pending_customer', operationId: crypto.randomUUID() })
+    } else {
+      await database.db.insert(user).values({ id: crypto.randomUUID(), email: f.newEmail, name: 'Other', role: 'customer', createdAt: new Date(), updatedAt: new Date() })
+    }
+    await expect(service.confirm(f.input)).rejects.toThrow('EMAIL_UNAVAILABLE')
+    const after = await f.read()
+    expect(after.user.email).toBe(f.oldEmail)
+    expect(after.oldClaim?.userId).toBe(f.userId)
+    expect(after.pending).not.toBeNull()
+    expect(after.sessions).toHaveLength(2)
+    expect(after.audits).toHaveLength(0)
+  })
+
+  it.each(['revoked', 'expired', 'foreign'])('rechecks a %s session before transferring', async (kind) => {
+    const f = await confirmationFixture()
+    if (kind === 'revoked') await database.db.delete(session).where(eq(session.id, f.sessionId))
+    if (kind === 'expired') await database.db.update(session).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(session.id, f.sessionId))
+    const input = kind === 'foreign' ? { ...f.input, sessionId: (await confirmationFixture()).sessionId } : f.input
+    await expect(service.confirm(input)).rejects.toThrow('AUTHENTICATION_REQUIRED')
+    const after = await f.read()
+    expect(after.user.email).toBe(f.oldEmail)
+    expect(after.newClaim).toBeNull()
+    expect(after.pending).not.toBeNull()
+    expect(after.audits).toHaveLength(0)
+  })
+
+  it('rolls back the entire transfer if the audit insert fails', async () => {
+    const f = await confirmationFixture()
+    const failingService = new CustomerEmailChangeService({
+      repository: new CustomerEmailChangeRepository(database.db),
+      claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), lockPool),
+      audit: { record: async () => { throw new Error('audit unavailable') } },
+      secret: config.betterAuthSecret, emailSender,
+    })
+    await expect(failingService.confirm(f.input)).rejects.toThrow('audit unavailable')
+    const after = await f.read()
+    expect(after.user.email).toBe(f.oldEmail)
+    expect(after.oldClaim?.userId).toBe(f.userId)
+    expect(after.newClaim).toBeNull()
+    expect(after.pending).not.toBeNull()
+    expect(after.sessions).toHaveLength(2)
+  })
+
+  it('requires JSON, storefront origin and a customer session for confirmation', async () => {
+    for (const [headers, status] of [
+      [{ origin: config.storefrontUrl, 'content-type': 'application/json' }, 401],
+      [{ cookie, origin: config.adminUrl, 'content-type': 'application/json' }, 403],
+      [{ cookie, origin: config.storefrontUrl, 'content-type': 'text/plain' }, 422],
+    ] as const) {
+      const response = await app.handle(new Request('http://localhost/api/v1/customer/email-change/confirm', {
+        method: 'POST', headers, body: JSON.stringify({ code: '00000000' }),
+      }))
+      expect(response.status).toBe(status)
+    }
+  })
+
+  it('returns safe errors and limits the sixth confirmation with retry-after', async () => {
+    await database.db.delete(applicationRateLimit)
+    for (let i = 0; i < 6; i += 1) {
+      const response = await app.handle(new Request('http://localhost/api/v1/customer/email-change/confirm', {
+        method: 'POST', headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json' },
+        body: JSON.stringify({ code: '00000000' }),
+      }))
+      expect(response.status).toBe(i === 5 ? 429 : 422)
+      expect((await response.json() as { code: string }).code).toBe(i === 5 ? 'RATE_LIMITED' : 'EMAIL_CHANGE_CODE_INVALID')
+      if (i === 5) expect(response.headers.get('retry-after')).toBeTruthy()
+    }
+  })
+})
+
+
+function observedClaims() {
+  const blocked = Promise.withResolvers<void>()
+  const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), {
+    reserve: async () => {
+      const connection = await lockPool.reserve()
+      return {
+        unsafe: async <T>(query: string, parameters?: unknown[]): Promise<T[]> => {
+          const result = await connection.unsafe(query, parameters as never[])
+          if (query.includes('pg_try_advisory_lock($1::bigint)') && !result[0]?.acquired) blocked.resolve()
+          return result as unknown as T[]
+        },
+        release: () => connection.release(),
+      }
+    },
+  })
+  return { claims, blocked }
+}
+
+it.each(['signup', 'invitation'] as const)('serializes confirmation ahead of concurrent %s', async (kind) => {
+  const f = await confirmationFixture()
+  const { claims, blocked } = observedClaims()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  class PausedRepository extends CustomerEmailChangeRepository {
+    override async transferIdentity(tx: DatabaseTransaction, userId: string, oldEmail: string, newEmail: string) {
+      entered.resolve()
+      await release.promise
+      return super.transferIdentity(tx, userId, oldEmail, newEmail)
+    }
+  }
+  const audit = new AuditService(new AuditRepository(database.db))
+  const confirming = new CustomerEmailChangeService({
+    repository: new PausedRepository(database.db), claims, audit,
+    secret: config.betterAuthSecret, emailSender,
+  }).confirm(f.input)
+  await entered.promise
+  const competitor = kind === 'signup'
+    ? new CustomerSignupService({ auth, claims, audit, limiter: new RateLimiter(new ApplicationRateLimitRepository(database.db)) })
+      .signupCustomer({ email: f.newEmail, password: 'correct horse battery staple', name: 'Rival', ip: '127.0.0.1', requestId: 'rival' })
+    : new StaffInvitationService({ auth, claims, audit, repository: new StaffInvitationRepository(database.db), emailSender,
+      runInBackground: () => undefined, adminUrl: config.adminUrl })
+      .create({ email: f.newEmail, role: 'support', inviterUserId: 'staff-1', inviterRole: 'owner' })
+  const outcome = competitor.then(() => 'accepted', (error: Error) => error.message)
+  await blocked.promise
+  release.resolve()
+  expect(await confirming).toEqual({ changed: true })
+  expect(await outcome).toBe(kind === 'signup' ? 'accepted' : 'EMAIL_UNAVAILABLE')
+  expect((await f.read()).newClaim).toMatchObject({ state: 'customer', userId: f.userId })
+  expect(await database.db.select().from(user).where(eq(user.email, f.newEmail))).toHaveLength(1)
+  expect(await database.db.select().from(staffInvitation).where(eq(staffInvitation.normalizedEmail, f.newEmail))).toHaveLength(0)
+})
+
+it.each(['signup', 'invitation'] as const)('rolls back confirmation after a concurrent %s wins the claim', async (kind) => {
+  const f = await confirmationFixture()
+  const { claims, blocked } = observedClaims()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  class PausedAudit extends AuditService {
+    override async record(writer: Parameters<AuditService['record']>[0], event: AuditEvent) {
+      entered.resolve()
+      await release.promise
+      return super.record(writer, event)
+    }
+  }
+  const audit = new PausedAudit(new AuditRepository(database.db))
+  const competitor = kind === 'signup'
+    ? new CustomerSignupService({ auth, claims, audit, limiter: new RateLimiter(new ApplicationRateLimitRepository(database.db)) })
+      .signupCustomer({ email: f.newEmail, password: 'correct horse battery staple', name: 'Rival', ip: '127.0.0.1', requestId: 'rival' })
+    : new StaffInvitationService({ auth, claims, audit, repository: new StaffInvitationRepository(database.db), emailSender,
+      runInBackground: () => undefined, adminUrl: config.adminUrl })
+      .create({ email: f.newEmail, role: 'support', inviterUserId: 'staff-1', inviterRole: 'owner' })
+  await entered.promise
+  const confirming = new CustomerEmailChangeService({
+    repository: new CustomerEmailChangeRepository(database.db), claims,
+    audit: new AuditService(new AuditRepository(database.db)), secret: config.betterAuthSecret, emailSender,
+  }).confirm(f.input).then(() => 'changed', (error: Error) => error.message)
+  await blocked.promise
+  release.resolve()
+  await competitor
+  expect(await confirming).toBe('EMAIL_UNAVAILABLE')
+  const after = await f.read()
+  expect(after.user.email).toBe(f.oldEmail)
+  expect(after.oldClaim?.userId).toBe(f.userId)
+  expect(after.newClaim?.state).toBe(kind === 'signup' ? 'customer' : 'pending_staff')
+  expect(after.newClaim?.userId).not.toBe(f.userId)
+  expect(after.pending).not.toBeNull()
+  expect(after.sessions).toHaveLength(2)
+  expect(after.audits).toHaveLength(0)
+})
+
+it('rejects a session revoked while confirmation waits for the email lock', async () => {
+  const f = await confirmationFixture()
+  const { claims, blocked } = observedClaims()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const holder = claims.withEmailOperation(f.newEmail, async () => {
+    entered.resolve()
+    await release.promise
+  })
+  await entered.promise
+  const confirming = new CustomerEmailChangeService({
+    repository: new CustomerEmailChangeRepository(database.db), claims,
+    audit: new AuditService(new AuditRepository(database.db)), secret: config.betterAuthSecret, emailSender,
+  }).confirm(f.input).then(() => 'changed', (error: Error) => error.message)
+  await blocked.promise
+  await database.db.delete(session).where(eq(session.id, f.sessionId))
+  release.resolve()
+  await holder
+  expect(await confirming).toBe('AUTHENTICATION_REQUIRED')
+  const after = await f.read()
+  expect(after.user.email).toBe(f.oldEmail)
+  expect(after.pending).not.toBeNull()
+  expect(after.newClaim).toBeNull()
+})
+
+it('reacquires the replacement email lock if the pending request changes while waiting', async () => {
+  const f = await confirmationFixture()
+  const { claims, blocked } = observedClaims()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const holder = claims.withEmailOperation(f.newEmail, async () => {
+    entered.resolve()
+    await release.promise
+  })
+  await entered.promise
+  const confirming = new CustomerEmailChangeService({
+    repository: new CustomerEmailChangeRepository(database.db), claims,
+    audit: new AuditService(new AuditRepository(database.db)), secret: config.betterAuthSecret, emailSender,
+  }).confirm(f.input).then(() => 'changed', (error: Error) => error.message)
+  await blocked.promise
+  const replacement = `${f.userId}@replacement.example.com`
+  await claims.withEmailOperation(replacement, () => database.db.transaction((tx) =>
+    new CustomerEmailChangeRepository(database.db).upsertPending(tx, {
+      userId: f.userId, newEmail: replacement,
+      codeDigest: digestEmailChangeCode(config.betterAuthSecret, f.userId, '87654321'),
+      expiresAt: new Date(Date.now() + 600_000), failedAttempts: 0,
+    })))
+  release.resolve()
+  await holder
+  expect(await confirming).toBe('EMAIL_CHANGE_CODE_INVALID')
+  expect((await f.read()).pending?.newEmail).toBe(replacement)
+  expect(await service.confirm({ ...f.input, code: '87654321' })).toEqual({ changed: true })
+  expect((await f.read()).user.email).toBe(replacement)
+})
+
+it('rejects staff sessions at the confirmation route', async () => {
+  await database.db.update(user).set({ accountType: 'staff', role: 'support', emailVerified: true, staffActivatedAt: new Date() }).where(eq(user.id, customerId))
+  await database.db.update(session).set({ lastActivityAt: new Date(), absoluteExpiresAt: new Date(Date.now() + 3_600_000) }).where(eq(session.userId, customerId))
+  try {
+    const response = await app.handle(new Request('http://localhost/api/v1/customer/email-change/confirm', {
+      method: 'POST', headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json' },
+      body: JSON.stringify({ code: '01234567' }),
+    }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ code: 'CUSTOMER_ACCOUNT_REQUIRED', message: 'Customer account required' })
+  } finally {
+    await database.db.update(user).set({ accountType: 'customer', role: 'customer', emailVerified: false, staffActivatedAt: null }).where(eq(user.id, customerId))
+    await database.db.update(session).set({ lastActivityAt: null, absoluteExpiresAt: null }).where(eq(session.userId, customerId))
+  }
+})
+
+it('accepts an unverified customer through the route and invalidates their cookie after success', async () => {
+  await database.db.delete(applicationRateLimit)
+  await service.request({ userId: customerId,
+    sessionId: (await database.db.select().from(session).where(eq(session.userId, customerId)))[0]!.id,
+    newEmail: 'confirmed@example.com', currentPassword: 'correct horse battery staple',
+    clientIp: '127.0.0.1', requestId: 'route-success',
+  })
+  const confirm = () => app.handle(new Request('http://localhost/api/v1/customer/email-change/confirm', {
+    method: 'POST', headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json' },
+    body: JSON.stringify({ code: '01234567' }),
+  }))
+  const response = await confirm()
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({ changed: true })
+  expect((await confirm()).status).toBe(401)
 })

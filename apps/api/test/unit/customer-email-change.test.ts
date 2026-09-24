@@ -18,11 +18,19 @@ async function fixture(failDelivery = false) {
   const background: Promise<unknown>[] = []
   const passwordHash = await hashPassword(input.currentPassword)
   const service = new CustomerEmailChangeService({
+    audit: { record: async () => undefined },
     repository: {
+      transaction: async (callback) => callback({} as never),
+      findConfirmationEmails: async () => null,
+      lockConfirmation: async () => ({ customer: null, pending: null, session: null }),
+      incrementAttempts: async () => undefined,
+      isEmailOccupied: async () => false,
+      transferIdentity: async () => undefined,
       findCredential: async () => ({ email: 'old@example.com', passwordHash }),
       upsertPending: async (_tx, row) => { pending.splice(0, pending.length, row) },
     },
     claims: {
+      withEmailOperations: async (_emails, callback) => callback(),
       withEmailClaim: async (email, callback) => callback({
         tx: {} as never,
         normalizedEmail: email,
@@ -107,5 +115,15 @@ describe('customer email change request', () => {
     expect(verifyEmailChangeCode('secret', userId, '01234567', digest)).toBe(true)
     expect(verifyEmailChangeCode('secret', 'other', '01234567', digest)).toBe(false)
     expect(verifyEmailChangeCode('secret', userId, '01234568', digest)).toBe(false)
+  })
+})
+
+describe('customer email change confirmation contract', () => {
+  it('rejects a confirmation without a pending request', async () => {
+    const { service } = await fixture()
+    await expect(Promise.resolve().then(() => service.confirm({
+      userId, sessionId: input.sessionId, code: '01234567',
+      clientIp: input.clientIp, requestId: 'request-2',
+    }))).rejects.toThrow('EMAIL_CHANGE_CODE_INVALID')
   })
 })

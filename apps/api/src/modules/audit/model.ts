@@ -6,6 +6,7 @@ export const auditMetadataKeys = {
   'staff.invitation-cancelled': [],
   'staff.invitation-accepted': ['role'],
   'customer.created': [],
+  'customer.email-changed': [],
   'staff.role-changed': ['previousRole', 'nextRole'],
   'staff.suspended': ['reason'],
   'staff.reactivated': [],

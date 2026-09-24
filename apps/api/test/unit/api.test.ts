@@ -48,6 +48,7 @@ const app = await createApp(config, {
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
   customerEmailChange: new CustomerEmailChangeService({
+    audit,
     repository: new CustomerEmailChangeRepository(database.db),
     claims,
     secret: config.betterAuthSecret,
@@ -236,6 +237,10 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/staff/'].get.tags).toEqual(['Staff Members'])
     expect(specification.paths['/api/v1/auth/staff/sessions']?.get.tags).toEqual(['Staff Sessions'])
     expect(specification.paths['/api/v1/auth/staff/sessions/{id}/revoke']?.post.tags).toEqual(['Staff Sessions'])
+    expect(specification.paths['/api/v1/customer/email-change/confirm'].post).toMatchObject({
+      tags: ['Customer Email Change'], security: [{ sessionCookie: [] }],
+      responses: { 200: expect.anything(), 401: expect.anything(), 409: expect.anything(), 410: expect.anything(), 422: expect.anything(), 429: expect.anything() },
+    })
     expect(specification.paths['/api/v1/staff/'].get.security).toEqual([{ sessionCookie: [] }])
     expect(specification.paths['/api/v1/customer/profile'].get).toMatchObject({
       tags: ['Customer Profile'], security: [{ sessionCookie: [] }],
@@ -300,7 +305,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(46)
+    expect(operations).toHaveLength(47)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

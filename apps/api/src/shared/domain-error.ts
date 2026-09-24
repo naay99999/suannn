@@ -10,6 +10,9 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
+  AUTHENTICATION_REQUIRED: { status: 401, message: 'Authentication required' },
+  EMAIL_CHANGE_CODE_INVALID: { status: 422, message: 'Email change code is invalid' },
+  EMAIL_CHANGE_CODE_EXPIRED: { status: 410, message: 'Email change code has expired' },
   CUSTOMER_ACCOUNT_REQUIRED: { status: 403, message: 'Customer account required' },
   INVALID_PROFILE_NAME: { status: 422, message: 'Request validation failed' },
   ONBOARDING_SESSION_REQUIRED: { status: 401, message: 'Staff onboarding session required' },

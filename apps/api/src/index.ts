@@ -58,6 +58,7 @@ const app = await createApp(config, {
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
   customerEmailChange: new CustomerEmailChangeService({
+    audit,
     repository: new CustomerEmailChangeRepository(database.db),
     claims,
     secret: config.betterAuthSecret,

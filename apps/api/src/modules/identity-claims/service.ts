@@ -108,7 +108,11 @@ export class IdentityClaimService {
     })
   }
 
-  async withEmailOperation<T>(email: string, callback: () => Promise<T>): Promise<T> {
+  withEmailOperation<T>(email: string, callback: () => Promise<T>): Promise<T> {
+    return this.withEmailOperations([email], callback)
+  }
+
+  async withEmailOperations<T>(emails: string[], callback: () => Promise<T>): Promise<T> {
     if (!this.lockPool) throw new Error('IDENTITY_LOCK_POOL_REQUIRED')
     const deadline = Date.now() + 10_000
     const reservation = this.lockPool.reserve()
@@ -125,8 +129,8 @@ export class IdentityClaimService {
       throw new Error('IDENTITY_CLAIM_LOCK_TIMEOUT')
     }
     let globalSlot: number | null = null
-    let emailLock = false
-    const emailKey = emailAdvisoryLockKey(normalizeEmail(email))
+    const acquiredKeys: string[] = []
+    const emailKeys = [...new Set(emails.map(normalizeEmail))].sort().map(emailAdvisoryLockKey)
     const pause = () => new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 75))
 
     try {
@@ -141,18 +145,24 @@ export class IdentityClaimService {
       }
       if (globalSlot === null) throw new Error('IDENTITY_CLAIM_LOCK_TIMEOUT')
 
-      while (Date.now() < deadline && !emailLock) {
-        const [row] = await connection.unsafe<{ acquired: boolean }>(
-          'select pg_try_advisory_lock($1::bigint) as acquired', [emailKey],
-        )
-        emailLock = row?.acquired === true
-        if (!emailLock) await pause()
+      for (const emailKey of emailKeys) {
+        let acquired = false
+        while (Date.now() < deadline && !acquired) {
+          const [row] = await connection.unsafe<{ acquired: boolean }>(
+            'select pg_try_advisory_lock($1::bigint) as acquired', [emailKey],
+          )
+          acquired = row?.acquired === true
+          if (!acquired) await pause()
+        }
+        if (!acquired) throw new Error('IDENTITY_CLAIM_LOCK_TIMEOUT')
+        acquiredKeys.push(emailKey)
       }
-      if (!emailLock) throw new Error('IDENTITY_CLAIM_LOCK_TIMEOUT')
       return await callback()
     } finally {
       try {
-        if (emailLock) await connection.unsafe('select pg_advisory_unlock($1::bigint)', [emailKey])
+        for (const emailKey of acquiredKeys.reverse()) {
+          await connection.unsafe('select pg_advisory_unlock($1::bigint)', [emailKey])
+        }
         if (globalSlot !== null) {
           await connection.unsafe('select pg_advisory_unlock(42001, $1)', [globalSlot])
         }

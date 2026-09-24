@@ -60,4 +60,40 @@ export function createCustomerEmailChangeModule(
         tags: ['Customer Email Change'], security: [{ sessionCookie: [] }],
       },
     })
+    .post('/email-change/confirm', async ({ user, session, body, requestContext, set }) => {
+      const limited = await limiter.consume({
+        namespace: 'customer-email-change-confirm',
+        subjectHash: hashToken(user.id),
+        ip: requestContext.clientIp,
+        limit: 5,
+        windowSeconds: 600,
+      })
+      if (!limited.allowed) {
+        const rejected = rateLimitResponse(limited)
+        set.status = rejected.status
+        Object.assign(set.headers, rejected.headers)
+        return rejected.body
+      }
+      return service.confirm({
+        userId: user.id,
+        sessionId: session.id,
+        code: body.code,
+        clientIp: requestContext.clientIp,
+        requestId: requestContext.requestId,
+      })
+    }, {
+      customerAuth: true,
+      browserMutation: 'storefront',
+      body: 'customerEmailChange.confirmBody',
+      response: {
+        200: 'customerEmailChange.changed',
+        401: 'http.error', 403: 'http.error', 409: 'http.error', 410: 'http.error',
+        422: 'http.error', 429: 'http.error', 503: 'http.error',
+      },
+      detail: {
+        summary: 'Confirm customer email change',
+        description: 'Confirms the eight-digit code, verifies the new address and revokes all customer sessions. Sign in again after success.',
+        tags: ['Customer Email Change'], security: [{ sessionCookie: [] }],
+      },
+    })
 }
