@@ -5,23 +5,26 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 
 let acceptedInput: unknown
+let acceptCount = 0
 let acceptResult: () => Promise<unknown> = async () => ({ accepted: true, next: 'mfa-enrollment' })
 let beginResult: () => Promise<unknown> = async () => ({ totpURI: 'otpauth://totp/Suannn:Sam?secret=ABC', backupCodes: ['code-1', 'code-2'] })
 let verifyResult: () => Promise<unknown> = async () => ({ verified: true })
 let refreshed = false
+let refreshResult: () => Promise<string> = async () => 'active'
 
 class FakeAuthError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message) }
 }
 
 mock.module('../src/lib/auth-client', () => ({
-  acceptInvitation: (input: unknown) => { acceptedInput = input; return acceptResult() },
+  acceptInvitation: (input: unknown) => { acceptedInput = input; acceptCount++; return acceptResult() },
   beginTotp: () => beginResult(),
   verifyEnrollment: () => verifyResult(),
   AuthRequestError: FakeAuthError,
 }))
 mock.module('../src/lib/auth-session', () => ({
-  refreshAuthSession: async () => { refreshed = true; return 'active' },
+  authSessionQuery: { queryKey: ['auth', 'session'] },
+  refreshAuthSession: async () => { refreshed = true; return refreshResult() },
 }))
 
 const { Component: InvitationPage } = await import('../src/pages/staff/invitation-page')
@@ -41,7 +44,9 @@ function renderPage(initialPath: string) {
 afterEach(() => {
   cleanup()
   acceptedInput = undefined
+  acceptCount = 0
   refreshed = false
+  refreshResult = async () => 'active'
   localStorage.clear()
   sessionStorage.clear()
 })
@@ -114,4 +119,18 @@ test('refreshes the active staff session after successful TOTP enrollment', asyn
   expect(await screen.findByText('Dashboard')).toBeTruthy()
   expect(router.state.location.pathname).toBe('/dashboard')
   expect(refreshed).toBe(true)
+})
+
+test('delegates session recovery after acceptance without retrying the invitation', async () => {
+  acceptResult = async () => ({ accepted: true, next: 'mfa-enrollment' })
+  refreshResult = async () => { throw new FakeAuthError(0, 'NETWORK_ERROR', 'Offline') }
+  renderPage('/staff/invitations/accept?token=secret-token-123456')
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Name'), 'Sam')
+  await user.type(screen.getByLabelText('New password'), 'strong-password-123')
+  await user.click(screen.getByRole('button', { name: 'Accept invitation' }))
+  expect(await screen.findByText('Set up your authenticator')).toBeTruthy()
+  expect(acceptCount).toBe(1)
+  expect(refreshed).toBe(false)
+  expect(screen.queryByRole('button', { name: 'Accept invitation' })).toBeNull()
 })

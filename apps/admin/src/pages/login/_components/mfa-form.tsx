@@ -35,7 +35,7 @@ export function MfaForm() {
       if (state !== 'active') throw new AuthRequestError(401, 'SESSION_EXPIRED', 'Session expired')
       navigate(safeReturnTo(routeState?.from), { replace: true })
     } catch (caught) {
-      if (caught instanceof AuthRequestError && ['INVALID_TWO_FACTOR_CHALLENGE', 'SESSION_EXPIRED'].includes(caught.code)) {
+      if (caught instanceof AuthRequestError && ['INVALID_TWO_FACTOR_CHALLENGE', 'INVALID_TWO_FACTOR_COOKIE', 'SESSION_EXPIRED'].includes(caught.code)) {
         navigate('/login', { replace: true, state: { reason: 'Your verification session expired. Sign in again.' } })
       } else {
         setError(caught instanceof AuthRequestError ? caught.message : 'Could not verify the code. Try again.')

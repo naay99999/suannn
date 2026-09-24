@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { z } from 'zod'
 import { acceptInvitation, AuthRequestError } from '@/lib/auth-client'
-import { refreshAuthSession } from '@/lib/auth-session'
+import { authSessionQuery } from '@/lib/auth-session'
 
 const invitationSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name is too long'),
@@ -32,7 +32,7 @@ export function InvitationForm({ token }: { token: string }) {
     setPending(true)
     try {
       await acceptInvitation({ token, name: values.name, password: values.password })
-      await refreshAuthSession(queryClient)
+      queryClient.removeQueries({ queryKey: authSessionQuery.queryKey })
       navigate('/staff/onboarding', { replace: true })
     } catch (error) {
       if (error instanceof AuthRequestError && error.status === 410) {

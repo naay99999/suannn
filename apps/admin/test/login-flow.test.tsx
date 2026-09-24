@@ -113,3 +113,24 @@ test('returns to login when the MFA challenge has expired', async () => {
   expect(await screen.findByText('Your verification session expired. Sign in again.')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Login' })).toBeTruthy()
 })
+
+test('restarts login when Better Auth rejects a stale TOTP challenge cookie', async () => {
+  signInResult = async () => 'challenge'
+  verifyResult = async () => { throw new FakeAuthError(401, 'INVALID_TWO_FACTOR_COOKIE', 'Invalid two-factor cookie') }
+  renderFlow()
+  const user = await enterPassword()
+  await user.type(await screen.findByLabelText('Authenticator code'), '123456')
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+  expect(await screen.findByText('Your verification session expired. Sign in again.')).toBeTruthy()
+})
+
+test('restarts login when Better Auth rejects a stale backup-code challenge cookie', async () => {
+  signInResult = async () => 'challenge'
+  backupResult = async () => { throw new FakeAuthError(401, 'INVALID_TWO_FACTOR_COOKIE', 'Invalid two-factor cookie') }
+  renderFlow()
+  const user = await enterPassword()
+  await user.click(await screen.findByRole('button', { name: 'Use a backup code' }))
+  await user.type(screen.getByLabelText('Backup code'), 'backup-123')
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+  expect(await screen.findByText('Your verification session expired. Sign in again.')).toBeTruthy()
+})

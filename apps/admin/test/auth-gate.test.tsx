@@ -1,14 +1,15 @@
 import { afterEach, expect, mock, test } from 'bun:test'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import type { AuthSession } from '../src/lib/auth-session'
 
 let sessionResult: () => Promise<AuthSession | null> = async () => null
 let onboardingResult: () => Promise<{ required: true; userId: string }> = async () => ({ required: true, userId: 'user-1' })
+let sessionRequests = 0
 
 mock.module('../src/lib/auth-client', () => ({
-  getSession: () => sessionResult(),
+  getSession: () => { sessionRequests++; return sessionResult() },
   getOnboarding: () => onboardingResult(),
 }))
 
@@ -25,7 +26,10 @@ function renderRoute(path = '/dashboard') {
   const router = createMemoryRouter([
     { path: '/login', element: <div>Login screen</div> },
     { path: '/staff/onboarding', element: <OnboardingStaffGate />, children: [{ index: true, element: <div>MFA setup</div> }] },
-    { element: <ActiveStaffGate />, children: [{ path: '/dashboard', element: <div>Admin content</div> }] },
+    { element: <ActiveStaffGate />, children: [
+      { path: '/dashboard', element: <div>Admin content</div> },
+      { path: '/orders', element: <div>Orders content</div> },
+    ] },
   ], { initialEntries: [path] })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
   return { client, router }
@@ -77,7 +81,27 @@ test('shows retry after a session network error', async () => {
 
 test('rejects onboarding when the server denies the limited session', async () => {
   sessionResult = async () => ({ ...staffSession, staff: undefined })
-  onboardingResult = async () => { throw new Error('expired') }
+  onboardingResult = async () => { throw Object.assign(new Error('expired'), { status: 401 }) }
   renderRoute('/staff/onboarding')
   expect(await screen.findByText('Login screen')).toBeTruthy()
+})
+
+test('rechecks staff access before showing another protected page', async () => {
+  sessionRequests = 0
+  sessionResult = async () => staffSession
+  const { router } = renderRoute('/dashboard')
+  expect(await screen.findByText('Admin content')).toBeTruthy()
+  sessionResult = async () => null
+  await act(async () => { await router.navigate('/orders') })
+  expect(screen.queryByText('Orders content')).toBeNull()
+  expect(await screen.findByText('Login screen')).toBeTruthy()
+  expect(sessionRequests).toBeGreaterThanOrEqual(2)
+})
+
+test('offers retry for a temporary onboarding status failure', async () => {
+  sessionResult = async () => ({ ...staffSession, staff: undefined })
+  onboardingResult = async () => { throw Object.assign(new Error('offline'), { status: 0 }) }
+  renderRoute('/staff/onboarding')
+  expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy()
+  expect(screen.queryByText('Login screen')).toBeNull()
 })
