@@ -12,6 +12,8 @@ import { AuditService } from '../../src/modules/audit/service'
 import { CustomerSignupService } from '../../src/modules/auth/customer/service'
 import { CustomerProfileRepository } from '../../src/modules/customer/profile/repository'
 import { CustomerProfileService } from '../../src/modules/customer/profile/service'
+import { CustomerAddressRepository } from '../../src/modules/customer/addresses/repository'
+import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
 import { createCustomerAuthModule } from '../../src/modules/auth/customer'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
@@ -42,6 +44,7 @@ const app = await createApp(config, {
     audit,
   }),
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
+  customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
@@ -161,6 +164,7 @@ describe('API routes', () => {
       'System',
       'Customer Registration',
       'Customer Profile',
+      'Customer Addresses',
       'Sign-in',
       'Account Recovery',
       'Email Verification',
@@ -287,7 +291,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(40)
+    expect(operations).toHaveLength(44)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

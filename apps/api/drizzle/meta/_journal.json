@@ -36,6 +36,13 @@
       "when": 1790162055200,
       "tag": "0004_thick_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790249610989,
+      "tag": "0005_cheerful_venus",
+      "breakpoints": true
     }
   ]
 }

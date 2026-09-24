@@ -25,6 +25,9 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   INVALID_INVITATION: { status: 410, message: 'Invitation is invalid or expired' },
   INVALID_ROLE: { status: 422, message: 'Role is invalid' },
   INVALID_CURSOR: { status: 422, message: 'Pagination cursor is invalid' },
+  INVALID_ADDRESS: { status: 422, message: 'Request validation failed' },
+  ADDRESS_NOT_FOUND: { status: 404, message: 'Address not found' },
+  ADDRESS_LIMIT_REACHED: { status: 409, message: 'Address limit reached' },
 }
 
 export class DomainError extends Error {
