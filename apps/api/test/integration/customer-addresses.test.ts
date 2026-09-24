@@ -147,8 +147,17 @@ describe('customer address persistence and routes', () => {
       },
     ))
     expect((await defaultRequest(b.id, 'shipping')).status).toBe(200)
+    let selected = await service.list(customerId)
+    expect(selected.find((item) => item.isDefaultShipping)?.id).toBe(b.id)
+    expect(selected.find((item) => item.isDefaultBilling)?.id).toBe(a!.id)
     expect((await defaultRequest(c.id, 'billing')).status).toBe(200)
+    selected = await service.list(customerId)
+    expect(selected.find((item) => item.isDefaultShipping)?.id).toBe(b.id)
+    expect(selected.find((item) => item.isDefaultBilling)?.id).toBe(c.id)
     expect((await defaultRequest(b.id, 'shipping')).status).toBe(200)
+    selected = await service.list(customerId)
+    expect(selected.find((item) => item.isDefaultShipping)?.id).toBe(b.id)
+    expect(selected.find((item) => item.isDefaultBilling)?.id).toBe(c.id)
     expect((await defaultRequest(a!.id, 'invalid')).status).toBe(422)
     expect((await defaultRequest(a!.id, 'shipping', { origin: 'http://untrusted.example' })).status).toBe(403)
     await expect(service.setDefault(otherCustomerId, a!.id, 'shipping')).rejects.toThrow('ADDRESS_NOT_FOUND')
@@ -167,6 +176,17 @@ describe('customer address persistence and routes', () => {
     expect(addresses.find((item) => item.isDefaultBilling)?.id).toBe(c.id)
   })
 
+  it('promotes the oldest billing address without changing the shipping default', async () => {
+    const [oldest, shipping] = await service.list(customerId)
+    const billing = await service.create(customerId, { ...address, label: 'Billing only' })
+    await service.setDefault(customerId, shipping!.id, 'shipping')
+    await service.setDefault(customerId, billing.id, 'billing')
+    await service.remove(customerId, billing.id)
+    const remaining = await service.list(customerId)
+    expect(remaining.find((item) => item.isDefaultBilling)?.id).toBe(oldest!.id)
+    expect(remaining.find((item) => item.isDefaultShipping)?.id).toBe(shipping!.id)
+  })
+
   it('serializes concurrent creation of the twentieth address', async () => {
     await service.remove(customerId, (await service.list(customerId))[0]!.id)
     await service.remove(customerId, (await service.list(customerId))[0]!.id)
@@ -178,5 +198,7 @@ describe('customer address persistence and routes', () => {
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
     expect(await service.list(customerId)).toHaveLength(20)
     await expect(service.create(customerId, address)).rejects.toThrow('ADDRESS_LIMIT_REACHED')
+    for (const item of await service.list(customerId)) await service.remove(customerId, item.id)
+    expect(await service.list(customerId)).toEqual([])
   })
 })

@@ -46,7 +46,7 @@ import { CustomerProfileService } from '../../src/modules/customer/profile/servi
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
-function profileApp(account: typeof customer | null = customer) {
+function profileApp(account: typeof customer | null = customer, onRename?: () => void) {
   const auth = { api: { getSession: async () => account ? { user: account, session } : null } }
   const profile = {
     id: account?.id ?? '', name: account?.name ?? '',
@@ -54,7 +54,7 @@ function profileApp(account: typeof customer | null = customer) {
   }
   const repository = {
     get: async () => profile,
-    rename: async (_id: string, name: string) => ({ ...profile, name }),
+    rename: async (_id: string, name: string) => { onRename?.(); return { ...profile, name } },
   }
   return new Elysia().use(createErrorHandlingPlugin())
     .use(createCustomerProfileModule(config, auth as never, new CustomerProfileService(repository as never)))
@@ -91,6 +91,17 @@ describe('customer profile route', () => {
     expect(response.status).toBe(422)
     expect(await response.json()).toEqual({ code: 'VALIDATION_ERROR', message: 'Request validation failed' })
   })
+
+  it.each([{ role: 'owner' }, { email: 'evil@example.com' }])(
+    'rejects an extra account field alongside a valid name', async (field) => {
+      let renames = 0
+      const response = await profileApp(customer, () => { renames += 1 })
+        .handle(patch({ name: 'Renamed', ...field }))
+      expect(response.status).toBe(422)
+      expect(await response.json()).toEqual({ code: 'VALIDATION_ERROR', message: 'Request validation failed' })
+      expect(renames).toBe(0)
+    },
+  )
 
   it('rejects whitespace-only names with a safe 422', async () => {
     const response = await profileApp().handle(patch({ name: '  \t  ' }))

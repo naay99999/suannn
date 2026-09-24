@@ -11,6 +11,26 @@ import { rateLimitResponse } from '../../rate-limit/service'
 import { customerEmailChangeModels } from './model'
 import type { CustomerEmailChangeService } from './service'
 
+function parseEmailChangeBody(allowedKeys: readonly string[]) {
+  return async ({ request }: { request: Request }) => {
+    const raw = await request.json().catch(() => null)
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw) ||
+      Object.keys(raw).some((key) => !allowedKeys.includes(key))) {
+      throw new Error('VALIDATION_ERROR')
+    }
+    return raw
+  }
+}
+
+const parseRequestBody = parseEmailChangeBody(['newEmail', 'currentPassword'])
+const parseConfirmBody = parseEmailChangeBody(['code'])
+
+function requireJsonBody({ request }: { request: Request }) {
+  if (request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+    throw new Error('VALIDATION_ERROR')
+  }
+}
+
 export function createCustomerEmailChangeModule(
   config: AppConfig,
   auth: Auth,
@@ -48,6 +68,8 @@ export function createCustomerEmailChangeModule(
     }, {
       customerAuth: true,
       browserMutation: 'storefront',
+      parse: [parseRequestBody, 'json'],
+      transform: requireJsonBody,
       body: 'customerEmailChange.requestBody',
       response: {
         200: 'customerEmailChange.accepted',
@@ -84,6 +106,8 @@ export function createCustomerEmailChangeModule(
     }, {
       customerAuth: true,
       browserMutation: 'storefront',
+      parse: [parseConfirmBody, 'json'],
+      transform: requireJsonBody,
       body: 'customerEmailChange.confirmBody',
       response: {
         200: 'customerEmailChange.changed',

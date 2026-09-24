@@ -7,6 +7,15 @@ import { httpModels } from '../../../shared/http-model'
 import { customerProfileModels } from './model'
 import type { CustomerProfileService } from './service'
 
+async function parseRenameBody({ request }: { request: Request }) {
+  const raw = await request.json().catch(() => null)
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw) ||
+    Object.keys(raw).some((key) => key !== 'name')) {
+    throw new Error('VALIDATION_ERROR')
+  }
+  return raw
+}
+
 export function createCustomerProfileModule(config: AppConfig, auth: Auth, service: CustomerProfileService) {
   return new Elysia({ name: 'customer-profile', prefix: '/api/v1/customer' })
     .use(createBrowserMutationPlugin(config))
@@ -30,6 +39,7 @@ export function createCustomerProfileModule(config: AppConfig, auth: Auth, servi
     }, {
       customerAuth: true,
       browserMutation: 'storefront',
+      parse: [parseRenameBody, 'json'],
       body: 'customerProfile.renameBody',
       response: { 200: 'customerProfile.profile', 401: 'http.error', 403: 'http.error', 422: 'http.error' },
       detail: {

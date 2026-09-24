@@ -15,6 +15,7 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   EMAIL_CHANGE_CODE_EXPIRED: { status: 410, message: 'Email change code has expired' },
   CUSTOMER_ACCOUNT_REQUIRED: { status: 403, message: 'Customer account required' },
   INVALID_PROFILE_NAME: { status: 422, message: 'Request validation failed' },
+  VALIDATION_ERROR: { status: 422, message: 'Request validation failed' },
   ONBOARDING_SESSION_REQUIRED: { status: 401, message: 'Staff onboarding session required' },
   ACTIVE_STAFF_SESSION_REQUIRED: { status: 401, message: 'Active staff session required' },
   OWNER_REQUIRED: { status: 403, message: 'Owner access required' },
