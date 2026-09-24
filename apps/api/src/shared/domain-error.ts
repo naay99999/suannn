@@ -10,6 +10,12 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
+  AUTHENTICATION_REQUIRED: { status: 401, message: 'Authentication required' },
+  EMAIL_CHANGE_CODE_INVALID: { status: 422, message: 'Email change code is invalid' },
+  EMAIL_CHANGE_CODE_EXPIRED: { status: 410, message: 'Email change code has expired' },
+  CUSTOMER_ACCOUNT_REQUIRED: { status: 403, message: 'Customer account required' },
+  INVALID_PROFILE_NAME: { status: 422, message: 'Request validation failed' },
+  VALIDATION_ERROR: { status: 422, message: 'Request validation failed' },
   ONBOARDING_SESSION_REQUIRED: { status: 401, message: 'Staff onboarding session required' },
   ACTIVE_STAFF_SESSION_REQUIRED: { status: 401, message: 'Active staff session required' },
   OWNER_REQUIRED: { status: 403, message: 'Owner access required' },
@@ -20,9 +26,13 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
   OWNER_INVARIANT: { status: 409, message: 'At least one active owner is required' },
   EMAIL_UNAVAILABLE: { status: 409, message: 'Email is unavailable' },
+  INVALID_CURRENT_PASSWORD: { status: 422, message: 'Current password is invalid' },
   INVALID_INVITATION: { status: 410, message: 'Invitation is invalid or expired' },
   INVALID_ROLE: { status: 422, message: 'Role is invalid' },
   INVALID_CURSOR: { status: 422, message: 'Pagination cursor is invalid' },
+  INVALID_ADDRESS: { status: 422, message: 'Request validation failed' },
+  ADDRESS_NOT_FOUND: { status: 404, message: 'Address not found' },
+  ADDRESS_LIMIT_REACHED: { status: 409, message: 'Address limit reached' },
 }
 
 export class DomainError extends Error {

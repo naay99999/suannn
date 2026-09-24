@@ -150,6 +150,32 @@ export function createAuthMacros(auth: Auth) {
           return { user: current.user, session: current.session }
         },
       },
+      customerAuth: {
+        async resolve({ status, request: { headers } }) {
+          let current: Awaited<ReturnType<typeof auth.api.getSession>>
+          try {
+            current = await auth.api.getSession({ headers })
+          } catch {
+            current = null
+          }
+
+          if (!current) {
+            return status(401, {
+              code: 'AUTHENTICATION_REQUIRED',
+              message: 'Authentication required',
+            })
+          }
+
+          if (current.user.accountType !== 'customer') {
+            return status(403, {
+              code: 'CUSTOMER_ACCOUNT_REQUIRED',
+              message: 'Customer account required',
+            })
+          }
+
+          return { user: current.user, session: current.session }
+        },
+      },
       staffAuth: {
         async resolve({ status, request: { headers } }) {
           const current = await auth.api.getSession({ headers })

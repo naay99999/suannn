@@ -10,6 +10,12 @@ import { createErrorHandlingPlugin } from '../../src/plugins/error-handling'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { CustomerSignupService } from '../../src/modules/auth/customer/service'
+import { CustomerProfileRepository } from '../../src/modules/customer/profile/repository'
+import { CustomerProfileService } from '../../src/modules/customer/profile/service'
+import { CustomerAddressRepository } from '../../src/modules/customer/addresses/repository'
+import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
+import { CustomerEmailChangeRepository } from '../../src/modules/customer/email-change/repository'
+import { CustomerEmailChangeService } from '../../src/modules/customer/email-change/service'
 import { createCustomerAuthModule } from '../../src/modules/auth/customer'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
@@ -38,6 +44,15 @@ const app = await createApp(config, {
     claims,
     limiter,
     audit,
+  }),
+  customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
+  customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
+  customerEmailChange: new CustomerEmailChangeService({
+    audit,
+    repository: new CustomerEmailChangeRepository(database.db),
+    claims,
+    secret: config.betterAuthSecret,
+    emailSender,
   }),
   staffInvitations: new StaffInvitationService({
     auth,
@@ -157,6 +172,9 @@ describe('API routes', () => {
     expect(specification.tags.map(({ name }) => name)).toEqual([
       'System',
       'Customer Registration',
+      'Customer Profile',
+      'Customer Addresses',
+      'Customer Email Change',
       'Sign-in',
       'Account Recovery',
       'Email Verification',
@@ -219,7 +237,17 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/staff/'].get.tags).toEqual(['Staff Members'])
     expect(specification.paths['/api/v1/auth/staff/sessions']?.get.tags).toEqual(['Staff Sessions'])
     expect(specification.paths['/api/v1/auth/staff/sessions/{id}/revoke']?.post.tags).toEqual(['Staff Sessions'])
+    expect(specification.paths['/api/v1/customer/email-change/confirm'].post).toMatchObject({
+      tags: ['Customer Email Change'], security: [{ sessionCookie: [] }],
+      responses: { 200: expect.anything(), 401: expect.anything(), 409: expect.anything(), 410: expect.anything(), 422: expect.anything(), 429: expect.anything() },
+    })
     expect(specification.paths['/api/v1/staff/'].get.security).toEqual([{ sessionCookie: [] }])
+    expect(specification.paths['/api/v1/customer/profile'].get).toMatchObject({
+      tags: ['Customer Profile'], security: [{ sessionCookie: [] }],
+    })
+    expect(specification.paths['/api/v1/customer/profile'].patch).toMatchObject({
+      tags: ['Customer Profile'], security: [{ sessionCookie: [] }],
+    })
     expect(specification.paths['/api/v1/auth/staff/invitations/accept']?.post.security).toEqual([])
     expect(specification.paths['/api/v1/auth/staff/mfa/backup-codes/regenerate']?.post.tags)
       .toEqual(['Staff MFA'])
@@ -277,7 +305,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(38)
+    expect(operations).toHaveLength(47)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
@@ -296,6 +324,58 @@ describe('API routes', () => {
       const name = reference.slice('#/components/schemas/'.length)
       expect(specification.components.schemas[name]).toBeDefined()
     }
+  })
+
+  it('publishes every customer account route with a cookie-secured JSON contract', async () => {
+    const response = await app.handle(new Request('http://localhost/api/v1/openapi.json'))
+    expect(response.status).toBe(200)
+
+    const specification = await response.json() as {
+      paths: Record<string, Record<string, {
+        tags?: string[]
+        security?: Array<Record<string, string[]>>
+        requestBody?: { content?: { 'application/json'?: { schema?: unknown } } }
+        responses?: Record<string, { content?: { 'application/json'?: { schema?: unknown } } }>
+      }>>
+    }
+    const customerOperations = [
+      ['/api/v1/customer/profile', 'get', 'Customer Profile', false],
+      ['/api/v1/customer/profile', 'patch', 'Customer Profile', true],
+      ['/api/v1/customer/addresses', 'get', 'Customer Addresses', false],
+      ['/api/v1/customer/addresses', 'post', 'Customer Addresses', true],
+      ['/api/v1/customer/addresses/{id}', 'patch', 'Customer Addresses', true],
+      ['/api/v1/customer/addresses/{id}', 'delete', 'Customer Addresses', false],
+      ['/api/v1/customer/addresses/{id}/default', 'put', 'Customer Addresses', true],
+      ['/api/v1/customer/email-change/request', 'post', 'Customer Email Change', true],
+      ['/api/v1/customer/email-change/confirm', 'post', 'Customer Email Change', true],
+    ] as const
+    const actualOperations = Object.entries(specification.paths)
+      .filter(([path]) => path.startsWith('/api/v1/customer/'))
+      .flatMap(([path, methods]) => Object.keys(methods).map((method) => `${method.toUpperCase()} ${path}`))
+      .sort()
+    expect(actualOperations).toEqual(customerOperations
+      .map(([path, method]) => `${method.toUpperCase()} ${path}`)
+      .sort())
+
+    for (const [path, method, tag, hasBody] of customerOperations) {
+      const operation = specification.paths[path]?.[method]
+      expect(operation).toBeDefined()
+      expect(operation?.tags).toEqual([tag])
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.responses?.['401']?.content?.['application/json']?.schema).toBeDefined()
+      expect(operation?.responses?.['403']?.content?.['application/json']?.schema).toBeDefined()
+      if (method === 'delete') {
+        expect(operation?.responses?.['200']).toBeDefined()
+      } else {
+        expect(operation?.responses?.['200']?.content?.['application/json']?.schema).toBeDefined()
+      }
+      if (hasBody) {
+        expect(operation?.requestBody?.content?.['application/json']?.schema).toBeDefined()
+      } else {
+        expect(operation?.requestBody).toBeUndefined()
+      }
+    }
+    expect(specification.paths['/api/v1/auth/change-email']).toBeUndefined()
   })
 
   it('returns the versioned root response', async () => {

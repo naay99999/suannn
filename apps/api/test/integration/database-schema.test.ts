@@ -139,10 +139,10 @@ describe('authentication domain constraints', () => {
   it('rejects legacy emails that collide after normalization', async () => {
     await resetTestDatabase(database)
     const initialMigration = await Bun.file(
-      new URL('../drizzle/0000_giant_starjammers.sql', import.meta.url),
+      new URL('../../drizzle/0000_giant_starjammers.sql', import.meta.url),
     ).text()
     const authDomainMigration = await Bun.file(
-      new URL('../drizzle/0001_free_veda.sql', import.meta.url),
+      new URL('../../drizzle/0001_free_veda.sql', import.meta.url),
     ).text()
 
     await database.client.unsafe(initialMigration)

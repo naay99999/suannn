@@ -11,7 +11,7 @@ export function createErrorHandlingPlugin() {
         return { code: 'NOT_FOUND', message: 'Not found' }
       }
 
-      if (code === 'VALIDATION') {
+      if (code === 'VALIDATION' || code === 'PARSE') {
         set.status = 422
         return { code: 'VALIDATION_ERROR', message: 'Request validation failed' }
       }
