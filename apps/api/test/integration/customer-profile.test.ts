@@ -72,7 +72,7 @@ describe('customer profile persistence', () => {
   })
 
   it('prevents reading or renaming a row after it becomes staff', async () => {
-    await database.db.update(user).set({ accountType: 'staff' }).where(eq(user.id, customerId))
+    await database.db.update(user).set({ accountType: 'staff', role: 'support' }).where(eq(user.id, customerId))
     await expect(service.get(customerId)).rejects.toThrow('CUSTOMER_ACCOUNT_REQUIRED')
     await expect(service.rename(customerId, 'Intrusion')).rejects.toThrow('CUSTOMER_ACCOUNT_REQUIRED')
     const [persisted] = await database.db.select().from(user).where(eq(user.id, customerId))
