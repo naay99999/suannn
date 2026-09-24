@@ -13,6 +13,10 @@ export const router = createBrowserRouter([
     lazy: () => import('./pages/login/mfa-page'),
   },
   {
+    path: 'staff/invitations/accept',
+    lazy: () => import('./pages/staff/invitation-page'),
+  },
+  {
     path: '*',
     lazy: () => import('./pages/not-found-page'),
   },
