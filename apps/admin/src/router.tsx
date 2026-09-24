@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router'
 import { AdminRouteError } from './pages/error-page'
 import { AdminLayout } from './pages/layout'
+import { ActiveStaffGate, OnboardingStaffGate } from './components/auth/auth-gate'
 
 export const router = createBrowserRouter([
   {
@@ -8,32 +9,39 @@ export const router = createBrowserRouter([
     lazy: () => import('./pages/login/login-page'),
   },
   {
+    path: 'login/mfa',
+    lazy: () => import('./pages/login/mfa-page'),
+  },
+  {
+    path: 'staff/invitations/accept',
+    lazy: () => import('./pages/staff/invitation-page'),
+  },
+  {
     path: '*',
     lazy: () => import('./pages/not-found-page'),
   },
   {
-    Component: AdminLayout,
-    errorElement: <AdminRouteError />,
+    Component: OnboardingStaffGate,
     children: [
       {
-        path: 'dashboard',
-        lazy: () => import('./pages/dashboard/dashboard-page'),
+        path: 'staff/onboarding',
+        lazy: () => import('./pages/staff/onboarding-page'),
       },
+    ],
+  },
+  {
+    Component: ActiveStaffGate,
+    children: [
       {
-        path: 'products',
-        lazy: () => import('./pages/products/products-page'),
-      },
-      {
-        path: 'orders',
-        lazy: () => import('./pages/orders/orders-page'),
-      },
-      {
-        path: 'customers',
-        lazy: () => import('./pages/customers/customers-page'),
-      },
-      {
-        path: 'settings',
-        lazy: () => import('./pages/settings/system-settings-page'),
+        Component: AdminLayout,
+        errorElement: <AdminRouteError />,
+        children: [
+          { path: 'dashboard', lazy: () => import('./pages/dashboard/dashboard-page') },
+          { path: 'products', lazy: () => import('./pages/products/products-page') },
+          { path: 'orders', lazy: () => import('./pages/orders/orders-page') },
+          { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
+          { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },
+        ],
       },
     ],
   },

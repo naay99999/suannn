@@ -1,19 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { PropsWithChildren } from 'react'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      gcTime: 5 * 60_000,
-      retry: 1,
-    },
-    mutations: {
-      retry: false,
-    },
-  },
-})
+import { queryClient } from './query-client'
 
 export function QueryProvider({ children }: PropsWithChildren) {
   return (
