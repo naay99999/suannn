@@ -68,3 +68,23 @@ Audit records are application-append-only and security mutations write their aud
 - `/api/v1/auth/*` exposes only the pinned sign-in, sign-out, recovery, verification, session, and MFA-challenge allowlist. Raw Admin and MFA-enrollment endpoints remain denied.
 
 Errors use `{ "code", "message" }` and never expose internal stack traces to clients.
+
+## Customer account API
+
+All routes below use the current customer's Better Auth session cookie. An active customer session may use them even if its original email is unverified; staff sessions cannot. The API derives the customer ID from the session. Browser writes require `Origin: <STOREFRONT_URL>` (the exact configured origin) and `Content-Type: application/json`; send the cookie with credentials. A missing session returns 401 and a disallowed origin returns 403. No request body accepts a user ID.
+
+| Method | Path | JSON body | Success |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/customer/profile` | None | `{ id, name, email, emailVerified }` |
+| `PATCH` | `/api/v1/customer/profile` | `{ "name": "Mali" }` | Updated profile |
+| `GET` | `/api/v1/customer/addresses` | None | `{ "items": [...] }` in creation order |
+| `POST` | `/api/v1/customer/addresses` | Address fields below | Created address |
+| `PATCH` | `/api/v1/customer/addresses/{id}` | One or more mutable address fields | Updated address |
+| `PUT` | `/api/v1/customer/addresses/{id}/default` | `{ "kind": "shipping" }` or `{ "kind": "billing" }` | Updated address |
+| `DELETE` | `/api/v1/customer/addresses/{id}` | None | Empty 200 response |
+| `POST` | `/api/v1/customer/email-change/request` | `{ "newEmail": "new@example.com", "currentPassword": "..." }` | `{ "accepted": true }` |
+| `POST` | `/api/v1/customer/email-change/confirm` | `{ "code": "01234567" }` | `{ "changed": true }` |
+
+An address needs `label`, `recipientName`, `phone`, `addressLine1`, `subdistrict`, `district`, `province`, and `postalCode`. `addressLine2` may be omitted or null; `country` may be omitted or must be `"TH"`. The phone is a 9- or 10-digit domestic number and the postal code is five digits. A customer can store at most 20 addresses; creating another returns 409. Each customer has at most one shipping default and one billing default. The first address becomes both. Setting one default leaves the other unchanged. Deleting a default promotes the oldest remaining address for that default type. Address IDs must belong to the signed-in customer.
+
+Requesting an email change verifies the current password and sends an eight-digit code to the proposed address. A new request replaces the previous pending code. The code expires after ten minutes and five incorrect confirmation attempts make it unusable. Request attempts are limited to three per hour per customer/IP; confirmation attempts are limited to five per ten minutes per customer/IP, with 429 and `Retry-After` when limited. Confirmation moves the account and identity claim to the new address, marks the address verified, consumes the code, and revokes every customer session. **Sign in again with the new email after a successful confirmation.** The raw Better Auth `/api/v1/auth/change-email` route is not available.

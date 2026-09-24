@@ -326,6 +326,58 @@ describe('API routes', () => {
     }
   })
 
+  it('publishes every customer account route with a cookie-secured JSON contract', async () => {
+    const response = await app.handle(new Request('http://localhost/api/v1/openapi.json'))
+    expect(response.status).toBe(200)
+
+    const specification = await response.json() as {
+      paths: Record<string, Record<string, {
+        tags?: string[]
+        security?: Array<Record<string, string[]>>
+        requestBody?: { content?: { 'application/json'?: { schema?: unknown } } }
+        responses?: Record<string, { content?: { 'application/json'?: { schema?: unknown } } }>
+      }>>
+    }
+    const customerOperations = [
+      ['/api/v1/customer/profile', 'get', 'Customer Profile', false],
+      ['/api/v1/customer/profile', 'patch', 'Customer Profile', true],
+      ['/api/v1/customer/addresses', 'get', 'Customer Addresses', false],
+      ['/api/v1/customer/addresses', 'post', 'Customer Addresses', true],
+      ['/api/v1/customer/addresses/{id}', 'patch', 'Customer Addresses', true],
+      ['/api/v1/customer/addresses/{id}', 'delete', 'Customer Addresses', false],
+      ['/api/v1/customer/addresses/{id}/default', 'put', 'Customer Addresses', true],
+      ['/api/v1/customer/email-change/request', 'post', 'Customer Email Change', true],
+      ['/api/v1/customer/email-change/confirm', 'post', 'Customer Email Change', true],
+    ] as const
+    const actualOperations = Object.entries(specification.paths)
+      .filter(([path]) => path.startsWith('/api/v1/customer/'))
+      .flatMap(([path, methods]) => Object.keys(methods).map((method) => `${method.toUpperCase()} ${path}`))
+      .sort()
+    expect(actualOperations).toEqual(customerOperations
+      .map(([path, method]) => `${method.toUpperCase()} ${path}`)
+      .sort())
+
+    for (const [path, method, tag, hasBody] of customerOperations) {
+      const operation = specification.paths[path]?.[method]
+      expect(operation).toBeDefined()
+      expect(operation?.tags).toEqual([tag])
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.responses?.['401']?.content?.['application/json']?.schema).toBeDefined()
+      expect(operation?.responses?.['403']?.content?.['application/json']?.schema).toBeDefined()
+      if (method === 'delete') {
+        expect(operation?.responses?.['200']).toBeDefined()
+      } else {
+        expect(operation?.responses?.['200']?.content?.['application/json']?.schema).toBeDefined()
+      }
+      if (hasBody) {
+        expect(operation?.requestBody?.content?.['application/json']?.schema).toBeDefined()
+      } else {
+        expect(operation?.requestBody).toBeUndefined()
+      }
+    }
+    expect(specification.paths['/api/v1/auth/change-email']).toBeUndefined()
+  })
+
   it('returns the versioned root response', async () => {
     const response = await app.handle(new Request('http://localhost/api/v1'))
 

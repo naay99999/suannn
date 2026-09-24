@@ -46,7 +46,7 @@ export function createCustomerAddressModule(config: AppConfig, auth: Auth, servi
     })
     .post('/addresses', ({ user, body }) => service.create(user.id, body), {
       customerAuth: true, browserMutation: 'storefront',
-      parse: parseAddressBody,
+      parse: [parseAddressBody, 'json'],
       body: 'customerAddress.createBody',
       response: { 200: 'customerAddress.address', 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error' },
       detail: {
@@ -56,7 +56,7 @@ export function createCustomerAddressModule(config: AppConfig, auth: Auth, servi
     })
     .patch('/addresses/:id', ({ user, params, body }) => service.update(user.id, params.id, body), {
       customerAuth: true, browserMutation: 'storefront',
-      parse: parseAddressBody,
+      parse: [parseAddressBody, 'json'],
       params: 'http.idParams', body: 'customerAddress.updateBody',
       response: { 200: 'customerAddress.address', 401: 'http.error', 403: 'http.error', 404: 'http.error', 422: 'http.error' },
       detail: {
@@ -66,7 +66,7 @@ export function createCustomerAddressModule(config: AppConfig, auth: Auth, servi
     })
     .put('/addresses/:id/default', ({ user, params, body }) => service.setDefault(user.id, params.id, body.kind), {
       customerAuth: true, browserMutation: 'storefront',
-      parse: parseDefaultBody,
+      parse: [parseDefaultBody, 'json'],
       params: 'http.idParams', body: 'customerAddress.defaultBody',
       response: { 200: 'customerAddress.address', 401: 'http.error', 403: 'http.error', 404: 'http.error', 422: 'http.error' },
       detail: {
