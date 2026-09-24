@@ -10,6 +10,8 @@ import { createErrorHandlingPlugin } from '../../src/plugins/error-handling'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { CustomerSignupService } from '../../src/modules/auth/customer/service'
+import { CustomerProfileRepository } from '../../src/modules/customer/profile/repository'
+import { CustomerProfileService } from '../../src/modules/customer/profile/service'
 import { createCustomerAuthModule } from '../../src/modules/auth/customer'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
@@ -39,6 +41,7 @@ const app = await createApp(config, {
     limiter,
     audit,
   }),
+  customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
@@ -157,6 +160,7 @@ describe('API routes', () => {
     expect(specification.tags.map(({ name }) => name)).toEqual([
       'System',
       'Customer Registration',
+      'Customer Profile',
       'Sign-in',
       'Account Recovery',
       'Email Verification',
@@ -220,6 +224,12 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/auth/staff/sessions']?.get.tags).toEqual(['Staff Sessions'])
     expect(specification.paths['/api/v1/auth/staff/sessions/{id}/revoke']?.post.tags).toEqual(['Staff Sessions'])
     expect(specification.paths['/api/v1/staff/'].get.security).toEqual([{ sessionCookie: [] }])
+    expect(specification.paths['/api/v1/customer/profile'].get).toMatchObject({
+      tags: ['Customer Profile'], security: [{ sessionCookie: [] }],
+    })
+    expect(specification.paths['/api/v1/customer/profile'].patch).toMatchObject({
+      tags: ['Customer Profile'], security: [{ sessionCookie: [] }],
+    })
     expect(specification.paths['/api/v1/auth/staff/invitations/accept']?.post.security).toEqual([])
     expect(specification.paths['/api/v1/auth/staff/mfa/backup-codes/regenerate']?.post.tags)
       .toEqual(['Staff MFA'])
@@ -277,7 +287,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(38)
+    expect(operations).toHaveLength(40)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

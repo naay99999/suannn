@@ -5,6 +5,8 @@ import { createAuth } from './plugins/auth/auth'
 import { AuditRepository } from './modules/audit/repository'
 import { AuditService } from './modules/audit/service'
 import { CustomerSignupService } from './modules/auth/customer/service'
+import { CustomerProfileRepository } from './modules/customer/profile/repository'
+import { CustomerProfileService } from './modules/customer/profile/service'
 import { createResendEmailSender } from './modules/email/sender'
 import { EmailTaskQueue } from './modules/email/sender'
 import { IdentityClaimRepository } from './modules/identity-claims/repository'
@@ -49,6 +51,7 @@ const app = await createApp(config, {
   customerSignup: new CustomerSignupService({
     auth, claims, limiter, audit, requireTrustedClientIp: config.requireTrustedClientIp,
   }),
+  customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   staffInvitations: new StaffInvitationService({
     auth,
     claims,
