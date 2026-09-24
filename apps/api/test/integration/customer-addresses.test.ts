@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { Elysia } from 'elysia'
 import { loadConfig } from '../../src/config/env'
-import { user } from '../../src/database/schema'
+import { customerAddress, user } from '../../src/database/schema'
 import { createCustomerAddressModule } from '../../src/modules/customer/addresses'
 import { CustomerAddressRepository } from '../../src/modules/customer/addresses/repository'
 import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
@@ -128,6 +128,43 @@ describe('customer address persistence and routes', () => {
       method: 'DELETE', headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json' },
     }))
     expect(missing.status).toBe(404)
+  })
+
+  it('keeps shipping and billing defaults independent through concurrent changes and deletion', async () => {
+    const [a, existing] = await service.list(customerId)
+    const b = existing!
+    const c = await service.create(customerId, { ...address, label: 'Third' })
+    for (const [item, day] of [[a!, 1], [b, 2], [c, 3]] as const) {
+      await database.db.update(customerAddress).set({ createdAt: new Date(`2025-01-0${day}T00:00:00Z`) })
+        .where(eq(customerAddress.id, item.id))
+    }
+
+    const defaultRequest = (id: string, kind: string, headers: Record<string, string> = {}) => app.handle(new Request(
+      `http://localhost/api/v1/customer/addresses/${id}/default`, {
+        method: 'PUT',
+        headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({ kind }),
+      },
+    ))
+    expect((await defaultRequest(b.id, 'shipping')).status).toBe(200)
+    expect((await defaultRequest(c.id, 'billing')).status).toBe(200)
+    expect((await defaultRequest(b.id, 'shipping')).status).toBe(200)
+    expect((await defaultRequest(a!.id, 'invalid')).status).toBe(422)
+    expect((await defaultRequest(a!.id, 'shipping', { origin: 'http://untrusted.example' })).status).toBe(403)
+    await expect(service.setDefault(otherCustomerId, a!.id, 'shipping')).rejects.toThrow('ADDRESS_NOT_FOUND')
+
+    await Promise.all([service.setDefault(customerId, b.id, 'shipping'), service.setDefault(customerId, c.id, 'shipping')])
+    await Promise.all([service.setDefault(customerId, b.id, 'billing'), service.setDefault(customerId, c.id, 'billing')])
+    let addresses = await service.list(customerId)
+    expect(addresses.filter((item) => item.isDefaultShipping)).toHaveLength(1)
+    expect(addresses.filter((item) => item.isDefaultBilling)).toHaveLength(1)
+
+    await service.setDefault(customerId, b.id, 'shipping')
+    await service.setDefault(customerId, c.id, 'billing')
+    await service.remove(customerId, b.id)
+    addresses = await service.list(customerId)
+    expect(addresses.find((item) => item.isDefaultShipping)?.id).toBe(a!.id)
+    expect(addresses.find((item) => item.isDefaultBilling)?.id).toBe(c.id)
   })
 
   it('serializes concurrent creation of the twentieth address', async () => {

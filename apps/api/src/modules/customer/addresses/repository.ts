@@ -65,6 +65,23 @@ export class CustomerAddressRepository {
     return updated
   }
 
+  setDefault(userId: string, id: string, kind: 'shipping' | 'billing'): Promise<CustomerAddress> {
+    return this.db.transaction(async (tx) => {
+      await lockCustomer(tx, userId)
+      const [target] = await tx.select({ id: customerAddress.id }).from(customerAddress)
+        .where(and(eq(customerAddress.id, id), eq(customerAddress.userId, userId)))
+      if (!target) throw new Error('ADDRESS_NOT_FOUND')
+
+      const flag = kind === 'shipping' ? 'isDefaultShipping' : 'isDefaultBilling'
+      await tx.update(customerAddress).set({ [flag]: false })
+        .where(and(eq(customerAddress.userId, userId), eq(customerAddress[flag], true)))
+      const [updated] = await tx.update(customerAddress).set({ [flag]: true, updatedAt: new Date() })
+        .where(and(eq(customerAddress.id, id), eq(customerAddress.userId, userId)))
+        .returning(addressColumns)
+      return updated
+    })
+  }
+
   remove(userId: string, id: string): Promise<void> {
     return this.db.transaction(async (tx) => {
       await lockCustomer(tx, userId)

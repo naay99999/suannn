@@ -88,6 +88,10 @@ export class CustomerAddressService {
     return this.repository.update(userId, id, normalized)
   }
 
+  setDefault(userId: string, id: string, kind: 'shipping' | 'billing'): Promise<CustomerAddress> {
+    return this.repository.setDefault(userId, id, kind)
+  }
+
   remove(userId: string, id: string): Promise<void> {
     return this.repository.remove(userId, id)
   }

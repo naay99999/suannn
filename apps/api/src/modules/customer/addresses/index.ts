@@ -21,6 +21,15 @@ async function parseAddressBody({ request }: { request: Request }) {
   return raw
 }
 
+async function parseDefaultBody({ request }: { request: Request }) {
+  const raw = await request.json().catch(() => null)
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw) ||
+    Object.keys(raw).length !== 1 || !('kind' in raw)) {
+    throw new Error('INVALID_ADDRESS')
+  }
+  return raw
+}
+
 export function createCustomerAddressModule(config: AppConfig, auth: Auth, service: CustomerAddressService) {
   return new Elysia({ name: 'customer-addresses', prefix: '/api/v1/customer', normalize: false })
     .use(createBrowserMutationPlugin(config))
@@ -52,6 +61,16 @@ export function createCustomerAddressModule(config: AppConfig, auth: Auth, servi
       response: { 200: 'customerAddress.address', 401: 'http.error', 403: 'http.error', 404: 'http.error', 422: 'http.error' },
       detail: {
         summary: 'Update customer address', description: 'Updates address fields on an address owned by the current customer.',
+        tags: ['Customer Addresses'], security: [{ sessionCookie: [] }],
+      },
+    })
+    .put('/addresses/:id/default', ({ user, params, body }) => service.setDefault(user.id, params.id, body.kind), {
+      customerAuth: true, browserMutation: 'storefront',
+      parse: parseDefaultBody,
+      params: 'http.idParams', body: 'customerAddress.defaultBody',
+      response: { 200: 'customerAddress.address', 401: 'http.error', 403: 'http.error', 404: 'http.error', 422: 'http.error' },
+      detail: {
+        summary: 'Set customer address default', description: 'Sets the shipping or billing default for an owned address.',
         tags: ['Customer Addresses'], security: [{ sessionCookie: [] }],
       },
     })

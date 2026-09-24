@@ -18,6 +18,7 @@ const fields = {
 export const customerAddressModels = {
   'customerAddress.createBody': t.Object({ ...fields, addressLine2: t.Optional(fields.addressLine2) }, { additionalProperties: false }),
   'customerAddress.updateBody': t.Partial(t.Object(fields, { additionalProperties: false })),
+  'customerAddress.defaultBody': t.Object({ kind: t.Union([t.Literal('shipping'), t.Literal('billing')]) }, { additionalProperties: false }),
   'customerAddress.address': t.Object({
     id: t.String(), label: t.String(), recipientName: t.String(), phone: t.String(),
     addressLine1: t.String(), addressLine2: t.Union([t.String(), t.Null()]),
