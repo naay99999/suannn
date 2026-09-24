@@ -9,6 +9,10 @@ export const router = createBrowserRouter([
     lazy: () => import('./pages/login/login-page'),
   },
   {
+    path: 'login/mfa',
+    lazy: () => import('./pages/login/mfa-page'),
+  },
+  {
     path: '*',
     lazy: () => import('./pages/not-found-page'),
   },
