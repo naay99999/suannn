@@ -49,6 +49,7 @@ export interface AdminProduct {
   updatedAt: Date
   publishedAt: Date | null
   archivedAt: Date | null
+  variants?: AdminVariant[]
 }
 
 export interface AdminVariant {
@@ -62,5 +63,69 @@ export interface AdminVariant {
   displayOrder: number
   createdAt: Date
   updatedAt: Date
+  archivedAt: Date | null
+}
+
+export interface CursorPage<T> {
+  items: T[]
+  nextCursor: string | null
+}
+
+export type StoreProductSort = 'newest' | 'price-asc' | 'price-desc'
+
+export interface StoreProductQuery {
+  q?: string
+  category?: ProductCategory
+  sort?: StoreProductSort
+  limit?: number
+  cursor?: string
+}
+
+export interface AdminProductQuery {
+  q?: string
+  status?: ProductStatus
+  limit?: number
+  cursor?: string
+}
+
+export interface StoreProductSummary {
+  id: string
+  slug: string
+  name: string
+  englishName: string | null
+  category: ProductCategory
+  imageUrl: string | null
+  imageAlt: string | null
+  minPriceSatang: number
+}
+
+export interface StoreProductVariant {
+  id: string
+  name: string
+  unit: string
+  priceSatang: number
+  displayOrder: number
+  canPurchase: boolean
+}
+
+export interface StoreProductDetail extends StoreProductSummary {
+  description: string | null
+  originStory: string | null
+  storageInstructions: string | null
+  variants: StoreProductVariant[]
+}
+
+export interface AdminProductSummary {
+  id: string
+  slug: string
+  name: string
+  englishName: string | null
+  category: ProductCategory
+  imageUrl: string | null
+  imageAlt: string | null
+  status: ProductStatus
+  createdAt: Date
+  updatedAt: Date
+  publishedAt: Date | null
   archivedAt: Date | null
 }
