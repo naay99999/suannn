@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-thai';
 
 @custom-variant dark (&:is(.dark *));
 @source '../../../apps/**/*.{ts,tsx}';
@@ -9,8 +9,8 @@
 @source '../**/*.{ts,tsx}';
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: 'Inter Variable', sans-serif;
+  --font-heading: var(--font-family-brand);
+  --font-sans: var(--font-family-brand);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -18,6 +18,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink, var(--primary));
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -42,6 +43,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-glass-surface: var(--glass-surface);
+  --color-glass-border: var(--glass-border);
+  --color-photo-foreground: var(--photo-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,75 +53,114 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --font-family-brand: 'Satoshi', 'Noto Sans Thai Variable', sans-serif;
+  --background: #ffffff;
+  --foreground: #182c21;
+  --card: #ffffff;
+  --card-foreground: #182c21;
+  --popover: #ffffff;
+  --popover-foreground: #182c21;
+  --primary: #16a34a;
+  --primary-ink: #137a39;
+  --primary-foreground: #082410;
+  --secondary: #f0f8f1;
+  --secondary-foreground: #183c24;
+  --muted: #f4f6f3;
+  --muted-foreground: #657166;
+  --accent: #eff8ef;
+  --accent-foreground: #183c24;
+  --destructive: #c93838;
+  --border: #e2e9e1;
+  --input: #dce5dc;
+  --ring: #16a34a;
+  --chart-1: #16a34a;
+  --chart-2: #69bd66;
+  --chart-3: #a6d48c;
+  --chart-4: #d0e9ad;
+  --chart-5: #356f4a;
+  --radius: 0.75rem;
+  --sidebar: #f8fbf7;
+  --sidebar-foreground: #182c21;
+  --sidebar-primary: #16a34a;
+  --sidebar-primary-foreground: #082410;
+  --sidebar-accent: #eaf5eb;
+  --sidebar-accent-foreground: #183c24;
+  --sidebar-border: #e2e9e1;
+  --sidebar-ring: #16a34a;
+  --glass-surface: rgb(255 255 255 / 78%);
+  --glass-border: rgb(255 255 255 / 70%);
+  --glass-shadow: rgb(33 78 30 / 6%);
+  --photo-foreground: #ffffff;
+  --photo-shade: #102817;
+  --ambient-lime: #d3f4a8;
+  --ambient-mint: #d7f7e5;
+  --farm-ambient: #e4f2cf;
+  --cta-ambient: #cfeeb8;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0d1911;
+  --foreground: #eef7ef;
+  --card: #14251a;
+  --card-foreground: #eef7ef;
+  --popover: #14251a;
+  --popover-foreground: #eef7ef;
+  --primary: #16a34a;
+  --primary-ink: #75e39c;
+  --primary-foreground: #071b0d;
+  --secondary: #1b3222;
+  --secondary-foreground: #e5f5e8;
+  --muted: #1b2c20;
+  --muted-foreground: #adc3b0;
+  --accent: #203b28;
+  --accent-foreground: #ebf8ed;
+  --destructive: #f37373;
+  --border: #314737;
+  --input: #3b5541;
+  --ring: #56c979;
+  --chart-1: #56c979;
+  --chart-2: #8fdf89;
+  --chart-3: #b6e0a4;
+  --chart-4: #4eaa70;
+  --chart-5: #2d8050;
+  --sidebar: #122117;
+  --sidebar-foreground: #eef7ef;
+  --sidebar-primary: #16a34a;
+  --sidebar-primary-foreground: #071b0d;
+  --sidebar-accent: #203b28;
+  --sidebar-accent-foreground: #ebf8ed;
+  --sidebar-border: #314737;
+  --sidebar-ring: #56c979;
+  --glass-surface: rgb(20 40 26 / 80%);
+  --glass-border: rgb(206 236 209 / 20%);
+  --glass-shadow: rgb(0 0 0 / 20%);
+  --photo-foreground: #ffffff;
+  --photo-shade: #102817;
+  --ambient-lime: #314b24;
+  --ambient-mint: #193e29;
+  --farm-ambient: #2c4828;
+  --cta-ambient: #27542c;
 }
 
 @layer base {
@@ -126,7 +169,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground;
   }
 
   button:not(:disabled), [role='button']:not(:disabled) {
@@ -146,4 +189,113 @@ html[data-theme-transition='active']::view-transition-new(root) {
 
 html[data-theme-transition='active']::view-transition-group(root) {
   animation-duration: var(--theme-transition-duration);
+}
+
+/* Shared brand typography, with storefront-specific layouts below. */
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/satoshi-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/satoshi-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/satoshi-700.woff2') format('woff2');
+  font-weight: 600 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('../assets/fonts/satoshi-900.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+.suannn-store {
+  -webkit-font-smoothing: antialiased;
+}
+
+.suannn-store .page-width { width: min(100% - 96px, 1280px); margin-inline: auto; }
+.suannn-store .section-heading { font-size: clamp(1.7rem, 3.1vw, 2.65rem); font-weight: 600; line-height: 1.45; letter-spacing: -0.035em; }
+.suannn-store .suannn-logo { font-family: var(--font-family-brand); font-size: 2.55rem; font-weight: 900; letter-spacing: -0.075em; line-height: 1; color: var(--primary); }
+.suannn-store .suannn-logo span { color: var(--foreground); }
+.suannn-store .suannn-header { position: sticky; top: 0; z-index: 30; background: var(--glass-surface); border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(22px) saturate(1.5); }
+.suannn-store .nav-link { transition: color 180ms ease; }
+.suannn-store .nav-link:hover { color: var(--primary-ink); }
+.suannn-store a:focus-visible, .suannn-store button:focus-visible { outline: 2px solid var(--foreground); outline-offset: 5px; }
+.suannn-store .skip-link { position: fixed; top: 8px; left: 16px; z-index: 60; transform: translateY(-180%); padding: 12px 20px; border-radius: 12px; background: var(--foreground); color: var(--background); }
+.suannn-store .skip-link:focus { transform: translateY(0); }
+.suannn-store .suannn-hero { background: radial-gradient(ellipse at 50% 85%, var(--accent), transparent 65%); }
+.suannn-store .hero-orb { position: absolute; z-index: -1; width: 24vw; aspect-ratio: 1; border-radius: 50%; filter: blur(75px); opacity: 0.45; pointer-events: none; }
+.suannn-store .hero-orb-left { left: -12%; top: 25%; background: var(--ambient-lime); }
+.suannn-store .hero-orb-right { right: -12%; top: 5%; background: var(--ambient-mint); }
+.suannn-store .hero-still-life { height: clamp(420px, 46vw, 720px); margin-top: -8px; }
+.suannn-store .hero-still-life > img { object-position: center 72%; mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 93%, transparent 100%); mix-blend-mode: multiply; }
+.suannn-store .hero-glass-note { display: flex; align-items: center; gap: 12px; position: absolute; bottom: 56px; left: max(24px, calc((100vw - 1280px) / 2)); padding: 16px 22px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--glass-surface); box-shadow: 0 8px 35px var(--glass-shadow), inset 0 1px 0 var(--glass-border); backdrop-filter: blur(20px) saturate(1.4); }
+.suannn-store .hero-side-note { position: absolute; right: max(24px, calc((100vw - 1280px) / 2)); top: 42%; writing-mode: vertical-rl; font-size: 10px; letter-spacing: 0.18em; color: var(--muted-foreground); }
+.suannn-store .glass-label { padding: 8px 13px; border-radius: 999px; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); color: var(--foreground); font-size: 11px; }
+.suannn-store .glass-icon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); }
+.suannn-store .product-card { border-radius: 24px; }
+.suannn-store .product-card:focus-visible { outline-offset: 7px; }
+.suannn-store .suannn-brand-marquee { padding-right: 52px; }
+.suannn-store .suannn-brand-marquee.is-paused > div { animation-play-state: paused; }
+.suannn-store .collection-accordion { display: flex; gap: 16px; min-height: 450px; }
+.suannn-store .collection-panel { position: relative; flex: 1; overflow: hidden; border-radius: 28px; color: var(--photo-foreground); transition: flex 550ms cubic-bezier(0.2, 0.65, 0.3, 1); }
+.suannn-store .collection-panel.is-active { flex: 1.7; }
+.suannn-store .collection-shade { background: linear-gradient(180deg, transparent 20%, var(--photo-shade) 100%); }
+.suannn-store .collection-heading { position: absolute; left: 0; bottom: 36px; width: 100%; padding: 0 28px; text-align: left; transition: bottom 300ms ease; }
+.suannn-store .collection-panel.is-active .collection-heading { bottom: 154px; }
+.suannn-store .collection-detail { position: absolute; bottom: 32px; left: 28px; right: 28px; }
+.suannn-store .farm-section { background: radial-gradient(ellipse at 85% 25%, var(--farm-ambient), transparent 55%), var(--accent); }
+.suannn-store .farm-card { position: relative; }
+.suannn-store .farm-card-inner { position: relative; min-height: 390px; padding: 36px; border: 1px solid var(--glass-border); border-radius: 28px; background: var(--glass-surface); box-shadow: 0 5px 24px var(--glass-shadow), inset 0 1px 0 var(--glass-border); backdrop-filter: blur(24px); transform-origin: top center; }
+.suannn-store .suannn-cta { background: radial-gradient(ellipse at 50% 110%, var(--cta-ambient), transparent 70%), var(--accent); }
+.suannn-store .cta-wordmark { position: absolute; z-index: -1; bottom: -0.33em; left: 50%; transform: translateX(-50%); font-family: var(--font-family-brand); font-size: clamp(120px, 26vw, 350px); font-weight: 900; letter-spacing: -0.08em; color: var(--primary); opacity: 0.08; }
+
+@media (max-width: 767px) {
+  .suannn-store .page-width { width: calc(100% - 40px); }
+  .suannn-store .suannn-logo { font-size: 2.15rem; }
+  .suannn-store .hero-still-life { height: 370px; margin-top: 14px; }
+  .suannn-store .hero-glass-note { left: 50%; bottom: 16px; transform: translateX(-50%); padding: 12px 16px; white-space: nowrap; }
+  .suannn-store .hero-still-life > img { object-position: center 70%; }
+  .suannn-store .collection-accordion { flex-direction: column; gap: 12px; }
+  .suannn-store .collection-panel { min-height: 180px; flex: none; transition: min-height 300ms ease; }
+  .suannn-store .collection-panel.is-active { min-height: 340px; flex: none; }
+  .suannn-store .collection-heading { bottom: 28px; }
+  .suannn-store .collection-panel.is-active .collection-heading { bottom: 150px; }
+  .suannn-store .farm-card-inner { padding: 28px; min-height: auto; }
+  .suannn-store .glass-label { padding: 6px 10px; font-size: 10px; }
+  .suannn-store .glass-icon { width: 34px; height: 34px; }
+  .suannn-store .suannn-brand-marquee { --gap: 2.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suannn-store *, .suannn-store *::before, .suannn-store *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .suannn-store .product-gallery-main .swiper-wrapper,
+  .suannn-store .product-gallery-viewer-swiper .swiper-wrapper { transition-duration: 0ms !important; }
+  .suannn-store .marquee-shell > button { display: none; }
+  .suannn-store .suannn-brand-marquee { display: block; padding: 0 16px !important; }
+  .suannn-store .suannn-brand-marquee > div { flex-wrap: wrap; justify-content: center; gap: 12px 24px; }
+  .suannn-store .suannn-brand-marquee > div ~ div { display: none; }
+}
+
+
+/* Storefront catalog compositions share the global brand tokens. */
+.suannn-store .catalog-toolbar { background: var(--glass-surface); border-color: var(--border); backdrop-filter: blur(20px); }
+.suannn-store .catalog-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) {
+  .suannn-store .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .suannn-store .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
