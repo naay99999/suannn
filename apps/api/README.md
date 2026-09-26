@@ -36,7 +36,7 @@ Set `TRUSTED_PROXY_HEADERS` only when a trusted edge proxy overwrites every list
 
 After changing Better Auth plugins or schema options, run `bun --filter api auth:generate`, then create and apply a Drizzle migration with `db:generate` and `db:migrate`.
 
-Apply migrations before starting the new API. Existing identities are backfilled as customers; no migration promotes an existing user to staff.
+Apply migrations before starting the new API. In particular, apply `0008_adorable_doomsday.sql` before deploying the products API, which queries the product and product-variant tables. Existing identities are backfilled as customers; no migration promotes an existing user to staff.
 
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
@@ -88,3 +88,26 @@ All routes below use the current customer's Better Auth session cookie. An activ
 An address needs `label`, `recipientName`, `phone`, `addressLine1`, `subdistrict`, `district`, `province`, and `postalCode`. `addressLine2` may be omitted or null; `country` may be omitted or must be `"TH"`. The phone is a 9- or 10-digit domestic number and the postal code is five digits. A customer can store at most 20 addresses; creating another returns 409. Each customer has at most one shipping default and one billing default. The first address becomes both. Setting one default leaves the other unchanged. Deleting a default promotes the oldest remaining address for that default type. Address IDs must belong to the signed-in customer.
 
 Requesting an email change verifies the current password and sends an eight-digit code to the proposed address. A new request replaces the previous pending code. The code expires after ten minutes and five incorrect confirmation attempts make it unusable. Request attempts are limited to three per hour per customer/IP; confirmation attempts are limited to five per ten minutes per customer/IP, with 429 and `Retry-After` when limited. Confirmation moves the account and identity claim to the new address, marks the address verified, consumes the code, and revokes every customer session. **Sign in again with the new email after a successful confirmation.** The raw Better Auth `/api/v1/auth/change-email` route is not available.
+
+## Product catalog API
+
+Store catalog routes are public and return only published products and active variants. Product list routes accept `q`, `category` (`fresh` or `processed`), `sort` (`newest`, `price-asc`, or `price-desc`), `limit`, and `cursor`; `limit` defaults to 50 and is capped at 100. Product detail is addressed by its immutable slug. Store variant `canPurchase` mirrors the staff-controlled `salesEnabled` setting and does not indicate inventory availability.
+
+Admin routes require an active staff session with the listed catalog permission. Browser mutations also require `Origin: <ADMIN_URL>` and `Content-Type: application/json`. Product and variant deletes archive records, preserving their IDs and reserving archived SKUs. Staff list filters are `q`, `status`, `limit`, and `cursor`.
+
+| Method | Path | Permission | Success |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/store/products` | Public | Published product page |
+| `GET` | `/api/v1/store/products/{slug}` | Public | Published product detail |
+| `GET` | `/api/v1/admin/products` | `catalog:read` | Product page across statuses |
+| `GET` | `/api/v1/admin/products/{id}` | `catalog:read` | Product with active and archived variants |
+| `POST` | `/api/v1/admin/products` | `catalog:create` | Created draft product (`201`) |
+| `PATCH` | `/api/v1/admin/products/{id}` | `catalog:update` | Updated product |
+| `POST` | `/api/v1/admin/products/{id}/publish` | `catalog:publish` | Empty `200` response |
+| `POST` | `/api/v1/admin/products/{id}/unpublish` | `catalog:publish` | Empty `200` response |
+| `DELETE` | `/api/v1/admin/products/{id}` | `catalog:delete` | Empty `200` response; product archived |
+| `POST` | `/api/v1/admin/products/{id}/variants` | `catalog:create` | Created variant (`201`) |
+| `PATCH` | `/api/v1/admin/products/{id}/variants/{variantId}` | `catalog:update` | Updated active variant |
+| `DELETE` | `/api/v1/admin/products/{id}/variants/{variantId}` | `catalog:delete` | Empty `200` response; variant archived |
+
+Known product failures use `{ "code", "message" }`: unauthenticated staff requests return 401, insufficient permissions or a rejected browser origin return 403, unknown or non-public products return 404, lifecycle and uniqueness conflicts return 409, and invalid requests return 422. Create, update, publish, unpublish, and archive actions write audit records using the authenticated staff identity and request context.

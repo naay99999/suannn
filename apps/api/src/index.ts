@@ -25,6 +25,8 @@ import { StaffMfaService } from './modules/auth/mfa/service'
 import { DatabaseStaffMfaStore } from './modules/auth/mfa/repository'
 import { SystemSettingsRepository } from './modules/settings/repository'
 import { SystemSettingsService } from './modules/settings/service'
+import { ProductRepository } from './modules/products/repository'
+import { ProductService } from './modules/products/service'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -47,6 +49,7 @@ const emailSender = createResendEmailSender({
 const audit = new AuditService(new AuditRepository(database.db))
 const systemSettingsRepository = new SystemSettingsRepository(database.db, audit)
 const systemSettings = new SystemSettingsService(systemSettingsRepository)
+const products = new ProductService(new ProductRepository(database.db, audit))
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
@@ -89,6 +92,7 @@ const app = await createApp(config, {
   }),
   staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
   systemSettings,
+  products,
   staffMfaRequired,
   identityReservations: claims,
   limiter,

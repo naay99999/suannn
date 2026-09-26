@@ -27,6 +27,7 @@ import { StaffRepository } from '../../src/modules/auth/staff/repository'
 import { StaffService } from '../../src/modules/auth/staff/service'
 import { StaffMfaService } from '../../src/modules/auth/mfa/service'
 import { DatabaseStaffMfaStore } from '../../src/modules/auth/mfa/repository'
+import type { ProductService } from '../../src/modules/products/service'
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
@@ -72,6 +73,7 @@ const app = await createApp(config, {
     getSecuritySettings: async () => ({ staffMfaRequired: true }),
     setStaffMfaRequired: async (staffMfaRequired: boolean) => ({ staffMfaRequired }),
   } as never,
+  products: {} as ProductService,
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -180,6 +182,8 @@ describe('API routes', () => {
       'Customer Profile',
       'Customer Addresses',
       'Customer Email Change',
+      'Store Products',
+      'Admin Products',
       'Sign-in',
       'Account Recovery',
       'Email Verification',
@@ -311,7 +315,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(49)
+    expect(operations).toHaveLength(61)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
@@ -323,7 +327,7 @@ describe('API routes', () => {
           expect(specification.components.securitySchemes[scheme]).toBeDefined()
         }
       }
-      expect(operation.responses?.['200']).toBeDefined()
+      expect(operation.responses?.['200'] ?? operation.responses?.['201']).toBeDefined()
     }
     const references = JSON.stringify(specification).match(/#\/components\/schemas\/[^"\\]+/g) ?? []
     for (const reference of references) {
