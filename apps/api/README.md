@@ -42,6 +42,8 @@ Apply `0009_pale_typhoid_mary.sql` before deploying the inventory API. It create
 
 Apply the commerce migrations before deploying cart, checkout, order, or commerce-settings API code: `0010_glamorous_thor.sql` creates carts and the disabled commerce-settings row; `0011_brown_thunderbolt.sql` creates order, item, payment, event, operation, allocation, and outbox tables; `0012_tan_thunderbolt.sql` adds order/allocation consistency constraints; and `0013_guest_order_access_rotation.sql` supports guest-access rotation. Run `bun --filter api db:migrate` and verify it completes before starting the new API version. Keep `COMMERCE_SECRET` stable across deployments: it derives guest order access tokens used by checkout replay and the confirmation outbox.
 
+Cross-origin browser clients must use `credentials: 'include'` so the browser accepts and sends the `HttpOnly` guest-cart cookie. The cookie is scoped to `/api/v1/store` to reach cart and checkout routes. Guest order reads use `X-Order-Access-Token`; browser preflights allow it and `Idempotency-Key`. Frontend client configuration is a separate integration task.
+
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
 ## Authentication operations
