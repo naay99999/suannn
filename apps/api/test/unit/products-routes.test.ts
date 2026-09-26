@@ -22,6 +22,7 @@ const storeProduct = {
   imageUrl: 'https://example.com/coconut.jpg',
   imageAlt: 'Fresh coconut',
   minPriceSatang: 2500,
+  canPurchase: true,
 }
 
 const adminProduct = {

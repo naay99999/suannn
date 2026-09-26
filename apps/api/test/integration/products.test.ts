@@ -3,6 +3,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm'
 import { auditLog, product, productVariant, user } from '../../src/database/schema'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
+import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import type { ProductActor } from '../../src/modules/products/types'
@@ -53,7 +54,7 @@ afterAll(async () => {
 })
 
 function serviceWith(audit = new AuditService(new AuditRepository(database.db))) {
-  return new ProductService(new ProductRepository(database.db, audit))
+  return new ProductService(new ProductRepository(database.db, audit, new InventoryReadRepository(database.db)))
 }
 
 async function createProduct(service: ProductService, slug = 'fresh-tomato') {

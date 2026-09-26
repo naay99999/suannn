@@ -27,6 +27,7 @@ const productIdentity = {
 const storeProductSummary = t.Object({
   ...productIdentity,
   minPriceSatang: t.Integer({ minimum: 1, maximum: 1_000_000_000 }),
+  canPurchase: t.Boolean({ description: 'True when at least one active variant has eligible unreserved inventory in the default warehouse; reservation confirms availability.' }),
 }, { additionalProperties: false })
 
 const storeVariant = t.Object({
@@ -35,7 +36,7 @@ const storeVariant = t.Object({
   unit: t.String({ maxLength: 40 }),
   priceSatang: t.Integer({ minimum: 1, maximum: 1_000_000_000 }),
   displayOrder: t.Integer({ minimum: 0, maximum: 1_000_000 }),
-  canPurchase: t.Boolean({ description: 'Application-level eligibility hint from salesEnabled; it does not confirm stock availability.' }),
+  canPurchase: t.Boolean({ description: 'True when this variant has eligible unreserved inventory in the default warehouse; reservation confirms availability.' }),
 }, { additionalProperties: false })
 
 const storeProductDetail = t.Object({

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../../database/types'
 import { inventoryLot, product, productVariant, stockMovement, warehouse } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
@@ -153,6 +153,34 @@ function toLotDetail(row: LotReadRow, now: Date): LotDetail {
 
 export class InventoryReadRepository {
   constructor(private readonly db: Database) {}
+
+  async getSellableVariantIds(variantIds: readonly string[], now: Date): Promise<Set<string>> {
+    const requestedIds = [...new Set(variantIds)]
+    if (requestedIds.length === 0) return new Set()
+
+    const lots = await this.db.select({
+      variantId: productVariant.id,
+      expiryDate: inventoryLot.expiryDate,
+      minRemainingShelfLifeDays: productVariant.minRemainingShelfLifeDays,
+    }).from(inventoryLot)
+      .innerJoin(productVariant, eq(inventoryLot.variantId, productVariant.id))
+      .innerJoin(product, eq(productVariant.productId, product.id))
+      .innerJoin(warehouse, eq(inventoryLot.warehouseId, warehouse.id))
+      .where(and(
+        inArray(productVariant.id, requestedIds),
+        eq(warehouse.code, 'MAIN'),
+        eq(warehouse.isActive, true),
+        eq(product.status, 'published'),
+        eq(productVariant.salesEnabled, true),
+        isNull(productVariant.archivedAt),
+        isNull(inventoryLot.quarantinedAt),
+        gt(inventoryLot.onHandQuantity, inventoryLot.reservedQuantity),
+      ))
+
+    return new Set(lots
+      .filter(({ expiryDate, minRemainingShelfLifeDays }) => isLotEligible(expiryDate, minRemainingShelfLifeDays, now))
+      .map(({ variantId }) => variantId))
+  }
 
   async getVariantSummary(variantId: string, warehouseId: string): Promise<VariantStockSummary> {
     const [warehouseRow] = await this.db.select({ id: warehouse.id, isActive: warehouse.isActive })

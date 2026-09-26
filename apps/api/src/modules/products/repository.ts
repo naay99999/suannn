@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
-import { and, asc, count, desc, eq, gt, ilike, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import { product, productVariant } from '../../database/schema'
+import type { InventoryReadRepository } from '../inventory/read-repository'
 import type { AuditService } from '../audit/service'
 import { DomainError } from '../../shared/domain-error'
 import { decodeCursor, encodeCursor } from '../../shared/cursor'
@@ -73,7 +74,6 @@ const storeVariantProjection = {
   unit: productVariant.unit,
   priceSatang: productVariant.priceSatang,
   displayOrder: productVariant.displayOrder,
-  canPurchase: productVariant.salesEnabled,
 }
 
 const adminProductSummaryProjection = {
@@ -199,7 +199,11 @@ function mapUniqueViolation(error: unknown): unknown {
 }
 
 export class ProductRepository {
-  constructor(private readonly db: Database, private readonly audit: AuditService) {}
+  constructor(
+    private readonly db: Database,
+    private readonly audit: AuditService,
+    private readonly inventory: Pick<InventoryReadRepository, 'getSellableVariantIds'>,
+  ) {}
 
   async listStore(input: StoreProductQuery): Promise<CursorPage<StoreProductSummary>> {
     const query = normalizedStoreQuery(input)
@@ -259,7 +263,22 @@ export class ProductRepository {
     const hasMore = rows.length > query.limit
     const pageRows = rows.slice(0, query.limit)
     const last = pageRows.at(-1)
-    const items = pageRows.map(({ cursorSortKey: _cursorSortKey, ...summary }) => summary)
+    const pageProductIds = pageRows.map(({ id }) => id)
+    const activeVariants = pageProductIds.length > 0
+      ? await this.db.select({ id: productVariant.id, productId: productVariant.productId })
+        .from(productVariant)
+        .where(and(inArray(productVariant.productId, pageProductIds), isNull(productVariant.archivedAt)))
+      : []
+    const sellableVariantIds = activeVariants.length > 0
+      ? await this.inventory.getSellableVariantIds(activeVariants.map(({ id }) => id), new Date())
+      : new Set<string>()
+    const purchasableProductIds = new Set(activeVariants
+      .filter(({ id }) => sellableVariantIds.has(id))
+      .map(({ productId }) => productId))
+    const items = pageRows.map(({ cursorSortKey: _cursorSortKey, ...summary }) => ({
+      ...summary,
+      canPurchase: purchasableProductIds.has(summary.id),
+    }))
     return {
       items,
       nextCursor: hasMore && last ? encodeCursor({
@@ -281,14 +300,24 @@ export class ProductRepository {
       .limit(1)
     if (!row) throw new DomainError('PRODUCT_NOT_FOUND')
 
-    const variants: StoreProductVariant[] = await this.db.select(storeVariantProjection)
+    const activeVariants = await this.db.select(storeVariantProjection)
       .from(productVariant)
       .where(and(eq(productVariant.productId, row.id), isNull(productVariant.archivedAt)))
       .orderBy(asc(productVariant.displayOrder), asc(productVariant.id))
-    if (!variants.length) throw new DomainError('PRODUCT_NOT_FOUND')
+    if (!activeVariants.length) throw new DomainError('PRODUCT_NOT_FOUND')
+    const sellableVariantIds = await this.inventory.getSellableVariantIds(
+      activeVariants.map(({ id }) => id),
+      new Date(),
+    )
+    const variants: StoreProductVariant[] = activeVariants.map(({ id, ...variant }) => ({
+      id,
+      ...variant,
+      canPurchase: sellableVariantIds.has(id),
+    }))
     return {
       ...row,
       minPriceSatang: Math.min(...variants.map(({ priceSatang }) => priceSatang)),
+      canPurchase: variants.some(({ canPurchase }) => canPurchase),
       variants,
     }
   }

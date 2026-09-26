@@ -99,6 +99,7 @@ export interface StoreProductSummary {
   imageUrl: string | null
   imageAlt: string | null
   minPriceSatang: number
+  canPurchase: boolean
 }
 
 export interface StoreProductVariant {
