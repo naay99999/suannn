@@ -197,6 +197,26 @@ describe('persistent cart ownership and edits', () => {
     expect(renewed.lines[0]?.variantId).toBe(variantIds[1])
   })
 
+  it('cleans expired guest carts in bounded batches and leaves customer carts intact', async () => {
+    const service = createCartService()
+    const cleanup = new CartRepository(database.db, new InventoryReadRepository(database.db))
+    await service.setItem(customer, variantIds[0]!, 1)
+    await service.setItem(guest, variantIds[1]!, 2)
+    await service.setItem({ kind: 'guest', tokenHash: 'guest-token-hash-2' }, variantIds[2]!, 3)
+    await database.db.update(cart).set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(cart.guestTokenHash, guest.tokenHash))
+    await database.db.update(cart).set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(cart.guestTokenHash, 'guest-token-hash-2'))
+
+    expect(await cleanup.cleanupExpiredGuestCarts(1)).toBe(1)
+    expect(await database.db.select().from(cart)).toHaveLength(2)
+    expect(await database.db.select().from(cartItem)).toHaveLength(2)
+    expect(await cleanup.cleanupExpiredGuestCarts(1)).toBe(1)
+    expect(await cleanup.cleanupExpiredGuestCarts(100)).toBe(0)
+    expect(await database.db.select().from(cart).where(eq(cart.customerId, customerId))).toHaveLength(1)
+    expect(await database.db.select().from(cartItem)).toHaveLength(1)
+  })
+
   it('merges duplicate lines once, skips an archived guest line, and consumes the guest cart', async () => {
     const service = createCartService()
     const sharedVariantId = variantIds[0]!

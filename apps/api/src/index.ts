@@ -34,11 +34,13 @@ import { InventoryService } from './modules/inventory/service'
 import { startInventoryMaintenanceLoop } from './modules/inventory/maintenance'
 import { CartRepository } from './modules/cart/repository'
 import { CartService } from './modules/cart/service'
+import { startCommerceMaintenanceLoop } from './modules/commerce/maintenance'
 import { CommerceSettingsRepository } from './modules/commerce-settings/repository'
 import { CommerceSettingsService } from './modules/commerce-settings/service'
 import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
 import { OrderService } from './modules/orders/service'
+import { OrderOutbox } from './modules/orders/outbox'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -69,11 +71,13 @@ const inventory = new InventoryService(
   inventoryReservations,
 )
 const products = new ProductService(new ProductRepository(database.db, audit, inventoryReadRepository))
-const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
+const cartRepository = new CartRepository(database.db, inventoryReadRepository)
+const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
 const checkout = new CheckoutService(database.db, config.commerceSecret)
 const orders = new OrderService(database.db, config.commerceSecret)
+const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
@@ -122,6 +126,7 @@ const app = await createApp(config, {
   quote,
   checkout,
   orders,
+  commerceSettings,
   staffMfaRequired,
   identityReservations: claims,
   limiter,
@@ -152,6 +157,22 @@ const stopInventoryMaintenance = startInventoryMaintenanceLoop(
   })),
 )
 
+const stopOrderOutboxMaintenance = startCommerceMaintenanceLoop(
+  (limit) => orderOutbox.processBatch(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'ORDER_OUTBOX_WORKER_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
+const stopGuestCartCleanup = startCommerceMaintenanceLoop(
+  (limit) => cartRepository.cleanupExpiredGuestCarts(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'GUEST_CART_CLEANUP_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
 console.log(
   `API running at http://localhost:${app.server?.port}`,
 )
@@ -167,8 +188,13 @@ async function shutdown(signal: string) {
   console.info(JSON.stringify({ level: 'info', event: 'shutdown', signal }))
   clearInterval(maintenanceTimer)
   const inventoryMaintenanceDrained = stopInventoryMaintenance()
+  const commerceMaintenanceDrained = Promise.all([
+    stopOrderOutboxMaintenance(),
+    stopGuestCartCleanup(),
+  ])
   await app.stop()
   await inventoryMaintenanceDrained
+  await commerceMaintenanceDrained
   const drained = await emailQueue.drain(15_000)
   if (!drained) console.error(JSON.stringify({ level: 'error', code: 'EMAIL_SHUTDOWN_TIMEOUT' }))
   const backgroundDrained = await Promise.race([

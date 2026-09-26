@@ -74,6 +74,19 @@ const listQuery = t.Object({
 }, { additionalProperties: false })
 const idempotencyHeaders = t.Object({ 'idempotency-key': t.String({ pattern: '^[!-~]{1,128}$' }) })
 const emptyBody = t.Object({}, { additionalProperties: false })
+const fulfillmentBody = t.Object({
+  status: t.Union([t.Literal('processing'), t.Literal('packed'), t.Literal('shipped'), t.Literal('delivered')]),
+}, { additionalProperties: false })
+const collectCodBody = t.Object({
+  amountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+}, { additionalProperties: false })
+const guestAccessBody = t.Object({
+  reasonCode: t.Union([
+    t.Literal('customer_request'),
+    t.Literal('suspected_compromise'),
+    t.Literal('support_recovery'),
+  ]),
+}, { additionalProperties: false })
 
 export const ordersModels = {
   'orders.snapshot': snapshot,
@@ -84,4 +97,7 @@ export const ordersModels = {
   'orders.listQuery': listQuery,
   'orders.idempotencyHeaders': idempotencyHeaders,
   'orders.emptyBody': emptyBody,
+  'orders.fulfillmentBody': fulfillmentBody,
+  'orders.collectCodBody': collectCodBody,
+  'orders.guestAccessBody': guestAccessBody,
 }

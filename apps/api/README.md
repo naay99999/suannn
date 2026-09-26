@@ -16,7 +16,7 @@ bun --filter api db:migrate
 
 ## Configuration
 
-Copy `.env.example` to `.env.local`. Set `DATABASE_URL`, a random `BETTER_AUTH_SECRET` of at least 32 characters, `BETTER_AUTH_URL`, `STOREFRONT_URL`, `ADMIN_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`. The sender must be verified in Resend. Defaults include `HOST=0.0.0.0` and `PORT=6767`; audit retention and purge are an external operations responsibility.
+Copy `.env.example` to `.env.local`. Set `DATABASE_URL`, a random `BETTER_AUTH_SECRET` of at least 32 characters, `COMMERCE_SECRET` (at least 32 random bytes encoded as base64url), `BETTER_AUTH_URL`, `STOREFRONT_URL`, `ADMIN_URL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`. The sender must be verified in Resend. Defaults include `HOST=0.0.0.0` and `PORT=6767`; audit retention and purge are an external operations responsibility.
 
 Integration tests require a dedicated test database:
 
@@ -39,6 +39,8 @@ After changing Better Auth plugins or schema options, run `bun --filter api auth
 Apply migrations before starting the new API. In particular, apply `0008_adorable_doomsday.sql` before deploying the products API, which queries the product and product-variant tables. Existing identities are backfilled as customers; no migration promotes an existing user to staff.
 
 Apply `0009_pale_typhoid_mary.sql` before deploying the inventory API. It creates the `MAIN` warehouse, inventory lots, immutable stock movements, reservations, idempotency records, and the variant shelf-life setting used by inventory reads.
+
+Apply the commerce migrations before deploying cart, checkout, order, or commerce-settings API code: `0010_glamorous_thor.sql` creates carts and the disabled commerce-settings row; `0011_brown_thunderbolt.sql` creates order, item, payment, event, operation, allocation, and outbox tables; `0012_tan_thunderbolt.sql` adds order/allocation consistency constraints; and `0013_guest_order_access_rotation.sql` supports guest-access rotation. Run `bun --filter api db:migrate` and verify it completes before starting the new API version. Keep `COMMERCE_SECRET` stable across deployments: it derives guest order access tokens used by checkout replay and the confirmation outbox.
 
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
@@ -138,3 +140,25 @@ List endpoints use `limit` (default 50, maximum 100) and opaque `cursor` paginat
 | `POST` | `/api/v1/admin/inventory/reservations/{reservationId}/release` | `inventory:adjust` | Released reservation |
 
 The API process expires overdue reservations in bounded batches at least once per minute. Startup should run after the inventory migration is applied; graceful shutdown stops the cleanup timer and waits for an in-flight cleanup batch. Application errors use `{ "code", "message" }`: missing resources return 404, lifecycle or stock conflicts return 409, and invalid requests return 422.
+
+## Cart, checkout, orders, and commerce settings
+
+Apply the commerce migrations before deploying these endpoints. `COMMERCE_SECRET` is required at startup and must remain stable so guest order links can be verified and regenerated for checkout replays and confirmation delivery. Storefront cart cookies are `HttpOnly`, `SameSite=Lax`, scoped to the cart API, and `Secure` in production. Credentialed CORS and browser writes must use the exact configured `STOREFRONT_URL`; admin browser mutations use the exact `ADMIN_URL`. Production `CORS_ORIGINS` must include both exact origins. Send Better Auth cookies with credentials from their corresponding frontend.
+
+Checkout remains disabled until staff set a shipping fee. Configure the fee with `PUT /api/v1/admin/commerce-settings` while `checkoutEnabled` is false, then make a separate update with `checkoutEnabled: true`. The setting starts with no fee; the API does not assume free shipping. The API will reject checkout quotes while checkout is disabled or the fee is unset.
+
+| Method | Path | Permission | Body / result |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/admin/orders` | `order:read` | Paginated orders; `limit` defaults to 50 and caps at 100 |
+| `GET` | `/api/v1/admin/orders/{orderId}` | `order:read` | Order and payment detail; no guest access secret |
+| `POST` | `/api/v1/admin/orders/{orderId}/fulfillment` | `order:fulfill` | `{ "status": "processing" | "packed" | "shipped" | "delivered" }` |
+| `POST` | `/api/v1/admin/orders/{orderId}/cancel` | `order:cancel` | `{}`; cancellation before shipment |
+| `POST` | `/api/v1/admin/orders/{orderId}/collect-cod` | `order:collect` | `{ "amountSatang": 3000 }`; must equal the order total |
+| `POST` | `/api/v1/admin/orders/{orderId}/guest-access/reissue` | `order:manage-access` | `{ "reasonCode": "customer_request" }`; queues a new confirmation email |
+| `POST` | `/api/v1/admin/orders/{orderId}/guest-access/revoke` | `order:manage-access` | `{ "reasonCode": "customer_request" }` |
+| `GET` | `/api/v1/admin/commerce-settings` | `settings:read` | Shipping fee, checkout switch, and version |
+| `PUT` | `/api/v1/admin/commerce-settings` | `settings:update` | `{ "shippingFeeSatang": 500, "checkoutEnabled": false }` |
+
+Every staff route requires an active staff session with its listed permission. Fulfillment staff can collect COD; support staff can cancel and manage guest access. All admin mutations require the exact admin origin and `Content-Type: application/json`. Order commands require an `Idempotency-Key` with 1–128 visible ASCII characters; request bodies do not accept an actor ID. Guest-access reissue and revoke results never contain the access secret. Recovery sends the newly derived token only through the order-confirmation email.
+
+The API starts a bounded order-confirmation outbox worker and expired guest-cart cleanup worker. The outbox claims at most 100 due messages at a time, commits the claim before calling the configured `EmailSender`, and retries delivery failures; a delivery problem cannot roll back an order. Ensure Resend and `AUTH_EMAIL_FROM` are configured before accepting orders. Graceful shutdown stops both commerce timers and waits for any in-flight batch before closing the database.

@@ -97,6 +97,7 @@ const app = await createApp(config, {
   quote: new QuoteService(cart, commerceSettings, config.commerceSecret),
   checkout: new CheckoutService(database.db, config.commerceSecret),
   orders: new OrderService(database.db, config.commerceSecret),
+  commerceSettings,
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -207,6 +208,10 @@ describe('API routes', () => {
       'Customer Email Change',
       'Store Products',
       'Store Cart',
+      'Store Checkout',
+      'Store Orders',
+      'Admin Orders',
+      'Admin Commerce Settings',
       'Admin Products',
       'Admin Inventory',
       'Sign-in',
@@ -340,7 +345,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(79)
+    expect(operations).toHaveLength(93)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

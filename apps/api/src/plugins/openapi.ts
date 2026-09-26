@@ -20,6 +20,8 @@ export const apiTags = [
   { name: 'Store Cart', description: 'Maintain the current customer or guest cart.' },
   { name: 'Store Checkout', description: 'Quote the current cart and place cash-on-delivery orders.' },
   { name: 'Store Orders', description: 'Read and cancel orders owned by the current customer or guest token.' },
+  { name: 'Admin Orders', description: 'Staff order processing, COD collection, and guest order access recovery.' },
+  { name: 'Admin Commerce Settings', description: 'Staff controls for the shipping fee and checkout switch.' },
   { name: 'Admin Products', description: 'Staff catalog management for products and variants.' },
   { name: 'Admin Inventory', description: 'Staff inventory lots, stock movements, and reservations.' },
   { name: 'Sign-in', description: 'Sign in with email and password.' },

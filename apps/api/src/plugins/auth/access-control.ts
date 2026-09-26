@@ -7,7 +7,7 @@ export type { StaffRole } from './model'
 export const permissions = {
   catalog: ['read', 'create', 'update', 'delete', 'publish'],
   inventory: ['read', 'adjust'],
-  order: ['read', 'update-address', 'add-note', 'cancel', 'fulfill', 'refund'],
+  order: ['read', 'update-address', 'add-note', 'cancel', 'fulfill', 'refund', 'collect', 'manage-access'],
   customer: ['read'],
   staff: ['read', 'invite', 'change-role', 'suspend', 'revoke-session', 'reset-mfa'],
   audit: ['read'],
@@ -52,11 +52,11 @@ export const rolePermissions = {
   },
   fulfillment: {
     inventory: permissions.inventory,
-    order: ['read', 'update-address', 'add-note', 'fulfill'],
+    order: ['read', 'update-address', 'add-note', 'fulfill', 'collect'],
     customer: permissions.customer,
   },
   support: {
-    order: ['read', 'update-address', 'add-note', 'cancel'],
+    order: ['read', 'update-address', 'add-note', 'cancel', 'manage-access'],
     customer: permissions.customer,
   },
   customer: {},

@@ -33,6 +33,7 @@ const expectedCapabilities: Record<Role, readonly Permission[]> = {
     'order:update-address',
     'order:add-note',
     'order:fulfill',
+    'order:collect',
     'customer:read',
   ],
   support: [
@@ -40,6 +41,7 @@ const expectedCapabilities: Record<Role, readonly Permission[]> = {
     'order:update-address',
     'order:add-note',
     'order:cancel',
+    'order:manage-access',
     'customer:read',
   ],
   customer: [],

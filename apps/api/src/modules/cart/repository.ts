@@ -24,6 +24,7 @@ type CatalogRow = {
 type StoredCartLine = { variantId: string; quantity: number }
 
 const guestLifetime = sql`interval '30 days'`
+const maximumGuestCartCleanupBatch = 100
 
 function principalCondition(principal: CartPrincipal) {
   return principal.kind === 'customer'
@@ -73,6 +74,25 @@ export class CartRepository {
       cartVersion: ownerCart.version,
       lines: storedLines.map((line) => this.projectLine(line, catalog.get(line.variantId), sellableVariantIds)),
     }
+  }
+
+  async cleanupExpiredGuestCarts(limit: number): Promise<number> {
+    if (!Number.isInteger(limit) || limit < 1) throw new Error('INVALID_GUEST_CART_CLEANUP_LIMIT')
+    const batchSize = Math.min(limit, maximumGuestCartCleanupBatch)
+    return this.db.transaction(async (tx) => {
+      const expired = await tx.select({ id: cart.id })
+        .from(cart)
+        .where(lte(cart.expiresAt, sql`transaction_timestamp()`))
+        .orderBy(asc(cart.expiresAt), asc(cart.id))
+        .for('update', { skipLocked: true })
+        .limit(batchSize)
+      if (expired.length === 0) return 0
+
+      const deleted = await tx.delete(cart)
+        .where(inArray(cart.id, expired.map(({ id }) => id)))
+        .returning({ id: cart.id })
+      return deleted.length
+    })
   }
 
   async setItem(principal: CartPrincipal, variantId: string, quantity: number): Promise<void> {
