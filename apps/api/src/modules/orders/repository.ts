@@ -47,6 +47,16 @@ export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string
   }
 }
 
+export async function readGuestOrderAccessRecord(tx: DatabaseTransaction, orderId: string) {
+  const [order] = await tx.select({
+    id: commerceOrder.id,
+    customerId: commerceOrder.customerId,
+    guestAccessTokenHash: commerceOrder.guestAccessTokenHash,
+    terminalAt: commerceOrder.terminalAt,
+  }).from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
+  return order ?? null
+}
+
 export async function lockOrder(tx: DatabaseTransaction, orderId: string) {
   const [order] = await tx.select().from(commerceOrder)
     .where(eq(commerceOrder.id, orderId)).for('update').limit(1)

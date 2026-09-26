@@ -1,17 +1,23 @@
-import { timingSafeEqual } from 'node:crypto'
-import { and, eq, sql } from 'drizzle-orm'
+import { randomBytes } from 'node:crypto'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import {
   auditLog,
   commerceOrder,
   inventoryOperation,
   orderEvent,
+  orderOutbox,
   payment,
 } from '../../database/schema'
 import { assertAuditMetadata, type AuditEvent } from '../audit/model'
 import { CodPaymentProvider } from '../payments/cod'
 import { DomainError } from '../../shared/domain-error'
-import { hashGuestOrderToken } from './access'
+import {
+  deriveGuestOrderToken,
+  guestOrderTokenVerifierMatches,
+  hashGuestOrderToken,
+  isGuestOrderAccessExpired,
+} from './access'
 import { listOrderDetails, lockOrder, readOrderDetail } from './repository'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
@@ -30,6 +36,7 @@ const fulfillmentTransitions: Partial<Record<OrderStatus, OrderStatus>> = {
   packed: 'shipped',
   shipped: 'delivered',
 }
+const guestAccessReasonCodes = new Set(['customer_request', 'suspected_compromise', 'support_recovery'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -42,7 +49,7 @@ function assertOrderId(orderId: string) {
 function assertPrincipal(principal: OrderPrincipal): asserts principal is OrderPrincipal {
   if (!principal || typeof principal !== 'object') throw new DomainError('ORDER_ACCESS_DENIED')
   if (principal.kind === 'customer' && typeof principal.userId === 'string' && principal.userId.trim()) return
-  if (principal.kind === 'guest' && typeof principal.accessToken === 'string' && principal.accessToken.trim()) return
+  if (principal.kind === 'guest' && typeof principal.accessToken === 'string') return
   if (principal.kind === 'staff' && typeof principal.userId === 'string' && principal.userId.trim()) return
   throw new DomainError('ORDER_ACCESS_DENIED')
 }
@@ -64,26 +71,24 @@ function principalId(principal: OrderPrincipal, orderId: string) {
   return principal.kind === 'guest' ? orderId : principal.userId
 }
 
-function constantTimeHashMatches(expectedHash: string | null, token: string) {
-  if (!expectedHash || !/^[0-9a-f]{64}$/.test(expectedHash)) return false
-  const expected = Buffer.from(expectedHash, 'hex')
-  const candidate = Buffer.from(hashGuestOrderToken(token), 'hex')
-  return expected.length === candidate.length && timingSafeEqual(expected, candidate)
-}
-
 function assertCanAccess(order: typeof commerceOrder.$inferSelect, principal: OrderPrincipal) {
   if (principal.kind === 'staff') return
   if (principal.kind === 'customer') {
     if (order.customerId !== principal.userId) throw new DomainError('ORDER_ACCESS_DENIED')
     return
   }
-  if (order.customerId !== null || !constantTimeHashMatches(order.guestAccessTokenHash, principal.accessToken)) {
+  if (order.customerId !== null
+    || !guestOrderTokenVerifierMatches(order.guestAccessTokenHash, principal.accessToken)) {
     throw new DomainError('ORDER_NOT_FOUND')
   }
   if ((order.status === 'cancelled' || order.status === 'delivered') && order.terminalAt
-    && Date.now() > order.terminalAt.getTime() + 30 * 24 * 60 * 60 * 1000) {
+    && isGuestOrderAccessExpired(order.terminalAt, new Date())) {
     throw new DomainError('ORDER_NOT_FOUND')
   }
+}
+
+function assertGuestAccessReasonCode(reasonCode: string) {
+  if (!guestAccessReasonCodes.has(reasonCode)) throw new DomainError('INVALID_ORDER_COMMAND')
 }
 
 function actorType(principal: OrderPrincipal): 'customer' | 'guest' | 'staff' {
@@ -152,7 +157,7 @@ function inventoryActorIdFor(principal: OrderPrincipal, orderId: string) {
 export class OrderService {
   private readonly codPayment = new CodPaymentProvider()
 
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database, private readonly commerceSecret?: Uint8Array) {}
 
   async getForPrincipal(orderId: string, principal: OrderPrincipal): Promise<OrderDetail> {
     assertOrderId(orderId)
@@ -373,6 +378,124 @@ export class OrderService {
         throw new DomainError('ORDER_PAYMENT_CONFLICT')
       }
       return commandResult(orderId, await readOrderDetail(tx, orderId))
+    })
+  }
+
+  reissueGuestAccess(
+    orderId: string,
+    reasonCode: string,
+    staffActor: OrderStaffActor,
+    key: string,
+  ): Promise<OrderDetail> {
+    assertOrderId(orderId)
+    assertStaffActor(staffActor)
+    assertGuestAccessReasonCode(reasonCode)
+    const command = 'guest-access.reissue'
+    return runOrderCommand(this.db, {
+      scope: `staff:${staffActor.userId}`,
+      command,
+      idempotencyKey: key,
+      payload: { orderId, reasonCode },
+    }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
+      const order = await lockOrder(tx, orderId)
+      if (order.customerId !== null || !order.guestAccessTokenVersion) throw new DomainError('ORDER_NOT_FOUND')
+      if (!this.commerceSecret || this.commerceSecret.byteLength < 32) throw new DomainError('INVALID_ORDER_COMMAND')
+
+      const nonce = randomBytes(32).toString('base64url')
+      const token = deriveGuestOrderToken(order.id, nonce, this.commerceSecret, order.guestAccessTokenVersion)
+      await tx.update(commerceOrder).set({
+        guestAccessTokenNonce: nonce,
+        guestAccessTokenHash: hashGuestOrderToken(token),
+      }).where(eq(commerceOrder.id, orderId))
+
+      const eventId = crypto.randomUUID()
+      await tx.insert(orderEvent).values({
+        id: eventId,
+        orderId,
+        eventType: 'order.guest-access-reissued',
+        actorType: 'staff',
+        actorId: staffActor.userId,
+        reasonCode,
+        metadata: { operationId },
+      })
+      await tx.insert(orderOutbox).values({
+        orderId,
+        orderEventId: eventId,
+        eventType: 'order.guest-access-reissued',
+        templateId: 'order_confirmation',
+      })
+      const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
+      await recordOrderAudit(tx, {
+        id: crypto.randomUUID(),
+        actorUserId: staffActor.userId,
+        action: 'order.guest-access-reissued',
+        targetType: 'commerce_order',
+        targetId: orderId,
+        ...context,
+        metadata: { actorId: staffActor.userId, reasonCode, operationId },
+      })
+      const detail = await readOrderDetail(tx, orderId)
+      return commandResult(orderId, detail)
+    })
+  }
+
+  revokeGuestAccess(
+    orderId: string,
+    reasonCode: string,
+    staffActor: OrderStaffActor,
+    key: string,
+  ): Promise<OrderDetail> {
+    assertOrderId(orderId)
+    assertStaffActor(staffActor)
+    assertGuestAccessReasonCode(reasonCode)
+    const command = 'guest-access.revoke'
+    return runOrderCommand(this.db, {
+      scope: `staff:${staffActor.userId}`,
+      command,
+      idempotencyKey: key,
+      payload: { orderId, reasonCode },
+    }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
+      const order = await lockOrder(tx, orderId)
+      if (order.customerId !== null || !order.guestAccessTokenVersion) throw new DomainError('ORDER_NOT_FOUND')
+      if (!this.commerceSecret || this.commerceSecret.byteLength < 32) throw new DomainError('INVALID_ORDER_COMMAND')
+
+      const nonce = randomBytes(32).toString('base64url')
+      const inaccessibleToken = deriveGuestOrderToken(order.id, nonce, this.commerceSecret, order.guestAccessTokenVersion)
+      await tx.update(commerceOrder).set({
+        guestAccessTokenNonce: nonce,
+        guestAccessTokenHash: hashGuestOrderToken(inaccessibleToken),
+      }).where(eq(commerceOrder.id, orderId))
+      await tx.update(orderOutbox).set({
+        status: 'failed',
+        claimedAt: null,
+        nextAttemptAt: new Date('9999-12-31T00:00:00.000Z'),
+        lastErrorCode: 'ACCESS_REVOKED',
+      }).where(and(
+        eq(orderOutbox.orderId, orderId),
+        inArray(orderOutbox.status, ['pending', 'processing', 'failed']),
+      ))
+
+      await tx.insert(orderEvent).values({
+        id: crypto.randomUUID(),
+        orderId,
+        eventType: 'order.guest-access-revoked',
+        actorType: 'staff',
+        actorId: staffActor.userId,
+        reasonCode,
+        metadata: { operationId },
+      })
+      const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
+      await recordOrderAudit(tx, {
+        id: crypto.randomUUID(),
+        actorUserId: staffActor.userId,
+        action: 'order.guest-access-revoked',
+        targetType: 'commerce_order',
+        targetId: orderId,
+        ...context,
+        metadata: { actorId: staffActor.userId, reasonCode, operationId },
+      })
+      const detail = await readOrderDetail(tx, orderId)
+      return commandResult(orderId, detail)
     })
   }
 }

@@ -66,3 +66,21 @@ export function changeEmailCodeEmail(code: string): EmailContent {
     html: `<p>Use this code to confirm your new email address: <strong>${escapeHtml(code)}</strong></p><p>This code expires in 10 minutes.</p>`,
   }
 }
+
+export function orderConfirmationEmail(orderNumber: string, guestAccessToken?: string): EmailContent {
+  const safeOrderNumber = escapeHtml(orderNumber)
+  if (!guestAccessToken) {
+    return {
+      subject: `Your Suannn order ${orderNumber} is confirmed`,
+      text: `We received your order.\nOrder number: ${orderNumber}`,
+      html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p>`,
+    }
+  }
+
+  const safeToken = escapeHtml(guestAccessToken)
+  return {
+    subject: `Your Suannn order ${orderNumber} is confirmed`,
+    text: `We received your order.\nOrder number: ${orderNumber}\n\nUse this guest access token in the X-Order-Access-Token header to view or cancel your order:\n${guestAccessToken}`,
+    html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p>Use this guest access token in the <code>X-Order-Access-Token</code> header to view or cancel your order:</p><p><code>${safeToken}</code></p>`,
+  }
+}

@@ -20,6 +20,8 @@ export const auditMetadataKeys = {
   'order.cancelled': ['actorType', 'principalId', 'operationId', 'restoredQuantity', 'totalSatang'],
   'order.fulfillment-advanced': ['actorId', 'fromStatus', 'toStatus', 'operationId'],
   'order.cod-collected': ['actorId', 'paymentId', 'amountSatang', 'operationId'],
+  'order.guest-access-reissued': ['actorId', 'reasonCode', 'operationId'],
+  'order.guest-access-revoked': ['actorId', 'reasonCode', 'operationId'],
   'product.created': ['fields'],
   'product.updated': ['fields'],
   'product.published': [],

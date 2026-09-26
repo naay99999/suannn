@@ -8,6 +8,7 @@ export type EmailTemplate =
   | 'staff-invitation'
   | 'staff-mfa-recovery'
   | 'change-email'
+  | 'order-confirmation'
 
 export interface EmailMessage extends EmailContent {
   to: string
