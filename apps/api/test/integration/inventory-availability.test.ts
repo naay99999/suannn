@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import {
   auditLog,
   inventoryLot,
@@ -15,6 +15,7 @@ import {
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
+import { bangkokDate } from '../../src/modules/inventory/policy'
 import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
@@ -148,6 +149,29 @@ function futureDate(days: number) {
   return today.toISOString().slice(0, 10)
 }
 
+function dateAfterBangkokDays(now: Date, days: number) {
+  const date = new Date(`${bangkokDate(now)}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+function setSystemTime(time: Date) {
+  const SystemDate = globalThis.Date
+  class FixedDate extends SystemDate {
+    constructor(value?: string | number | Date) {
+      if (value === undefined) super(time.getTime())
+      else if (value instanceof SystemDate) super(value.getTime())
+      else super(value)
+    }
+
+    static now() {
+      return time.getTime()
+    }
+  }
+  globalThis.Date = FixedDate as DateConstructor
+  return () => { globalThis.Date = SystemDate }
+}
+
 describe('storefront inventory availability', () => {
   it('reports empty stock and manually disabled sales as unavailable', async () => {
     const empty = await seedCatalog()
@@ -245,6 +269,23 @@ describe('storefront inventory availability', () => {
     expect((await service.getStoreBySlug(catalog.slug)).canPurchase).toBe(true)
     const [storedLot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, lotId))
     expect(storedLot?.reservedQuantity).toBe(0)
+  })
+
+  it('uses PostgreSQL transaction time at the Bangkok expiry boundary', async () => {
+    const catalog = await seedCatalog()
+    const [{ now: rawDatabaseNow }] = await database.db.select({ now: sql<Date>`transaction_timestamp()` })
+      .from(warehouse).limit(1)
+    const databaseNow = rawDatabaseNow instanceof Date ? rawDatabaseNow : new Date(String(rawDatabaseNow))
+    await seedLot(catalog.variantId, { expiryDate: dateAfterBangkokDays(databaseNow, 1) })
+    const applicationClock = new Date(databaseNow.getTime() + 2 * 86_400_000)
+    const restoreSystemTime = setSystemTime(applicationClock)
+
+    try {
+      const detail = await createProductService().getStoreBySlug(catalog.slug)
+      expect(detail.variants[0]?.canPurchase).toBe(true)
+    } finally {
+      restoreSystemTime()
+    }
   })
 
   it('passes one page of active variants to one batched availability read', async () => {

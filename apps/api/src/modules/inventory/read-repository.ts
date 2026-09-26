@@ -59,7 +59,7 @@ const lotReadProjection = {
   warehouseActive: warehouse.isActive,
 }
 
-function nowFromDatabase(value: Date) {
+function nowFromDatabase(value: Date | string) {
   return value instanceof Date ? value : new Date(value)
 }
 
@@ -154,7 +154,7 @@ function toLotDetail(row: LotReadRow, now: Date): LotDetail {
 export class InventoryReadRepository {
   constructor(private readonly db: Database) {}
 
-  async getSellableVariantIds(variantIds: readonly string[], now: Date): Promise<Set<string>> {
+  async getSellableVariantIds(variantIds: readonly string[]): Promise<Set<string>> {
     const requestedIds = [...new Set(variantIds)]
     if (requestedIds.length === 0) return new Set()
 
@@ -162,6 +162,7 @@ export class InventoryReadRepository {
       variantId: productVariant.id,
       expiryDate: inventoryLot.expiryDate,
       minRemainingShelfLifeDays: productVariant.minRemainingShelfLifeDays,
+      now: sql<Date>`transaction_timestamp()`,
     }).from(inventoryLot)
       .innerJoin(productVariant, eq(inventoryLot.variantId, productVariant.id))
       .innerJoin(product, eq(productVariant.productId, product.id))
@@ -178,7 +179,8 @@ export class InventoryReadRepository {
       ))
 
     return new Set(lots
-      .filter(({ expiryDate, minRemainingShelfLifeDays }) => isLotEligible(expiryDate, minRemainingShelfLifeDays, now))
+      .filter(({ expiryDate, minRemainingShelfLifeDays, now }) =>
+        isLotEligible(expiryDate, minRemainingShelfLifeDays, nowFromDatabase(now)))
       .map(({ variantId }) => variantId))
   }
 

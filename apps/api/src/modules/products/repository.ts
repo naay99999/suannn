@@ -270,7 +270,7 @@ export class ProductRepository {
         .where(and(inArray(productVariant.productId, pageProductIds), isNull(productVariant.archivedAt)))
       : []
     const sellableVariantIds = activeVariants.length > 0
-      ? await this.inventory.getSellableVariantIds(activeVariants.map(({ id }) => id), new Date())
+      ? await this.inventory.getSellableVariantIds(activeVariants.map(({ id }) => id))
       : new Set<string>()
     const purchasableProductIds = new Set(activeVariants
       .filter(({ id }) => sellableVariantIds.has(id))
@@ -307,7 +307,6 @@ export class ProductRepository {
     if (!activeVariants.length) throw new DomainError('PRODUCT_NOT_FOUND')
     const sellableVariantIds = await this.inventory.getSellableVariantIds(
       activeVariants.map(({ id }) => id),
-      new Date(),
     )
     const variants: StoreProductVariant[] = activeVariants.map(({ id, ...variant }) => ({
       id,
