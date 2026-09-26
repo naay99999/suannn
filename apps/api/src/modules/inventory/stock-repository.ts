@@ -15,6 +15,7 @@ import type {
   ReceiveLotInput,
   WriteOffInput,
 } from './types'
+import { inventoryActorId } from './types'
 
 const lotProjection = {
   id: inventoryLot.id,
@@ -219,7 +220,7 @@ export class InventoryStockRepository {
           balanceAfter: updated.onHandQuantity,
           type: 'write_off',
           reasonCode: normalized.reason,
-          actorId: context.actor.userId ?? 'system',
+          actorId: inventoryActorId(context.actor),
         })
         await this.recordAdjustmentAudit(
           this.audit,
@@ -280,7 +281,7 @@ export class InventoryStockRepository {
             balanceAfter: updated.onHandQuantity,
             type: 'count_adjustment',
             reasonCode: normalized.reason,
-            actorId: context.actor.userId ?? 'system',
+            actorId: inventoryActorId(context.actor),
           })
         }
         await this.recordAdjustmentAudit(
@@ -435,7 +436,7 @@ export class InventoryStockRepository {
       balanceAfter: input.quantity,
       type: 'receipt',
       reasonCode: 'receipt',
-      actorId: actor.userId ?? 'system',
+      actorId: inventoryActorId(actor),
     })
     await recordReceiptAudit(this.audit, tx, actor, lotId, variant.id, warehouseRow.id, input.quantity)
 

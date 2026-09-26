@@ -11,7 +11,7 @@ const maximumSatang = Number.MAX_SAFE_INTEGER
 const quotePurpose = 'suannn:checkout-quote:v1'
 const quoteVersion = 1 as const
 
-function ownerFor(principal: CartPrincipal, secret: Uint8Array): SignedCheckoutQuotePayload['owner'] {
+export function checkoutQuoteOwner(principal: CartPrincipal, secret: Uint8Array): SignedCheckoutQuotePayload['owner'] {
   if (principal?.kind === 'customer' && typeof principal.userId === 'string' && principal.userId.trim()) {
     return { kind: 'customer', id: principal.userId }
   }
@@ -60,7 +60,7 @@ function sign(payload: string, secret: Uint8Array) {
   return createHmac('sha256', deriveSigningKey(secret)).update(payload).digest()
 }
 
-function canonicalPayload(payload: SignedCheckoutQuotePayload) {
+export function canonicalizeCheckoutQuote(payload: SignedCheckoutQuotePayload) {
   return JSON.stringify({
     version: payload.version,
     owner: { kind: payload.owner.kind, id: payload.owner.id },
@@ -72,6 +72,23 @@ function canonicalPayload(payload: SignedCheckoutQuotePayload) {
       .map(({ variantId, quantity, unitPriceSatang }) => ({ variantId, quantity, unitPriceSatang })),
     expiresAt: payload.expiresAt,
   })
+}
+
+export function decodeSignedCheckoutQuote(token: string, secret: Uint8Array): SignedCheckoutQuotePayload | null {
+  if (typeof token !== 'string' || !(secret instanceof Uint8Array) || secret.byteLength < 32) return null
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const encodedPayload = decodeBase64Url(parts[0]!)
+  const suppliedSignature = decodeBase64Url(parts[1]!)
+  if (!encodedPayload || !suppliedSignature || suppliedSignature.length !== 32) return null
+  const payloadText = encodedPayload.toString('utf8')
+  const expectedSignature = sign(payloadText, secret)
+  if (!timingSafeEqual(suppliedSignature, expectedSignature)) return null
+  try {
+    return asPayload(JSON.parse(payloadText))
+  } catch {
+    return null
+  }
 }
 
 function safeAdd(left: number, right: number) {
@@ -94,7 +111,7 @@ export class QuoteService {
   }
 
   async create(principal: CartPrincipal, now: Date): Promise<CheckoutQuote> {
-    const owner = ownerFor(principal, this.secret)
+    const owner = checkoutQuoteOwner(principal, this.secret)
     if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new DomainError('QUOTE_STALE')
 
     const settings = await this.settings.get()
@@ -134,7 +151,7 @@ export class QuoteService {
   }
 
   async verify(inputToken: string, principal: CartPrincipal, now: Date): Promise<CheckoutQuote> {
-    const owner = ownerFor(principal, this.secret)
+    const owner = checkoutQuoteOwner(principal, this.secret)
     if (typeof inputToken !== 'string' || !(now instanceof Date) || !Number.isFinite(now.getTime())) {
       throw new DomainError('QUOTE_STALE')
     }
@@ -156,7 +173,7 @@ export class QuoteService {
       throw error
     }
     const currentPayload = this.decodeToken(current.quoteToken)
-    if (!currentPayload || canonicalPayload(payload) !== canonicalPayload(currentPayload)) {
+    if (!currentPayload || canonicalizeCheckoutQuote(payload) !== canonicalizeCheckoutQuote(currentPayload)) {
       throw new DomainError('QUOTE_STALE')
     }
 
@@ -199,23 +216,11 @@ export class QuoteService {
   }
 
   private encodeToken(payload: SignedCheckoutQuotePayload) {
-    const canonical = canonicalPayload(payload)
+    const canonical = canonicalizeCheckoutQuote(payload)
     return `${encodeBase64Url(canonical)}.${encodeBase64Url(sign(canonical, this.secret))}`
   }
 
   private decodeToken(token: string): SignedCheckoutQuotePayload | null {
-    const parts = token.split('.')
-    if (parts.length !== 2) return null
-    const encodedPayload = decodeBase64Url(parts[0]!)
-    const suppliedSignature = decodeBase64Url(parts[1]!)
-    if (!encodedPayload || !suppliedSignature || suppliedSignature.length !== 32) return null
-    const payloadText = encodedPayload.toString('utf8')
-    const expectedSignature = sign(payloadText, this.secret)
-    if (!timingSafeEqual(suppliedSignature, expectedSignature)) return null
-    try {
-      return asPayload(JSON.parse(payloadText))
-    } catch {
-      return null
-    }
+    return decodeSignedCheckoutQuote(token, this.secret)
   }
 }

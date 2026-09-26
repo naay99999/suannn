@@ -25,6 +25,7 @@ function inventoryCommandContext(
 ): CommandContext {
   return {
     actor: {
+      kind: 'staff',
       userId,
       auditContext: {
         requestId: requestContext.requestId,

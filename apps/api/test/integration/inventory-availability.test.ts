@@ -21,12 +21,12 @@ import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
-import type { ProductActor } from '../../src/modules/products/types'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 
 const database = createTestDatabase()
 const actorId = 'inventory-availability-staff'
-const actor: ProductActor = {
+const actor = {
+  kind: 'staff' as const,
   userId: actorId,
   auditContext: { requestId: 'inventory-availability-test', ipAddress: '127.0.0.1', userAgent: 'test' },
 }

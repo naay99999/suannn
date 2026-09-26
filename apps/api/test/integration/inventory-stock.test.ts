@@ -26,6 +26,7 @@ import { testEnv } from '../fixtures'
 const database = createTestDatabase()
 const actorId = 'inventory-stock-staff'
 const actor: CommandContext['actor'] = {
+  kind: 'staff',
   userId: actorId,
   auditContext: { requestId: 'inventory-stock-test', ipAddress: '127.0.0.1', userAgent: 'test' },
 }

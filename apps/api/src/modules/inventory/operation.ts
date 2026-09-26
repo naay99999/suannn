@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import { inventoryOperation } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
-import type { InventoryActor } from './types'
+import { inventoryActorId, type InventoryActor } from './types'
 
 export interface InventoryCommandResult<T> {
   status: number
@@ -83,7 +83,7 @@ export async function runInventoryCommand<T>(
       requestHash,
       httpStatus: 200,
       resultPayload: { body: null },
-      actorId: actor.userId ?? 'system',
+      actorId: inventoryActorId(actor),
     }).onConflictDoNothing({ target: [inventoryOperation.scope, inventoryOperation.idempotencyKey] })
       .returning({ id: inventoryOperation.id })
 

@@ -32,6 +32,10 @@ export type DomainErrorCode =
   | 'QUOTE_STALE'
   | 'CHECKOUT_TOTAL_OUT_OF_RANGE'
   | 'INVALID_PAYMENT_AMOUNT'
+  | 'INVALID_ORDER_COMMAND'
+  | 'INVALID_ORDER_INPUT'
+  | 'ORDER_OPERATION_CONFLICT'
+  | 'ORDER_ADDRESS_NOT_FOUND'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -67,6 +71,10 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   QUOTE_STALE: { status: 409, message: 'Checkout quote is expired or no longer current' },
   CHECKOUT_TOTAL_OUT_OF_RANGE: { status: 422, message: 'Checkout total is outside the supported range' },
   INVALID_PAYMENT_AMOUNT: { status: 422, message: 'Payment amount is invalid' },
+  INVALID_ORDER_COMMAND: { status: 422, message: 'Order command is invalid' },
+  INVALID_ORDER_INPUT: { status: 422, message: 'Order request is invalid' },
+  ORDER_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
+  ORDER_ADDRESS_NOT_FOUND: { status: 404, message: 'Saved address not found' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

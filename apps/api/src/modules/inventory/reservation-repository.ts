@@ -22,6 +22,7 @@ import type {
   ReservationDetail,
   ReserveInput,
 } from './types'
+import { inventoryActorId } from './types'
 
 const lotProjection = {
   id: inventoryLot.id,
@@ -109,6 +110,17 @@ function reservationDetail(
       .sort((left, right) => left.variantId.localeCompare(right.variantId)
         || left.lotId.localeCompare(right.lotId)),
   }
+}
+
+export async function getReservationAllocationRows(tx: DatabaseTransaction, reservationId: string) {
+  return tx.select({
+    id: inventoryReservationAllocation.id,
+    variantId: inventoryReservationAllocation.variantId,
+    lotId: inventoryReservationAllocation.lotId,
+    quantity: inventoryReservationAllocation.quantity,
+  }).from(inventoryReservationAllocation)
+    .where(eq(inventoryReservationAllocation.reservationId, reservationId))
+    .orderBy(asc(inventoryReservationAllocation.variantId), asc(inventoryReservationAllocation.lotId), asc(inventoryReservationAllocation.id))
 }
 
 function asLotDetail(context: LotContext, lot = context.lot): LotDetail {
@@ -266,6 +278,7 @@ async function reserveInTransactionResult(
   input: ReserveInput,
   actor: InventoryActor,
   operationId: string,
+  beforeReserve?: () => Promise<void>,
 ): Promise<ReservationDetail | ReservationConflict> {
   const normalized = normalizeReserveInput(input)
   const now = await transactionNow(tx)
@@ -323,6 +336,7 @@ async function reserveInTransactionResult(
   const lockedLots = await tx.select(lotProjection).from(inventoryLot)
     .where(lotFilter).orderBy(asc(inventoryLot.id)).for('update')
   const lots = new Map(lockedLots.map((lot) => [lot.id, lot]))
+  await beforeReserve?.()
   await expireReservations(tx, activeExpiredIds, currentExpiredAllocations, lots, actor, now)
 
   const planned: ReservationAllocation[] = []
@@ -361,7 +375,7 @@ async function reserveInTransactionResult(
     status: 'active',
     createdAt: now,
     expiresAt,
-    actorId: actor.userId ?? 'system',
+    actorId: inventoryActorId(actor),
   }).returning()
   if (!reservation) throw new DomainError('INVENTORY_STOCK_CONFLICT')
 
@@ -409,8 +423,9 @@ export async function reserveInTransaction(
   input: ReserveInput,
   actor: InventoryActor,
   operationId: string,
+  beforeReserve?: () => Promise<void>,
 ): Promise<ReservationDetail> {
-  const reservation = await reserveInTransactionResult(tx, input, actor, operationId)
+  const reservation = await reserveInTransactionResult(tx, input, actor, operationId, beforeReserve)
   if ('code' in reservation) throw new DomainError(reservation.code)
   return reservation
 }
@@ -556,7 +571,7 @@ export async function confirmInTransaction(
       type: 'reservation_confirm',
       reasonCode: 'reservation_confirmed',
       occurredAt: now,
-      actorId: actor.userId ?? 'system',
+      actorId: inventoryActorId(actor),
     })
   }
 
@@ -667,6 +682,7 @@ export class InventoryReservationRepository {
     if (!Number.isInteger(limit) || limit < 1) throw new DomainError('INVALID_INVENTORY_COMMAND')
     const batchLimit = Math.min(limit, 100)
     const actor: InventoryActor = {
+      kind: 'system',
       userId: null,
       auditContext: { requestId: 'inventory-expiry-maintenance', ipAddress: null, userAgent: null },
     }

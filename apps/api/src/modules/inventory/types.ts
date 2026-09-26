@@ -1,9 +1,19 @@
 import type { AuditContext } from '../audit/model'
 import type { CursorPage } from '../products/types'
 
-export interface InventoryActor {
-  userId: string | null
+interface InventoryActorBase {
   auditContext: AuditContext
+}
+
+export type InventoryActor = InventoryActorBase & (
+  | { kind: 'customer'; userId: string }
+  | { kind: 'staff'; userId: string }
+  | { kind: 'guest'; userId: null; orderPrincipalId: string }
+  | { kind: 'system'; userId: null }
+)
+
+export function inventoryActorId(actor: InventoryActor): string {
+  return actor.kind === 'guest' ? actor.orderPrincipalId : actor.userId ?? 'system'
 }
 
 export interface CommandContext {

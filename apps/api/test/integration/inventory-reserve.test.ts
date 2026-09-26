@@ -23,6 +23,7 @@ import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDat
 const database = createTestDatabase()
 const actorId = 'inventory-reservation-staff'
 const actor: CommandContext['actor'] = {
+  kind: 'staff',
   userId: actorId,
   auditContext: { requestId: 'inventory-reservation-test', ipAddress: '127.0.0.1', userAgent: 'test' },
 }
