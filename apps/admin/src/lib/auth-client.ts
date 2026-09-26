@@ -143,3 +143,7 @@ export async function beginTotp(password: string) {
 export async function verifyEnrollment(code: string) {
   return dataOrError(await api.auth.staff.onboarding.totp.verify.post({ code }))
 }
+
+export async function regenerateBackupCodes(password: string) {
+  return dataOrError(await api.auth.staff.mfa['backup-codes'].regenerate.post({ password }))
+}

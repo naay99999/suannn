@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@workspace/ui/components/tabs'
+import { StaffManagement } from './_components/staff-management'
 
 export function Component() {
   return (
@@ -9,7 +10,7 @@ export function Component() {
           <TabsTrigger value="admin-users">Admin users</TabsTrigger>
           <TabsTrigger value="feature-controls">Feature controls</TabsTrigger>
         </TabsList>
-        <TabsContent value="admin-users" />
+        <TabsContent value="admin-users"><StaffManagement /></TabsContent>
         <TabsContent value="feature-controls" />
       </Tabs>
     </section>

@@ -1,40 +1,49 @@
-# Repository Guidelines
+# API Repository Guidelines
 
-## Project Structure & Module Organization
+## Structure and Responsibilities
 
-This package is the Bun/Elysia HTTP API. Application composition and the exported `App` type live in `src/app.ts`; `src/index.ts` loads configuration and starts the server. Keep features in `src/modules/<feature>/`, cross-cutting Elysia plugins in `src/plugins/`, configuration in `src/config/`, and database setup and Drizzle schemas in `src/database/`. Shared utilities such as logging belong in `src/shared/`.
+This package is the Bun/Elysia HTTP API. `src/app.ts` composes plugins and feature modules and exports the `App` type consumed by Eden Treaty clients. `src/index.ts` loads configuration, creates dependencies, starts the server, and handles shutdown. Keep feature code in `src/modules/<feature>/`, cross-cutting Elysia behavior in `src/plugins/`, configuration in `src/config/`, Drizzle setup and schemas in `src/database/`, and small shared utilities in `src/shared/`.
 
-Use a feature-based Elysia structure rather than introducing traditional controller classes. An Elysia instance in `index.ts` is the controller and owns routes, HTTP context, validation, and response contracts. Keep business rules in `service.ts`, database access in `repository.ts` when needed, and Elysia/HTTP schemas in `model.ts` (these are not Drizzle database models). The normal dependency direction is `index.ts -> service.ts -> repository.ts`; `index.ts` also references `model.ts`. Services and repositories should not receive or depend on the full Elysia `Context`.
+Organize related features under a bounded context when useful, as in `src/modules/auth/{customer,staff,invitations,mfa}/`. Keep independent supporting modules at the top level. Add a repository only when a feature needs persistence. Avoid growing `app.ts` with business logic or combining unrelated auth flows in one service.
 
-Group related features under a bounded-context directory when useful, for example `src/modules/auth/{customer,staff,invitations,mfa}/`. Keep independent supporting modules such as `audit`, `email`, `identity-claims`, `rate-limit`, and `system` at the top level. Do not create a repository for a feature that has no persistence concerns, and do not combine separate auth features into one large service.
+Within a feature, `index.ts` defines the Elysia routes, HTTP context, validation, authorization, and response contracts. `model.ts` defines HTTP schemas; these are distinct from Drizzle database schemas. `service.ts` owns business rules and orchestration, while `repository.ts` owns database access. The usual dependency direction is route → service → repository. Pass only the values a service needs, not the full Elysia `Context`. Prefer the existing Elysia module and plugin pattern over controller classes.
 
-Tests live in `test/` and use `*.test.ts` names (for example, `test/api.test.ts`). Drizzle migration output is committed under `drizzle/`.
+## HTTP Contracts and Cross-Cutting Behavior
 
-## Build, Test, and Development Commands
+- Put routes under the established `/api/v1` paths. Define request and response schemas, expected status codes, and OpenAPI details alongside each route. Reuse shared HTTP models where appropriate. Keep the `App` export accurate so clients infer contracts rather than duplicate request or response types.
+- Use the existing auth macros for session, customer verification, staff access, and permissions. Apply the browser mutation guard to cookie-authenticated writes and the application rate limiter to sensitive operations. Do not bypass the Better Auth HTTP allowlist when adding auth behavior.
+- Map application errors through the shared error handling policy. Application routes return safe `{ code, message }` errors; Better Auth routes retain their documented response format. Never send internal exceptions, stack traces, secrets, or sensitive account details to clients.
+- Keep request IDs and structured request/error logging through the shared plugins. Avoid logging credentials, tokens, cookies, raw request bodies, or sensitive URL values. Use the request context for audit metadata instead of reading untrusted forwarding headers directly.
+- Use exact, configured frontend origins for credentialed CORS and browser mutation checks. Add a new origin deliberately in configuration and the related auth policy; do not relax origin or CSRF checks to make a client work.
 
-Run these from this directory, or prefix them from the workspace root with `bun --filter api`:
+## Data, Authentication, and Migrations
+
+Keep persistence logic in repositories and business decisions in services. For security-sensitive mutations, record the audit event in the same domain transaction as the change when that flow requires atomicity. Preserve the existing identity reservation, session, permission, and rate-limit policies when extending authentication flows.
+
+Edit Drizzle schemas in `src/database/schema/` and commit generated migrations under `drizzle/`. After changing Better Auth plugins or schema options, run `bun run auth:generate`, inspect the generated auth schema, then run `bun run db:generate` and review the migration. Apply pending migrations with `bun run db:migrate` before starting an API version that depends on them. Never hand-edit an applied migration or silently change the database contract.
+
+## Commands and Verification
+
+Run commands from `apps/api/`, or use `bun --filter api <script>` from the workspace root:
 
 ```bash
-bun run dev            # start the API with file watching
-bun run test           # run Bun's test suite
-bun run typecheck      # run TypeScript without emitting files
-bun run lint           # lint src/ and test/ with Oxlint
-bun run db:generate    # create Drizzle migrations from schema changes
-bun run db:migrate     # apply pending migrations
+bun run dev
+bun run typecheck
+bun run lint
+bun run test:unit
+bun run test:integration
+bun run test                # unit, then integration
+bun run auth:generate
+bun run db:generate
+bun run db:migrate
 ```
 
-Run `bun run auth:generate` after changing Better Auth plugins or schema options, then generate and apply the corresponding migration.
+Use Bun's test runner and keep tests under `test/unit/` or `test/integration/` with `*.test.ts` names. Cover route contracts, validation and error responses, authorization boundaries, service rules, and persistence behavior affected by a change. Prefer unit tests for isolated behavior and integration tests for database-backed flows. Run `typecheck`, `lint`, and the relevant test suites for API changes.
 
-## Coding Style & Naming Conventions
+Integration tests require a dedicated PostgreSQL `TEST_DATABASE_URL`. They reset the `public` and `drizzle` schemas and reject a database whose actual name does not end in `_test`. Check the target before running `test:integration` or `test`; never point either command at a development or production database.
 
-Write strict TypeScript using two-space indentation, single quotes, no semicolons, and trailing commas where appropriate. Use camelCase for functions and variables, PascalCase for types, and lowercase feature directories. Keep routes and their response validation within their module. Any API composition change must preserve the `App` export in `src/app.ts` so Eden Treaty clients retain inferred types.
+## Configuration and Review
 
-Prefer small Elysia plugins and modules over adding unrelated logic to `app.ts`. Return the established `{ code, message }` error shape; never expose internal errors to clients.
+Use `.env.example` as the configuration reference and keep local values in `.env.local`; never commit secrets. Production CORS origins and trusted proxy headers must be explicit. Trust proxy headers only when the ingress overwrites them. Call out new environment variables, migrations, and deployment ordering in the pull request.
 
-## Testing Guidelines
-
-Use Bun's built-in test runner and keep unit or route coverage beside related test concerns in `test/`. Test public behavior, configuration failures, error responses, and authentication boundaries. Run `bun run test`, `bun run typecheck`, and `bun run lint` before submitting changes.
-
-## Configuration, Commits & Pull Requests
-
-Copy `.env.example` to `.env.local`; never commit secrets. Required production CORS origins must be exact and are also Better Auth trusted origins. Use concise imperative commits, such as `Add health check route`. Pull requests should describe user-visible behavior, link the issue when relevant, list validation run, and call out schema or environment-variable changes.
+Write strict TypeScript with two-space indentation, single quotes, no semicolons, and trailing commas where appropriate. Use camelCase for functions and variables, PascalCase for types, and lowercase feature directories. Keep commits focused with short imperative subjects. Pull requests should describe user-visible behavior, list validation run, link the issue when relevant, and identify schema or configuration changes.

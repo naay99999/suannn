@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { AdminRouteError } from './pages/error-page'
 import { AdminLayout } from './pages/layout'
 import { ActiveStaffGate, OnboardingStaffGate } from './components/auth/auth-gate'
@@ -32,6 +32,7 @@ export const router = createBrowserRouter([
   {
     Component: ActiveStaffGate,
     children: [
+      { index: true, element: <Navigate to="/dashboard" replace /> },
       {
         Component: AdminLayout,
         errorElement: <AdminRouteError />,

@@ -19,12 +19,20 @@ const activeSession = {
   staff: { role: 'support' as const, permissions: ['order:read'] },
 }
 
-function createHarness(current: typeof restrictedSession | typeof activeSession | null) {
+function createHarness(current: typeof restrictedSession | typeof activeSession | null, totpEnrollmentVerified = false) {
   const calls: Array<{ method: string; input: unknown }> = []
   const activations: unknown[] = []
+  const sessionHeaders: Headers[] = []
   const auth = {
     api: {
-      getSession: async () => current,
+      getSession: async (input: { headers: Headers }) => {
+        sessionHeaders.push(new Headers(input.headers))
+        if (sessionHeaders.length === 1 || !current) return current
+        return {
+          ...current,
+          session: { ...current.session, id: 'rotated-session' },
+        }
+      },
       enableTwoFactor: async (input: unknown) => {
         calls.push({ method: 'enable', input })
         return { method: 'totp', totpURI: 'otpauth://totp/Suannn', backupCodes: ['one', 'two'] }
@@ -32,8 +40,8 @@ function createHarness(current: typeof restrictedSession | typeof activeSession 
       verifyTOTP: async (input: unknown) => {
         calls.push({ method: 'verify', input })
         return {
-          headers: new Headers({ 'set-cookie': 'session=token' }),
-          response: { token: 'token', user: restrictedSession.user },
+          headers: new Headers({ 'set-cookie': 'better-auth.session_token=new-cookie; Path=/' }),
+          response: { token: 'deleted-session-token', user: restrictedSession.user },
         }
       },
       generateBackupCodes: async (input: unknown) => {
@@ -47,13 +55,16 @@ function createHarness(current: typeof restrictedSession | typeof activeSession 
     },
   } as unknown as Auth
   const store = {
+    async hasVerifiedEnrollment() {
+      return totpEnrollmentVerified
+    },
     async activate(
       userId: string,
-      sessionToken: string,
+      sessionId: string,
       activatedAt: Date,
       absoluteExpiresAt: Date,
     ) {
-      activations.push({ userId, sessionToken, activatedAt, absoluteExpiresAt })
+      activations.push({ userId, sessionId, activatedAt, absoluteExpiresAt })
     },
     async resetForRecovery() {
       return { email: 'owner@example.com' }
@@ -65,7 +76,7 @@ function createHarness(current: typeof restrictedSession | typeof activeSession 
     now: () => now,
   })
 
-  return { service, auth, store, calls, activations }
+  return { service, auth, store, calls, activations, sessionHeaders }
 }
 
 describe('staff MFA lifecycle', () => {
@@ -86,9 +97,20 @@ describe('staff MFA lifecycle', () => {
     }
   })
 
+  it('reports when an incomplete staff account already has a verified authenticator', async () => {
+    const headers = new Headers({ cookie: 'session=value' })
+    const { service } = createHarness(restrictedSession, true)
+
+    await expect(service.onboardingState(headers)).resolves.toEqual({
+      required: true,
+      userId: 'staff-1',
+      totpEnrollmentVerified: true,
+    })
+  })
+
   it('forces trustDevice false and activates an eight-hour non-sliding window', async () => {
     const headers = new Headers({ cookie: 'session=value' })
-    const { service, calls, activations } = createHarness(restrictedSession)
+    const { service, calls, activations, sessionHeaders } = createHarness(restrictedSession)
 
     await service.verifyEnrollment(headers, '123456', {
       requestId: 'request-1', ipAddress: '127.0.0.1', userAgent: null,
@@ -100,10 +122,11 @@ describe('staff MFA lifecycle', () => {
     })
     expect(activations).toEqual([{
       userId: 'staff-1',
-      sessionToken: 'token',
+      sessionId: 'rotated-session',
       activatedAt: now,
       absoluteExpiresAt: new Date('2026-09-22T18:00:00.000Z'),
     }])
+    expect(sessionHeaders[1]?.get('cookie')).toContain('better-auth.session_token=new-cookie')
   })
 
   it('regenerates backup codes only for active staff and never views stored codes', async () => {

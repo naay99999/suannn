@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { NotificationIcon, PaintBoardIcon, SettingsIcon, UserListIcon } from '@hugeicons/core-free-icons'
+import { useLocation, useNavigate } from 'react-router'
 import { Button } from '@workspace/ui/components/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Checkbox } from '@workspace/ui/components/checkbox'
@@ -8,20 +8,15 @@ import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTit
 import { Input } from '@workspace/ui/components/input'
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider } from '@workspace/ui/components/sidebar'
 import { cn } from '@workspace/ui/lib/utils'
+import { SecuritySettings } from './security-settings'
+import { getSettingsSectionFromHash, settingsSections } from './settings-sections'
 
-const sections = [
-  { id: 'profile', label: 'Profile', icon: UserListIcon },
-  { id: 'account', label: 'Account', icon: SettingsIcon },
-  { id: 'appearance', label: 'Appearance', icon: PaintBoardIcon },
-  { id: 'notifications', label: 'Notifications', icon: NotificationIcon },
-] as const
-
-type SectionId = (typeof sections)[number]['id']
-
-function SettingsForm({ section }: { section: SectionId }) {
+function SettingsForm({ section }: { section: (typeof settingsSections)[number]['id'] }) {
   const [saved, setSaved] = useState(false)
   const [emailUpdates, setEmailUpdates] = useState(true)
   const [compactNavigation, setCompactNavigation] = useState(false)
+
+  if (section === 'security') return <SecuritySettings />
 
   const content = {
     profile: {
@@ -104,14 +99,14 @@ function SettingsForm({ section }: { section: SectionId }) {
   )
 }
 
-function SettingsNavigation({ activeSection, onSelect }: { activeSection: SectionId; onSelect: (section: SectionId) => void }) {
+function SettingsNavigation({ activeSection, onSelect }: { activeSection: (typeof settingsSections)[number]['id']; onSelect: (section: (typeof settingsSections)[number]['id']) => void }) {
   return (
     <Sidebar collapsible="none" className="hidden md:flex">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu aria-label="Settings navigation">
-              {sections.map((section) => (
+              {settingsSections.map((section) => (
                 <SidebarMenuItem key={section.id}>
                   <SidebarMenuButton isActive={section.id === activeSection} onClick={() => onSelect(section.id)}>
                     <HugeiconsIcon icon={section.icon} strokeWidth={2} />
@@ -128,8 +123,14 @@ function SettingsNavigation({ activeSection, onSelect }: { activeSection: Sectio
 }
 
 export function SettingsWorkspace({ className }: { className?: string }) {
-  const [activeSection, setActiveSection] = useState<SectionId>('profile')
-  const activeLabel = sections.find((section) => section.id === activeSection)?.label
+  const { hash, pathname, search } = useLocation()
+  const navigate = useNavigate()
+  const activeSection = getSettingsSectionFromHash(hash)
+  const activeLabel = settingsSections.find((section) => section.id === activeSection)?.label
+
+  function setActiveSection(section: (typeof settingsSections)[number]['id']) {
+    navigate({ pathname, search, hash: `#settings/${section}` })
+  }
 
   return (
     <SidebarProvider className={cn('min-h-0 flex-1 items-start transform-gpu', className)}>
@@ -140,7 +141,7 @@ export function SettingsWorkspace({ className }: { className?: string }) {
             <p className="font-medium">Account settings / {activeLabel}</p>
           </div>
           <div className="flex gap-1 overflow-x-auto md:hidden" aria-label="Settings navigation">
-            {sections.map((section) => (
+            {settingsSections.map((section) => (
               <Button key={section.id} variant={section.id === activeSection ? 'secondary' : 'ghost'} size="sm" onClick={() => setActiveSection(section.id)}>
                 {section.label}
               </Button>

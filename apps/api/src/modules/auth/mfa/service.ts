@@ -1,3 +1,4 @@
+import { applySetCookies } from 'better-auth/cookies'
 import type { AuditContext } from '../../audit/model'
 import { scheduleBackground, type EmailSender } from '../../email/sender'
 import { staffMfaRecoveryEmail } from '../../email/templates'
@@ -5,9 +6,10 @@ import type { Auth } from '../../../plugins/auth/auth'
 import { withBackupCodeAuditContext } from '../../../plugins/auth/auth'
 
 export interface StaffMfaStore {
+  hasVerifiedEnrollment(userId: string): Promise<boolean>
   activate(
     userId: string,
-    sessionToken: string,
+    sessionId: string,
     activatedAt: Date,
     absoluteExpiresAt: Date,
     auditContext: AuditContext,
@@ -34,7 +36,11 @@ export class StaffMfaService {
   async onboardingState(headers: Headers) {
     const current = await this.requireRestrictedSession(headers)
 
-    return { required: true as const, userId: current.user.id }
+    return {
+      required: true as const,
+      userId: current.user.id,
+      totpEnrollmentVerified: await this.dependencies.store.hasVerifiedEnrollment(current.user.id),
+    }
   }
 
   async beginEnrollment(headers: Headers, password: string) {
@@ -59,11 +65,19 @@ export class StaffMfaService {
       body: { code, trustDevice: false },
       returnHeaders: true,
     })
+    const rotatedHeaders = new Headers(headers)
+    applySetCookies(rotatedHeaders, result.headers.getSetCookie())
+    const verifiedSession = await this.dependencies.auth.api.getSession({ headers: rotatedHeaders })
+
+    if (!verifiedSession || verifiedSession.user.id !== current.user.id) {
+      throw new Error('MFA_SESSION_ROTATION_NOT_FOUND')
+    }
+
     const activatedAt = this.now()
 
     await this.dependencies.store.activate(
       current.user.id,
-      result.response.token,
+      verifiedSession.session.id,
       activatedAt,
       new Date(activatedAt.getTime() + 8 * 60 * 60 * 1000),
       auditContext,

@@ -8,16 +8,26 @@ import type { StaffMfaStore } from './service'
 export class DatabaseStaffMfaStore implements StaffMfaStore {
   constructor(private readonly db: Database, private readonly audit: AuditService) {}
 
+  async hasVerifiedEnrollment(userId: string) {
+    const [enrollment] = await this.db.select({
+      enabled: user.twoFactorEnabled,
+      verified: twoFactor.verified,
+    }).from(user).leftJoin(twoFactor, eq(twoFactor.userId, user.id))
+      .where(eq(user.id, userId)).limit(1)
+
+    return enrollment?.enabled === true && enrollment.verified === true
+  }
+
   async activate(
     userId: string,
-    sessionToken: string,
+    sessionId: string,
     activatedAt: Date,
     absoluteExpiresAt: Date,
     auditContext: AuditContext,
   ) {
     await this.db.transaction(async (tx) => {
       const [verifiedSession] = await tx.select({ id: session.id }).from(session)
-        .where(and(eq(session.userId, userId), eq(session.token, sessionToken)))
+        .where(and(eq(session.userId, userId), eq(session.id, sessionId)))
         .for('update').limit(1)
       if (!verifiedSession) throw new Error('MFA_SESSION_ROTATION_NOT_FOUND')
 

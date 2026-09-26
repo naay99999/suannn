@@ -7,7 +7,11 @@ export const staffMfaModels = {
   'staffMfa.verifyBody': t.Object({
     code: t.String({ minLength: 6, maxLength: 8 }),
   }, { additionalProperties: false }),
-  'staffMfa.onboardingResponse': t.Object({ required: t.Literal(true), userId: t.String() }),
+  'staffMfa.onboardingResponse': t.Object({
+    required: t.Literal(true),
+    userId: t.String(),
+    totpEnrollmentVerified: t.Boolean(),
+  }),
   'staffMfa.enrollmentResponse': t.Object({ totpURI: t.String(), backupCodes: t.Array(t.String()) }),
   'staffMfa.verifiedResponse': t.Object({ verified: t.Literal(true) }),
   'staffMfa.backupCodesResponse': t.Object({ backupCodes: t.Array(t.String()) }),

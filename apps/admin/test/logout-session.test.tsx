@@ -2,6 +2,7 @@ import { afterEach, expect, mock, test } from 'bun:test'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SidebarProvider } from '@workspace/ui/components/sidebar'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import type { AuthSession } from '../src/lib/auth-session'
 
@@ -24,7 +25,7 @@ function renderMenu() {
     { path: '/dashboard', element: <StaffAccountMenu session={staffSession} /> },
     { path: '/login', element: <div>Login screen</div> },
   ], { initialEntries: ['/dashboard'] })
-  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><SidebarProvider><RouterProvider router={router} /></SidebarProvider></QueryClientProvider>)
   return { client, router }
 }
 
@@ -35,24 +36,42 @@ test('shows the current staff identity and clears private cache on logout', asyn
   const { client, router } = renderMenu()
   expect(screen.getByText('Sam Staff')).toBeTruthy()
   expect(screen.getByText('sam@example.com')).toBeTruthy()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Sign out' }))
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Sam Staff account menu' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
   expect(await screen.findByText('Login screen')).toBeTruthy()
   expect(router.state.location.pathname).toBe('/login')
   expect(client.getQueryData(['private', 'orders'])).toBeUndefined()
 })
 
+test('opens each settings section from the account menu', async () => {
+  const { router } = renderMenu()
+  const user = userEvent.setup()
+  const sections = ['Profile', 'Account', 'Security', 'Appearance', 'Notifications']
+
+  for (const section of sections) {
+    await user.click(screen.getByRole('button', { name: 'Sam Staff account menu' }))
+    await user.click(await screen.findByRole('menuitem', { name: section }))
+    expect(router.state.location.hash).toBe(`#settings/${section.toLowerCase()}`)
+  }
+})
+
 test('disables duplicate logout while the request is pending', async () => {
   signOutResult = () => new Promise(() => {})
   renderMenu()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Sign out' }))
-  expect(screen.getByRole('button', { name: 'Signing out…' }).hasAttribute('disabled')).toBe(true)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Sam Staff account menu' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
+  expect((await screen.findByRole('menuitem', { name: 'Signing out…' })).getAttribute('aria-disabled')).toBe('true')
 })
 
 test('keeps the staff page available when logout fails', async () => {
   signOutResult = async () => { throw new Error('offline') }
   const { client } = renderMenu()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Sign out' }))
-  expect(await screen.findByText('Could not sign out. Try again.')).toBeTruthy()
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Sam Staff account menu' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not sign out. Try again.')
   expect(client.getQueryData(['private', 'orders'])).toEqual(['order-1'])
 })
 

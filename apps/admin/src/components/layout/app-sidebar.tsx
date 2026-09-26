@@ -38,7 +38,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { data: session } = useQuery(authSessionQuery)
   const { hash, pathname, search } = useLocation()
   const navigate = useNavigate()
-  const settingsOpen = hash === '#settings'
+  const settingsOpen = hash === '#settings' || hash.startsWith('#settings/')
 
   function handleSettingsOpenChange(open: boolean) {
     if (!open && settingsOpen) {

@@ -7,6 +7,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 let acceptedInput: unknown
 let acceptCount = 0
 let acceptResult: () => Promise<unknown> = async () => ({ accepted: true, next: 'mfa-enrollment' })
+let onboardingResult: () => Promise<unknown> = async () => ({ required: true, userId: 'staff-1', totpEnrollmentVerified: false })
 let beginResult: () => Promise<unknown> = async () => ({ totpURI: 'otpauth://totp/Suannn:Sam?secret=ABC', backupCodes: ['code-1', 'code-2'] })
 let verifyResult: () => Promise<unknown> = async () => ({ verified: true })
 let refreshed = false
@@ -18,12 +19,19 @@ class FakeAuthError extends Error {
 
 mock.module('../src/lib/auth-client', () => ({
   acceptInvitation: (input: unknown) => { acceptedInput = input; acceptCount++; return acceptResult() },
+  getOnboarding: () => onboardingResult(),
   beginTotp: () => beginResult(),
   verifyEnrollment: () => verifyResult(),
   AuthRequestError: FakeAuthError,
 }))
 mock.module('../src/lib/auth-session', () => ({
-  authSessionQuery: { queryKey: ['auth', 'session'] },
+  authSessionQuery: {
+    queryKey: ['auth', 'session'],
+    queryFn: async () => ({
+      session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
+      user: { id: 'staff-1', name: 'Staff', email: 'staff@example.com', emailVerified: true, image: null, accountType: 'staff' },
+    }),
+  },
   refreshAuthSession: async () => { refreshed = true; return refreshResult() },
 }))
 
@@ -46,9 +54,11 @@ afterEach(() => {
   acceptedInput = undefined
   acceptCount = 0
   refreshed = false
+  onboardingResult = async () => ({ required: true, userId: 'staff-1', totpEnrollmentVerified: false })
   refreshResult = async () => 'active'
   localStorage.clear()
   sessionStorage.clear()
+  Reflect.deleteProperty(navigator, 'clipboard')
 })
 
 test('removes invitation token from the URL and accepts the supplied account', async () => {
@@ -78,18 +88,41 @@ test('explains a missing or expired invitation link', async () => {
   expect(await screen.findByText('This invitation expired. Ask an administrator for a new invitation.')).toBeTruthy()
 })
 
-test('shows TOTP URI and backup codes after password confirmation', async () => {
+test('shows a responsive QR, hides the manual key, and displays backup codes', async () => {
   beginResult = async () => ({ totpURI: 'otpauth://totp/Suannn:Sam?secret=ABC', backupCodes: ['code-1', 'code-2'] })
   renderPage('/staff/onboarding')
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Current password'), 'strong-password-123')
   await user.click(screen.getByRole('button', { name: 'Start setup' }))
-  expect(await screen.findByText('otpauth://totp/Suannn:Sam?secret=ABC')).toBeTruthy()
+  expect(await screen.findByTitle('Authenticator setup QR code')).toBeTruthy()
+  expect(screen.queryByText('otpauth://totp/Suannn:Sam?secret=ABC')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Show setup key' })).toBeTruthy()
   expect(screen.getByText('code-1')).toBeTruthy()
   expect(screen.getByText('code-2')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Verify setup' }).hasAttribute('disabled')).toBe(true)
   expect(localStorage.length).toBe(0)
   expect(sessionStorage.length).toBe(0)
+})
+
+test('reveals and copies the setup key and backup codes with confirmation', async () => {
+  const copied: string[] = []
+  beginResult = async () => ({ totpURI: 'otpauth://totp/Suannn:Sam?secret=ABC', backupCodes: ['code-1', 'code-2'] })
+  renderPage('/staff/onboarding')
+  const user = userEvent.setup()
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async (value: string) => { copied.push(value) } },
+  })
+  await user.type(screen.getByLabelText('Current password'), 'strong-password-123')
+  await user.click(screen.getByRole('button', { name: 'Start setup' }))
+  await user.click(await screen.findByRole('button', { name: 'Show setup key' }))
+  expect(screen.getByText('ABC')).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Copy setup key' }))
+  expect(copied).toContain('ABC')
+  expect(await screen.findByText('Setup key copied.')).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Copy backup codes' }))
+  expect(copied).toContain('code-1\ncode-2')
+  expect(await screen.findByText('Backup codes copied.')).toBeTruthy()
 })
 
 test('keeps an invalid TOTP code on the setup form', async () => {
@@ -99,7 +132,7 @@ test('keeps an invalid TOTP code on the setup form', async () => {
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Current password'), 'strong-password-123')
   await user.click(screen.getByRole('button', { name: 'Start setup' }))
-  await user.click(await screen.findByLabelText('I saved my backup codes'))
+  await user.click(await screen.findByRole('checkbox', { name: 'I saved my backup codes' }))
   await user.type(screen.getByLabelText('Authenticator code'), '123456')
   await user.click(screen.getByRole('button', { name: 'Verify setup' }))
   expect(await screen.findByText('Invalid code')).toBeTruthy()
@@ -113,9 +146,24 @@ test('refreshes the active staff session after successful TOTP enrollment', asyn
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Current password'), 'strong-password-123')
   await user.click(screen.getByRole('button', { name: 'Start setup' }))
-  await user.click(await screen.findByLabelText('I saved my backup codes'))
+  await user.click(await screen.findByRole('checkbox', { name: 'I saved my backup codes' }))
   await user.type(screen.getByLabelText('Authenticator code'), '123456')
   await user.click(screen.getByRole('button', { name: 'Verify setup' }))
+  expect(await screen.findByText('Dashboard')).toBeTruthy()
+  expect(router.state.location.pathname).toBe('/dashboard')
+  expect(refreshed).toBe(true)
+})
+
+test('resumes activation when the authenticator code was verified before the session update failed', async () => {
+  onboardingResult = async () => ({ required: true, userId: 'staff-1', totpEnrollmentVerified: true })
+  verifyResult = async () => ({ verified: true })
+  const router = renderPage('/staff/onboarding')
+  const user = userEvent.setup()
+  expect(await screen.findByText(/Your authenticator is already paired/)).toBeTruthy()
+  expect(screen.queryByLabelText('Current password')).toBeNull()
+  expect(screen.queryByTitle('Authenticator setup QR code')).toBeNull()
+  await user.type(screen.getByLabelText('Authenticator code'), '123456')
+  await user.click(screen.getByRole('button', { name: 'Complete setup' }))
   expect(await screen.findByText('Dashboard')).toBeTruthy()
   expect(router.state.location.pathname).toBe('/dashboard')
   expect(refreshed).toBe(true)
