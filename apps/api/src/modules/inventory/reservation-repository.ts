@@ -221,8 +221,9 @@ async function expireReservations(
   }
 }
 
-type ReservationConflict = {
-  code: 'INVENTORY_STOCK_CONFLICT'
+type ReservationConflict = { code: 'INVENTORY_STOCK_CONFLICT' | 'PRODUCT_STATE_CONFLICT' }
+type ReservationConflictBody = {
+  code: ReservationConflict['code']
   message: string
 }
 
@@ -231,7 +232,7 @@ async function reserveInTransactionResult(
   input: ReserveInput,
   actor: InventoryActor,
   operationId: string,
-): Promise<ReservationDetail | null> {
+): Promise<ReservationDetail | ReservationConflict> {
   const normalized = normalizeReserveInput(input)
   const now = await transactionNow(tx)
   const [warehouseRow] = await tx.select({
@@ -296,7 +297,7 @@ async function reserveInTransactionResult(
     const catalogProduct = variant ? lockedCatalog.products.get(variant.productId) : undefined
     if (!variant || !catalogProduct) throw new DomainError('VARIANT_NOT_FOUND')
     if (catalogProduct.status !== 'published' || variant.archivedAt || !variant.salesEnabled) {
-      throw new DomainError('PRODUCT_STATE_CONFLICT')
+      return { code: 'PRODUCT_STATE_CONFLICT' }
     }
 
     const candidates = lockedLots.filter((lot) => lot.warehouseId === normalized.warehouseId
@@ -313,7 +314,7 @@ async function reserveInTransactionResult(
       remaining -= quantity
       if (remaining === 0) break
     }
-    if (remaining > 0) return null
+    if (remaining > 0) return { code: 'INVENTORY_STOCK_CONFLICT' }
   }
 
   const reservationId = crypto.randomUUID()
@@ -375,7 +376,7 @@ export async function reserveInTransaction(
   operationId: string,
 ): Promise<ReservationDetail> {
   const reservation = await reserveInTransactionResult(tx, input, actor, operationId)
-  if (!reservation) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  if ('code' in reservation) throw new DomainError(reservation.code)
   return reservation
 }
 
@@ -384,23 +385,26 @@ export class InventoryReservationRepository {
 
   async reserve(input: ReserveInput, context: CommandContext): Promise<ReservationDetail> {
     const normalized = normalizeReserveInput(input)
-    const result = await runInventoryCommand<ReservationDetail | ReservationConflict>(
+    const result = await runInventoryCommand<ReservationDetail | ReservationConflictBody>(
       this.db,
       'inventory.reserve',
       context.idempotencyKey,
       normalized,
       context.actor,
       async (tx, operationId) => {
-        const reservation = await reserveInTransactionResult(tx, normalized, context.actor, operationId)
-        return reservation
-          ? { status: 201, body: reservation }
-          : {
-            status: 409,
-            body: { code: 'INVENTORY_STOCK_CONFLICT', message: 'Inventory stock does not allow this action' },
-          }
+        const outcome = await reserveInTransactionResult(tx, normalized, context.actor, operationId)
+        if (!('code' in outcome)) return { status: 201, body: outcome }
+        const error = new DomainError(outcome.code)
+        return {
+          status: error.status,
+          body: { code: outcome.code, message: error.publicMessage },
+        }
       },
     )
-    if (result.status === 409) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    if (result.status >= 400) {
+      const conflict = result.body as ReservationConflictBody
+      throw new DomainError(conflict.code)
+    }
     return result.body as ReservationDetail
   }
 

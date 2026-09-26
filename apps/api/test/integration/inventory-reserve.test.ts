@@ -255,6 +255,56 @@ describe('inventory reservations', () => {
     expect((await createService().getLot(lot.id)).reservedQuantity).toBe(0)
   })
 
+  it('commits overdue hold expiry before returning a multi-line catalog conflict', async () => {
+    const [availableVariant, draftVariant] = await seedVariants(2)
+    const lot = await seedLot(availableVariant, { quantity: 2 })
+    const [draftIdentity] = await database.db.select({ productId: productVariant.productId })
+      .from(productVariant).where(eq(productVariant.id, draftVariant))
+    if (!draftIdentity) throw new Error('Expected draft variant fixture')
+    await database.db.update(product).set({ status: 'draft' }).where(eq(product.id, draftIdentity.productId))
+
+    const now = new Date()
+    const oldReservationId = crypto.randomUUID()
+    await database.db.insert(inventoryReservation).values({
+      id: oldReservationId,
+      warehouseId: await mainWarehouseId(),
+      status: 'active',
+      createdAt: new Date(now.getTime() - 30 * 60 * 1000),
+      expiresAt: new Date(now.getTime() - 15 * 60 * 1000),
+      actorId,
+    })
+    await database.db.insert(inventoryReservationAllocation).values({
+      id: crypto.randomUUID(),
+      reservationId: oldReservationId,
+      variantId: availableVariant,
+      lotId: lot.id,
+      quantity: 2,
+    })
+    await database.db.update(inventoryLot).set({ reservedQuantity: 2 }).where(eq(inventoryLot.id, lot.id))
+
+    const input = {
+      warehouseId: await mainWarehouseId(),
+      lines: [
+        { variantId: availableVariant, quantity: 2 },
+        { variantId: draftVariant, quantity: 1 },
+      ],
+    }
+    await expect(createService().reserve(input, command('reserve-after-expiry-catalog-conflict')))
+      .rejects.toMatchObject({ code: 'PRODUCT_STATE_CONFLICT' })
+
+    const [expiredReservation] = await database.db.select().from(inventoryReservation)
+      .where(eq(inventoryReservation.id, oldReservationId))
+    const [expirationAudit] = await database.db.select().from(auditLog)
+      .where(eq(auditLog.targetId, oldReservationId))
+    const [operation] = await database.db.select().from(inventoryOperation)
+      .where(eq(inventoryOperation.idempotencyKey, 'reserve-after-expiry-catalog-conflict'))
+    expect(expiredReservation?.status).toBe('expired')
+    expect((await createService().getLot(lot.id)).reservedQuantity).toBe(0)
+    expect(expirationAudit?.action).toBe('inventory.reservation-expired')
+    expect(operation?.httpStatus).toBe(409)
+    expect(operation?.resultPayload).toMatchObject({ body: { code: 'PRODUCT_STATE_CONFLICT' } })
+  })
+
   it('cancels a whole multi-lot, multi-variant reservation when any lot is quarantined', async () => {
     const [firstVariant, secondVariant] = await seedVariants(2)
     const olderLot = await seedLot(firstVariant, { quantity: 2, receivedAt: new Date(Date.now() - 86_400_000) })
