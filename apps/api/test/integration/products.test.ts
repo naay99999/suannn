@@ -379,6 +379,33 @@ describe('product catalog read queries', () => {
       .rejects.toThrow('INVALID_CURSOR')
   })
 
+  it('rejects explicitly empty cursors for store and admin lists', async () => {
+    const service = serviceWith()
+
+    await expect(service.listStore({ cursor: '' })).rejects.toThrow('INVALID_CURSOR')
+    await expect(service.listAdmin({ cursor: '' })).rejects.toThrow('INVALID_CURSOR')
+  })
+
+  it('rejects impossible UTC dates in store and admin newest cursors', async () => {
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000051', slug: 'calendar-first', name: 'First', status: 'published', minPrices: [500] })
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000052', slug: 'calendar-second', name: 'Second', status: 'published', minPrices: [600] })
+
+    const service = serviceWith()
+    const storePage = await service.listStore({ limit: 1 })
+    const adminPage = await service.listAdmin({ limit: 1 })
+    if (!storePage.nextCursor || !adminPage.nextCursor) throw new Error('Expected cursor for both audiences')
+    const makeImpossibleCursor = (cursor: string) => {
+      const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Record<string, string>
+      value.sortKey = '2026-02-31T00:00:00.000000Z'
+      return Buffer.from(JSON.stringify(value)).toString('base64url')
+    }
+
+    await expect(service.listStore({ limit: 1, cursor: makeImpossibleCursor(storePage.nextCursor) }))
+      .rejects.toThrow('INVALID_CURSOR')
+    await expect(service.listAdmin({ limit: 1, cursor: makeImpossibleCursor(adminPage.nextCursor) }))
+      .rejects.toThrow('INVALID_CURSOR')
+  })
+
   it('hides drafts and archived products from slug detail even when their slugs are known', async () => {
     await seedProduct({ id: '10000000-0000-4000-8000-000000000031', slug: 'known-draft', name: 'Draft', status: 'draft', minPrices: [500] })
     await seedProduct({ id: '10000000-0000-4000-8000-000000000032', slug: 'known-archived', name: 'Archived', status: 'archived', minPrices: [500] })

@@ -130,6 +130,7 @@ function normalizedStoreQuery(query: StoreProductQuery) {
   const sort = query.sort ?? 'newest'
   if (category !== undefined && category !== 'fresh' && category !== 'processed') invalidQuery()
   if (sort !== 'newest' && sort !== 'price-asc' && sort !== 'price-desc') invalidQuery()
+  if (query.cursor === '') invalidCursor()
   if (query.cursor !== undefined && typeof query.cursor !== 'string') return invalidQuery()
   return { q, category, sort, limit: normalizePageSize(query.limit), cursor: query.cursor }
 }
@@ -139,6 +140,7 @@ function normalizedAdminQuery(query: AdminProductQuery) {
   const q = normalizeSearch(query.q)
   const status = query.status
   if (status !== undefined && status !== 'draft' && status !== 'published' && status !== 'archived') invalidQuery()
+  if (query.cursor === '') invalidCursor()
   if (query.cursor !== undefined && typeof query.cursor !== 'string') return invalidQuery()
   return { q, status, limit: normalizePageSize(query.limit), cursor: query.cursor }
 }
@@ -158,9 +160,19 @@ function validateCursorIdentity(cursor: Record<string, string>, expectedFingerpr
 }
 
 function validateCreatedAt(value: string): string {
-  const parsed = new Date(value)
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(value)
-    || !Number.isFinite(parsed.valueOf())) return invalidCursor()
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{6})Z$/.exec(value)
+  if (!match) return invalidCursor()
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const second = Number(secondText)
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) invalidCursor()
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (day < 1 || day > daysInMonth[month - 1]!) invalidCursor()
   return value
 }
 
