@@ -9,6 +9,7 @@ export type DomainErrorCode =
   | 'PRODUCT_STATE_CONFLICT'
   | 'INVALID_PRODUCT'
   | 'LOT_NOT_FOUND'
+  | 'RESERVATION_NOT_FOUND'
   | 'WAREHOUSE_NOT_FOUND'
   | 'LOT_CODE_CONFLICT'
   | 'INVENTORY_OPERATION_CONFLICT'
@@ -30,6 +31,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   PRODUCT_STATE_CONFLICT: { status: 409, message: 'Product state does not allow this action' },
   INVALID_PRODUCT: { status: 422, message: 'Product data is invalid' },
   LOT_NOT_FOUND: { status: 404, message: 'Inventory lot not found' },
+  RESERVATION_NOT_FOUND: { status: 404, message: 'Inventory reservation not found' },
   WAREHOUSE_NOT_FOUND: { status: 404, message: 'Warehouse not found' },
   LOT_CODE_CONFLICT: { status: 409, message: 'Lot code is already in use for this variant' },
   INVENTORY_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },

@@ -29,6 +29,9 @@ export const auditMetadataKeys = {
   'inventory.reserved': ['warehouseId', 'reservationId', 'operationId', 'allocationCount', 'quantity'],
   'inventory.reservation-expired': ['warehouseId', 'reservationId', 'reasonCode'],
   'inventory.reservation-cancelled': ['warehouseId', 'reservationId', 'lotId', 'reasonCode'],
+  'inventory.reservation-cancelled-on-confirm': ['warehouseId', 'reservationId', 'reasonCode'],
+  'inventory.reservation-confirmed': ['warehouseId', 'reservationId', 'operationId', 'quantity'],
+  'inventory.reservation-released': ['warehouseId', 'reservationId', 'quantity'],
   'inventory.quarantined': ['variantId', 'warehouseId', 'reasonCode'],
   'inventory.quarantine-released': ['variantId', 'warehouseId'],
 } as const

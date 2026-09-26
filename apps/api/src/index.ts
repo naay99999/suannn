@@ -27,10 +27,13 @@ import { SystemSettingsRepository } from './modules/settings/repository'
 import { SystemSettingsService } from './modules/settings/service'
 import { ProductRepository } from './modules/products/repository'
 import { ProductService } from './modules/products/service'
+import { InventoryReservationRepository } from './modules/inventory/reservation-repository'
+import { startInventoryMaintenanceLoop } from './modules/inventory/maintenance'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
 const identityLockPool = createIdentityLockPool(config.databaseUrl)
+const inventoryReservations = new InventoryReservationRepository(database.db)
 const backgroundTasks = new Set<Promise<void>>()
 const emailQueue = new EmailTaskQueue(4, 256)
 const runInBackground = (task: Promise<unknown>) => {
@@ -114,6 +117,15 @@ const maintenanceTimer = setInterval(() => {
 }, 60 * 60 * 1000)
 maintenanceTimer.unref()
 
+const stopInventoryMaintenance = startInventoryMaintenanceLoop(
+  (limit) => inventoryReservations.expireDueReservations(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error',
+    code: 'INVENTORY_RESERVATION_CLEANUP_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
 console.log(
   `API running at http://localhost:${app.server?.port}`,
 )
@@ -128,7 +140,9 @@ async function shutdown(signal: string) {
   isShuttingDown = true
   console.info(JSON.stringify({ level: 'info', event: 'shutdown', signal }))
   clearInterval(maintenanceTimer)
+  const inventoryMaintenanceDrained = stopInventoryMaintenance()
   await app.stop()
+  await inventoryMaintenanceDrained
   const drained = await emailQueue.drain(15_000)
   if (!drained) console.error(JSON.stringify({ level: 'error', code: 'EMAIL_SHUTDOWN_TIMEOUT' }))
   const backgroundDrained = await Promise.race([

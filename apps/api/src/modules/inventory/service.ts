@@ -38,6 +38,18 @@ export class InventoryService {
     return this.reservations.reserve(input, context)
   }
 
+  confirm(reservationId: string, context: CommandContext): Promise<ReservationDetail> {
+    return this.reservations.confirm(reservationId, context)
+  }
+
+  release(reservationId: string, context: CommandContext): Promise<ReservationDetail> {
+    return this.reservations.release(reservationId, context)
+  }
+
+  expireDueReservations(limit: number): Promise<number> {
+    return this.reservations.expireDueReservations(limit)
+  }
+
   quarantineLot(lotId: string, reason: string, context: CommandContext): Promise<LotDetail> {
     return this.reservations.quarantineLot(lotId, reason, context)
   }

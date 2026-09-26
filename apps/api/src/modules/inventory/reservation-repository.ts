@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lte, or, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import {
   auditLog,
@@ -7,6 +7,7 @@ import {
   inventoryReservationAllocation,
   product,
   productVariant,
+  stockMovement,
   warehouse,
 } from '../../database/schema'
 import { assertAuditMetadata, type AuditEvent } from '../audit/model'
@@ -50,6 +51,13 @@ interface LockedCatalog {
   }>
 }
 
+interface ReservationAllocationRow {
+  reservationId: string
+  variantId: string
+  lotId: string
+  quantity: number
+}
+
 interface LotContext {
   lot: {
     id: string
@@ -81,6 +89,25 @@ function dateFromDatabase(value: Date | string) {
 
 function totalQuantity(allocations: ReservationAllocation[]) {
   return allocations.reduce((total, allocation) => total + allocation.quantity, 0)
+}
+
+function reservationDetail(
+  reservation: typeof inventoryReservation.$inferSelect,
+  allocations: ReservationAllocationRow[],
+): ReservationDetail {
+  return {
+    id: reservation.id,
+    warehouseId: reservation.warehouseId,
+    externalReference: reservation.externalReference,
+    status: reservation.status,
+    createdAt: reservation.createdAt.toISOString(),
+    expiresAt: reservation.expiresAt.toISOString(),
+    completedAt: reservation.completedAt?.toISOString() ?? null,
+    actorId: reservation.actorId,
+    allocations: allocations.map(({ variantId, lotId, quantity }) => ({ variantId, lotId, quantity }))
+      .sort((left, right) => left.variantId.localeCompare(right.variantId)
+        || left.lotId.localeCompare(right.lotId)),
+  }
 }
 
 function asLotDetail(context: LotContext, lot = context.lot): LotDetail {
@@ -144,11 +171,15 @@ function auditEvent(
   }
 }
 
-async function lockCatalogRows(tx: DatabaseTransaction, variantIds: string[]): Promise<LockedCatalog> {
+async function lockCatalogRows(
+  tx: DatabaseTransaction,
+  variantIds: string[],
+  allowMissing = false,
+): Promise<LockedCatalog> {
   const uniqueVariantIds = [...new Set(variantIds)].sort()
   const identities = await tx.select({ id: productVariant.id, productId: productVariant.productId })
     .from(productVariant).where(inArray(productVariant.id, uniqueVariantIds))
-  if (identities.length !== uniqueVariantIds.length) throw new DomainError('VARIANT_NOT_FOUND')
+  if (!allowMissing && identities.length !== uniqueVariantIds.length) throw new DomainError('VARIANT_NOT_FOUND')
 
   const productIds = [...new Set(identities.map(({ productId }) => productId))].sort()
   const products = await tx.select({ id: product.id, status: product.status }).from(product)
@@ -163,7 +194,7 @@ async function lockCatalogRows(tx: DatabaseTransaction, variantIds: string[]): P
     minRemainingShelfLifeDays: productVariant.minRemainingShelfLifeDays,
   }).from(productVariant).where(inArray(productVariant.id, uniqueVariantIds))
     .orderBy(asc(productVariant.id)).for('update')
-  if (variants.length !== uniqueVariantIds.length) throw new DomainError('VARIANT_NOT_FOUND')
+  if (!allowMissing && variants.length !== uniqueVariantIds.length) throw new DomainError('VARIANT_NOT_FOUND')
   if (variants.some((variant) => !productIds.includes(variant.productId))) throw new ChangedReservationLockSet()
 
   return {
@@ -221,7 +252,9 @@ async function expireReservations(
   }
 }
 
-type ReservationConflict = { code: 'INVENTORY_STOCK_CONFLICT' | 'PRODUCT_STATE_CONFLICT' }
+type ReservationConflict = {
+  code: 'INVENTORY_STOCK_CONFLICT' | 'PRODUCT_STATE_CONFLICT' | 'VARIANT_NOT_FOUND' | 'PRODUCT_NOT_FOUND'
+}
 type ReservationConflictBody = {
   code: ReservationConflict['code']
   message: string
@@ -259,7 +292,7 @@ async function reserveInTransactionResult(
     ...requestedVariantIds,
     ...expiredAllocations.map(({ variantId }) => variantId),
   ])].sort()
-  const lockedCatalog = await lockCatalogRows(tx, lockVariantIds)
+  const lockedCatalog = await lockCatalogRows(tx, lockVariantIds, true)
   const expiredParentRows = expiredIds.length > 0
     ? await tx.select({ id: inventoryReservation.id }).from(inventoryReservation)
       .where(and(inArray(inventoryReservation.id, expiredIds), eq(inventoryReservation.status, 'active'), lte(inventoryReservation.expiresAt, now)))
@@ -295,7 +328,8 @@ async function reserveInTransactionResult(
   for (const line of normalized.lines) {
     const variant = lockedCatalog.variants.get(line.variantId)
     const catalogProduct = variant ? lockedCatalog.products.get(variant.productId) : undefined
-    if (!variant || !catalogProduct) throw new DomainError('VARIANT_NOT_FOUND')
+    if (!variant) return { code: 'VARIANT_NOT_FOUND' }
+    if (!catalogProduct) return { code: 'PRODUCT_NOT_FOUND' }
     if (catalogProduct.status !== 'published' || variant.archivedAt || !variant.salesEnabled) {
       return { code: 'PRODUCT_STATE_CONFLICT' }
     }
@@ -380,8 +414,300 @@ export async function reserveInTransaction(
   return reservation
 }
 
+interface LockedReservationContext {
+  reservation: typeof inventoryReservation.$inferSelect
+  allocations: ReservationAllocationRow[]
+  lots: Map<string, ReservationLot>
+  catalog: LockedCatalog
+  now: Date
+  warehouseActive: boolean
+}
+
+async function lockReservationContext(
+  tx: DatabaseTransaction,
+  reservationId: string,
+): Promise<LockedReservationContext> {
+  const [identity] = await tx.select({ id: inventoryReservation.id })
+    .from(inventoryReservation).where(eq(inventoryReservation.id, reservationId)).limit(1)
+  if (!identity) throw new DomainError('RESERVATION_NOT_FOUND')
+
+  const initialAllocations = await tx.select({
+    reservationId: inventoryReservationAllocation.reservationId,
+    variantId: inventoryReservationAllocation.variantId,
+    lotId: inventoryReservationAllocation.lotId,
+    quantity: inventoryReservationAllocation.quantity,
+  }).from(inventoryReservationAllocation)
+    .where(eq(inventoryReservationAllocation.reservationId, reservationId))
+  const variantIds = [...new Set(initialAllocations.map(({ variantId }) => variantId))].sort()
+  const catalog = await lockCatalogRows(tx, variantIds)
+  const [reservation] = await tx.select().from(inventoryReservation)
+    .where(eq(inventoryReservation.id, reservationId)).for('update').limit(1)
+  if (!reservation) throw new DomainError('RESERVATION_NOT_FOUND')
+
+  const allocations = await tx.select({
+    reservationId: inventoryReservationAllocation.reservationId,
+    variantId: inventoryReservationAllocation.variantId,
+    lotId: inventoryReservationAllocation.lotId,
+    quantity: inventoryReservationAllocation.quantity,
+  }).from(inventoryReservationAllocation)
+    .where(eq(inventoryReservationAllocation.reservationId, reservationId))
+  if (allocations.some(({ variantId }) => !variantIds.includes(variantId))) {
+    throw new ChangedReservationLockSet()
+  }
+  const lotIds = [...new Set(allocations.map(({ lotId }) => lotId))].sort()
+  const lockedLots = lotIds.length > 0
+    ? await tx.select().from(inventoryLot).where(inArray(inventoryLot.id, lotIds))
+      .orderBy(asc(inventoryLot.id)).for('update')
+    : []
+  if (lockedLots.length !== lotIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  const [warehouseRow] = await tx.select({ isActive: warehouse.isActive })
+    .from(warehouse).where(eq(warehouse.id, reservation.warehouseId)).limit(1)
+
+  return {
+    reservation,
+    allocations,
+    lots: new Map(lockedLots.map((lot) => [lot.id, lot])),
+    catalog,
+    now: await transactionNow(tx),
+    warehouseActive: warehouseRow?.isActive ?? false,
+  }
+}
+
+async function cancelReservationForConfirm(
+  tx: DatabaseTransaction,
+  reservation: typeof inventoryReservation.$inferSelect,
+  allocations: ReservationAllocationRow[],
+  lots: Map<string, ReservationLot>,
+  actor: InventoryActor,
+  now: Date,
+  reasonCode: 'catalog_state' | 'lot_state',
+) {
+  for (const allocation of allocations) {
+    const lot = lots.get(allocation.lotId)
+    if (!lot || lot.reservedQuantity < allocation.quantity) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    lot.reservedQuantity -= allocation.quantity
+    await tx.update(inventoryLot).set({ reservedQuantity: lot.reservedQuantity })
+      .where(eq(inventoryLot.id, lot.id))
+  }
+  await tx.update(inventoryReservation).set({ status: 'cancelled', completedAt: now })
+    .where(and(eq(inventoryReservation.id, reservation.id), eq(inventoryReservation.status, 'active')))
+  await recordAudit(tx, auditEvent(actor, 'inventory.reservation-cancelled-on-confirm', 'inventory_reservation', reservation.id, {
+    warehouseId: reservation.warehouseId,
+    reservationId: reservation.id,
+    reasonCode,
+  }))
+}
+
+export async function confirmInTransaction(
+  tx: DatabaseTransaction,
+  reservationId: string,
+  actor: InventoryActor,
+  operationId: string,
+): Promise<ReservationDetail> {
+  const context = await lockReservationContext(tx, reservationId)
+  const { reservation, allocations, lots, catalog, now } = context
+  if (reservation.status !== 'active') return reservationDetail(reservation, allocations)
+
+  if (reservation.expiresAt.getTime() <= now.getTime()) {
+    await expireReservations(tx, [reservationId], allocations, lots, actor, now)
+    return reservationDetail({ ...reservation, status: 'expired', completedAt: now }, allocations)
+  }
+
+  let invalidCatalog = !context.warehouseActive
+  let invalidLot = false
+  for (const allocation of allocations) {
+    const variant = catalog.variants.get(allocation.variantId)
+    const catalogProduct = variant ? catalog.products.get(variant.productId) : undefined
+    const lot = lots.get(allocation.lotId)
+    if (!variant || !catalogProduct || catalogProduct.status !== 'published'
+      || variant.archivedAt || !variant.salesEnabled) invalidCatalog = true
+    if (!lot || lot.quarantinedAt || lot.warehouseId !== reservation.warehouseId
+      || !isLotEligible(lot.expiryDate, variant?.minRemainingShelfLifeDays ?? 0, now)) invalidLot = true
+  }
+  if (invalidCatalog || invalidLot) {
+    const reasonCode = invalidCatalog ? 'catalog_state' : 'lot_state'
+    await cancelReservationForConfirm(tx, reservation, allocations, lots, actor, now, reasonCode)
+    return reservationDetail({ ...reservation, status: 'cancelled', completedAt: now }, allocations)
+  }
+
+  for (const allocation of allocations) {
+    const lot = lots.get(allocation.lotId)
+    if (!lot || lot.reservedQuantity < allocation.quantity || lot.onHandQuantity < allocation.quantity) {
+      throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    }
+    const onHandQuantity = lot.onHandQuantity - allocation.quantity
+    const reservedQuantity = lot.reservedQuantity - allocation.quantity
+    const [updated] = await tx.update(inventoryLot).set({ onHandQuantity, reservedQuantity })
+      .where(and(
+        eq(inventoryLot.id, lot.id),
+        gte(inventoryLot.onHandQuantity, allocation.quantity),
+        gte(inventoryLot.reservedQuantity, allocation.quantity),
+      )).returning({ onHandQuantity: inventoryLot.onHandQuantity })
+    if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    lot.onHandQuantity = onHandQuantity
+    lot.reservedQuantity = reservedQuantity
+    await tx.insert(stockMovement).values({
+      id: crypto.randomUUID(),
+      lotId: lot.id,
+      operationId,
+      quantityDelta: -allocation.quantity,
+      balanceAfter: updated.onHandQuantity,
+      type: 'reservation_confirm',
+      reasonCode: 'reservation_confirmed',
+      occurredAt: now,
+      actorId: actor.userId ?? 'system',
+    })
+  }
+
+  await tx.update(inventoryReservation).set({ status: 'confirmed', completedAt: now })
+    .where(and(eq(inventoryReservation.id, reservationId), eq(inventoryReservation.status, 'active')))
+  await recordAudit(tx, auditEvent(actor, 'inventory.reservation-confirmed', 'inventory_reservation', reservationId, {
+    warehouseId: reservation.warehouseId,
+    reservationId,
+    operationId,
+    quantity: totalQuantity(allocations),
+  }))
+  return reservationDetail({ ...reservation, status: 'confirmed', completedAt: now }, allocations)
+}
+
+export async function releaseInTransaction(
+  tx: DatabaseTransaction,
+  reservationId: string,
+  actor: InventoryActor,
+  _operationId: string,
+): Promise<ReservationDetail> {
+  const context = await lockReservationContext(tx, reservationId)
+  const { reservation, allocations, lots, now } = context
+  if (reservation.status !== 'active') return reservationDetail(reservation, allocations)
+
+  if (reservation.expiresAt.getTime() <= now.getTime()) {
+    await expireReservations(tx, [reservationId], allocations, lots, actor, now)
+    return reservationDetail({ ...reservation, status: 'expired', completedAt: now }, allocations)
+  }
+
+  for (const allocation of allocations) {
+    const lot = lots.get(allocation.lotId)
+    if (!lot || lot.reservedQuantity < allocation.quantity) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    lot.reservedQuantity -= allocation.quantity
+    const [updated] = await tx.update(inventoryLot).set({ reservedQuantity: lot.reservedQuantity })
+      .where(and(eq(inventoryLot.id, lot.id), gte(inventoryLot.reservedQuantity, allocation.quantity)))
+      .returning({ id: inventoryLot.id })
+    if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+  await tx.update(inventoryReservation).set({ status: 'released', completedAt: now })
+    .where(and(eq(inventoryReservation.id, reservationId), eq(inventoryReservation.status, 'active')))
+  await recordAudit(tx, auditEvent(actor, 'inventory.reservation-released', 'inventory_reservation', reservationId, {
+    warehouseId: reservation.warehouseId,
+    reservationId,
+    quantity: totalQuantity(allocations),
+  }))
+  return reservationDetail({ ...reservation, status: 'released', completedAt: now }, allocations)
+}
+
 export class InventoryReservationRepository {
   constructor(private readonly db: Database) {}
+
+  async confirm(reservationId: string, context: CommandContext): Promise<ReservationDetail> {
+    const result = await runInventoryCommand<ReservationDetail | ReservationConflictBody>(
+      this.db,
+      'inventory.confirm-reservation',
+      context.idempotencyKey,
+      { reservationId },
+      context.actor,
+      async (tx, operationId) => {
+        const detail = await confirmInTransaction(tx, reservationId, context.actor, operationId)
+        if (detail.status === 'confirmed') return { status: 200, body: detail }
+        const code = detail.status === 'cancelled' ? 'PRODUCT_STATE_CONFLICT' : 'INVENTORY_STOCK_CONFLICT'
+        const error = new DomainError(code)
+        return { status: error.status, body: { code, message: error.publicMessage } }
+      },
+    )
+    if (result.status >= 400) throw new DomainError((result.body as ReservationConflictBody).code)
+    return result.body as ReservationDetail
+  }
+
+  async release(reservationId: string, context: CommandContext): Promise<ReservationDetail> {
+    const result = await runInventoryCommand<ReservationDetail | ReservationConflictBody>(
+      this.db,
+      'inventory.release-reservation',
+      context.idempotencyKey,
+      { reservationId },
+      context.actor,
+      async (tx, operationId) => {
+        const detail = await releaseInTransaction(tx, reservationId, context.actor, operationId)
+        if (detail.status === 'released') return { status: 200, body: detail }
+        const error = new DomainError('INVENTORY_STOCK_CONFLICT')
+        return {
+          status: error.status,
+          body: { code: 'INVENTORY_STOCK_CONFLICT', message: error.publicMessage },
+        }
+      },
+    )
+    if (result.status >= 400) throw new DomainError((result.body as ReservationConflictBody).code)
+    return result.body as ReservationDetail
+  }
+
+  async expireDueReservations(limit: number): Promise<number> {
+    if (!Number.isInteger(limit) || limit < 1) throw new DomainError('INVALID_INVENTORY_COMMAND')
+    const batchLimit = Math.min(limit, 100)
+    const actor: InventoryActor = {
+      userId: null,
+      auditContext: { requestId: 'inventory-expiry-maintenance', ipAddress: null, userAgent: null },
+    }
+
+    return this.db.transaction(async (tx) => {
+      const now = await transactionNow(tx)
+      const candidates = await tx.select({ id: inventoryReservation.id })
+        .from(inventoryReservation)
+        .where(and(eq(inventoryReservation.status, 'active'), lte(inventoryReservation.expiresAt, now)))
+        .orderBy(asc(inventoryReservation.expiresAt), asc(inventoryReservation.id))
+        .limit(batchLimit)
+      const candidateIds = candidates.map(({ id }) => id)
+      if (candidateIds.length === 0) return 0
+
+      const candidateAllocations = await tx.select({
+        reservationId: inventoryReservationAllocation.reservationId,
+        variantId: inventoryReservationAllocation.variantId,
+        lotId: inventoryReservationAllocation.lotId,
+        quantity: inventoryReservationAllocation.quantity,
+      }).from(inventoryReservationAllocation)
+        .where(inArray(inventoryReservationAllocation.reservationId, candidateIds))
+      const variantIds = [...new Set(candidateAllocations.map(({ variantId }) => variantId))].sort()
+      if (variantIds.length > 0) await lockCatalogRows(tx, variantIds)
+
+      const lockedReservations = await tx.select({
+        id: inventoryReservation.id,
+        warehouseId: inventoryReservation.warehouseId,
+      }).from(inventoryReservation)
+        .where(and(
+          inArray(inventoryReservation.id, candidateIds),
+          eq(inventoryReservation.status, 'active'),
+          lte(inventoryReservation.expiresAt, now),
+        )).orderBy(asc(inventoryReservation.id)).for('update', { skipLocked: true })
+      const activeIds = lockedReservations.map(({ id }) => id)
+      if (activeIds.length === 0) return 0
+
+      const activeAllocations = candidateAllocations.filter(({ reservationId }) => activeIds.includes(reservationId))
+      if (activeAllocations.some(({ variantId }) => !variantIds.includes(variantId))) {
+        throw new ChangedReservationLockSet()
+      }
+      const lotIds = [...new Set(activeAllocations.map(({ lotId }) => lotId))].sort()
+      const lockedLots = lotIds.length > 0
+        ? await tx.select().from(inventoryLot).where(inArray(inventoryLot.id, lotIds))
+          .orderBy(asc(inventoryLot.id)).for('update')
+        : []
+      if (lockedLots.length !== lotIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+      await expireReservations(
+        tx,
+        activeIds,
+        activeAllocations,
+        new Map(lockedLots.map((lot) => [lot.id, lot])),
+        actor,
+        now,
+      )
+      return activeIds.length
+    })
+  }
 
   async reserve(input: ReserveInput, context: CommandContext): Promise<ReservationDetail> {
     const normalized = normalizeReserveInput(input)
