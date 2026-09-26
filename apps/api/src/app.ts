@@ -14,6 +14,8 @@ import { createStaffModule, createStaffSessionModule } from './modules/auth/staf
 import { createAdminProductsModule, createStoreProductsModule } from './modules/products'
 import { createAdminInventoryModule } from './modules/inventory'
 import { createStoreCartModule } from './modules/cart'
+import { createStoreCheckoutModule } from './modules/checkout'
+import { createStoreOrdersModule } from './modules/orders'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
 import type { CustomerProfileService } from './modules/customer/profile/service'
@@ -26,6 +28,9 @@ import type { SystemSettingsService } from './modules/settings/service'
 import type { ProductService } from './modules/products/service'
 import type { InventoryService } from './modules/inventory/service'
 import type { CartService } from './modules/cart/service'
+import type { QuoteService } from './modules/checkout/quote'
+import type { CheckoutService } from './modules/checkout/service'
+import type { OrderService } from './modules/orders/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
@@ -50,6 +55,9 @@ export interface AppDependencies {
   products: ProductService
   inventory: InventoryService
   cart: CartService
+  quote: QuoteService
+  checkout: CheckoutService
+  orders: OrderService
   staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
@@ -103,6 +111,8 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
+    .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.limiter))
+    .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(systemModule)

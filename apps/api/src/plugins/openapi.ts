@@ -18,6 +18,8 @@ export const apiTags = [
   { name: 'Customer Email Change', description: 'Request and confirm a customer email change. Confirmation verifies the new email and revokes all customer sessions.' },
   { name: 'Store Products', description: 'Public catalog products and active variants available to storefront clients.' },
   { name: 'Store Cart', description: 'Maintain the current customer or guest cart.' },
+  { name: 'Store Checkout', description: 'Quote the current cart and place cash-on-delivery orders.' },
+  { name: 'Store Orders', description: 'Read and cancel orders owned by the current customer or guest token.' },
   { name: 'Admin Products', description: 'Staff catalog management for products and variants.' },
   { name: 'Admin Inventory', description: 'Staff inventory lots, stock movements, and reservations.' },
   { name: 'Sign-in', description: 'Sign in with email and password.' },

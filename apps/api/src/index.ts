@@ -34,6 +34,11 @@ import { InventoryService } from './modules/inventory/service'
 import { startInventoryMaintenanceLoop } from './modules/inventory/maintenance'
 import { CartRepository } from './modules/cart/repository'
 import { CartService } from './modules/cart/service'
+import { CommerceSettingsRepository } from './modules/commerce-settings/repository'
+import { CommerceSettingsService } from './modules/commerce-settings/service'
+import { QuoteService } from './modules/checkout/quote'
+import { CheckoutService } from './modules/checkout/service'
+import { OrderService } from './modules/orders/service'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -65,6 +70,10 @@ const inventory = new InventoryService(
 )
 const products = new ProductService(new ProductRepository(database.db, audit, inventoryReadRepository))
 const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
+const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
+const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
+const checkout = new CheckoutService(database.db, config.commerceSecret)
+const orders = new OrderService(database.db, config.commerceSecret)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
@@ -110,6 +119,9 @@ const app = await createApp(config, {
   products,
   inventory,
   cart,
+  quote,
+  checkout,
+  orders,
   staffMfaRequired,
   identityReservations: claims,
   limiter,

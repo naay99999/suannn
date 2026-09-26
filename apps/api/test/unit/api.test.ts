@@ -33,6 +33,11 @@ import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import { CartRepository } from '../../src/modules/cart/repository'
 import { CartService } from '../../src/modules/cart/service'
+import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
+import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
+import { QuoteService } from '../../src/modules/checkout/quote'
+import { CheckoutService } from '../../src/modules/checkout/service'
+import { OrderService } from '../../src/modules/orders/service'
 import type { ProductService } from '../../src/modules/products/service'
 import { testEnv } from '../fixtures'
 
@@ -44,6 +49,8 @@ const auth = createAuth(config, database.db, { emailSender, runInBackground: (ta
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 const inventoryReadRepository = new InventoryReadRepository(database.db)
+const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
+const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const app = await createApp(config, {
   auth,
   audit,
@@ -86,7 +93,10 @@ const app = await createApp(config, {
     inventoryReadRepository,
     new InventoryReservationRepository(database.db),
   ),
-  cart: new CartService(new CartRepository(database.db, inventoryReadRepository)),
+  cart,
+  quote: new QuoteService(cart, commerceSettings, config.commerceSecret),
+  checkout: new CheckoutService(database.db, config.commerceSecret),
+  orders: new OrderService(database.db, config.commerceSecret),
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
