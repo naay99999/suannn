@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
+import { Elysia } from 'elysia'
 import { and, eq, sql } from 'drizzle-orm'
 import {
   auditLog,
@@ -16,7 +17,11 @@ import { InventoryReservationRepository } from '../../src/modules/inventory/rese
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import type { CommandContext, ReceiveLotInput } from '../../src/modules/inventory/types'
+import { createAdminInventoryModule } from '../../src/modules/inventory'
+import { loadConfig } from '../../src/config/env'
+import type { Auth } from '../../src/plugins/auth/auth'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { testEnv } from '../fixtures'
 
 const database = createTestDatabase()
 const actorId = 'inventory-stock-staff'
@@ -156,6 +161,44 @@ describe('inventory receipt and read persistence', () => {
       .where(and(eq(inventoryLot.variantId, variantId), eq(inventoryLot.warehouseId, input.warehouseId)))
     expect(summary.onHandQuantity).toBe(4)
     expect(summary.onHandQuantity).toBe(Number(ledger?.quantity))
+  })
+
+  it('returns aggregate totals above the per-lot cap from the inventory HTTP route', async () => {
+    const { variantId } = await seedVariant()
+    const warehouseId = await mainWarehouseId()
+    const quantityPerLot = 600_000_000
+    for (const lotCode of ['SUMMARY-LARGE-1', 'SUMMARY-LARGE-2']) {
+      await receive(receiptInput(variantId, lotCode, { warehouseId, quantity: quantityPerLot }), `receipt-${lotCode}`)
+    }
+
+    const service = createService()
+    const expected = {
+      variantId,
+      warehouseId,
+      onHandQuantity: 1_200_000_000,
+      reservedQuantity: 0,
+      eligibleQuantity: 1_200_000_000,
+      sellableQuantity: 1_200_000_000,
+    }
+    expect(await service.getVariantSummary(variantId, warehouseId)).toEqual(expected)
+
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: actorId, accountType: 'staff' as const },
+          staff: { role: 'owner', permissions: [] },
+          session: { id: 'inventory-summary-session' },
+        }),
+      },
+    } as unknown as Auth
+    const app = new Elysia().use(createAdminInventoryModule(loadConfig(testEnv), auth, service))
+    const response = await app.handle(new Request(
+      `http://localhost/api/v1/admin/inventory/variants/${variantId}/summary`,
+      { headers: { cookie: 'session=owner' } },
+    ))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(expected)
   })
 
   it('paginates lots and movements without duplicate rows', async () => {

@@ -13,11 +13,16 @@ import {
   warehouse,
 } from '../../src/database/schema'
 import { bangkokDate } from '../../src/modules/inventory/policy'
+import { AuditRepository } from '../../src/modules/audit/repository'
+import { AuditService } from '../../src/modules/audit/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import type { CommandContext } from '../../src/modules/inventory/types'
+import { ProductRepository } from '../../src/modules/products/repository'
+import { ProductService } from '../../src/modules/products/service'
+import type { ProductActor } from '../../src/modules/products/types'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 
 const database = createTestDatabase()
@@ -77,6 +82,32 @@ function createService() {
     new InventoryReadRepository(database.db),
     new InventoryReservationRepository(database.db),
   )
+}
+
+function createProductService() {
+  return new ProductService(new ProductRepository(
+    database.db,
+    new AuditService(new AuditRepository(database.db)),
+    new InventoryReadRepository(database.db),
+  ))
+}
+
+async function waitForBlockedProductLocks(expected: number) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    const rows = await database.db.execute<{ blocked: number }>(sql`
+      select count(*)::int as blocked
+      from pg_stat_activity
+      where datname = current_database()
+        and pid <> pg_backend_pid()
+        and wait_event_type = 'Lock'
+        and query ilike '%for update%'
+        and query ilike '%product%'
+    `)
+    if ((rows[0]?.blocked ?? 0) >= expected) return
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(`Timed out waiting for ${expected} catalog row lock waiters`)
 }
 
 async function seedVariant() {
@@ -248,6 +279,61 @@ describe('inventory reservation lifecycle', () => {
     expect(stored?.status).toBe('cancelled')
     expect(operation?.httpStatus).toBe(409)
     expect(await createService().getLot(lot.id)).toMatchObject({ onHandQuantity: 5, reservedQuantity: 0 })
+  })
+
+  it('serializes a catalog sales change ahead of a concurrent reservation', async () => {
+    const { productId, variantId } = await seedVariant()
+    const lot = await seedLot(variantId)
+    const warehouseId = await mainWarehouseId()
+    const productActor: ProductActor = { userId: actorId, auditContext: actor.auditContext }
+    let signalLockAcquired: (() => void) | undefined
+    let releaseCatalogLock: (() => void) | undefined
+    const lockAcquired = new Promise<void>((resolve) => { signalLockAcquired = resolve })
+    const holdCatalogLock = new Promise<void>((resolve) => { releaseCatalogLock = resolve })
+    const lockTransaction = database.db.transaction(async (tx) => {
+      await tx.select({ id: product.id }).from(product)
+        .where(eq(product.id, productId)).for('update')
+      signalLockAcquired?.()
+      await holdCatalogLock
+    })
+    await lockAcquired
+    let catalogUpdate: Promise<{ status: 'fulfilled'; value: Awaited<ReturnType<ProductService['updateVariant']>> } | { status: 'rejected'; error: unknown }> | undefined
+    let reservationAttempt: Promise<{ status: 'fulfilled'; value: Awaited<ReturnType<InventoryService['reserve']>> } | { status: 'rejected'; error: unknown }> | undefined
+
+    try {
+      catalogUpdate = createProductService().updateVariant(productId, variantId, { salesEnabled: false }, productActor)
+        .then((value) => ({ status: 'fulfilled' as const, value }), (error: unknown) => ({ status: 'rejected' as const, error }))
+      await waitForBlockedProductLocks(1)
+
+      reservationAttempt = createService().reserve({
+        warehouseId,
+        lines: [{ variantId, quantity: 2 }],
+      }, command('lifecycle-catalog-change-race-reserve'))
+        .then((value) => ({ status: 'fulfilled' as const, value }), (error: unknown) => ({ status: 'rejected' as const, error }))
+      await waitForBlockedProductLocks(2)
+      releaseCatalogLock?.()
+
+      const [changed, reserved] = await Promise.all([catalogUpdate, reservationAttempt])
+      expect(changed?.status).toBe('fulfilled')
+      if (changed?.status === 'rejected') throw changed.error
+      const changedVariant = changed!.value
+      expect(changedVariant.salesEnabled).toBe(false)
+      expect(reserved.status).toBe('rejected')
+      if (reserved.status === 'rejected') expect(reserved.error).toMatchObject({ code: 'PRODUCT_STATE_CONFLICT' })
+
+      const [storedVariant] = await database.db.select({ salesEnabled: productVariant.salesEnabled })
+        .from(productVariant).where(eq(productVariant.id, variantId))
+      const [operation] = await database.db.select({ httpStatus: inventoryOperation.httpStatus })
+        .from(inventoryOperation).where(eq(inventoryOperation.idempotencyKey, 'lifecycle-catalog-change-race-reserve'))
+      expect(storedVariant?.salesEnabled).toBe(false)
+      expect(operation?.httpStatus).toBe(409)
+      expect(await database.db.select().from(inventoryReservation)).toHaveLength(0)
+      expect(await createService().getLot(lot.id)).toMatchObject({ onHandQuantity: 5, reservedQuantity: 0 })
+    } finally {
+      releaseCatalogLock?.()
+      await lockTransaction
+      await Promise.all([catalogUpdate, reservationAttempt].filter((attempt) => attempt !== undefined))
+    }
   })
 
   it('commits overdue expiry before a reserve request returns a missing variant 404', async () => {

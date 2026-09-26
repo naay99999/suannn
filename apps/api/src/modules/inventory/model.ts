@@ -41,10 +41,10 @@ const lot = t.Object({
 const variantSummary = t.Object({
   variantId: uuid,
   warehouseId: uuid,
-  onHandQuantity: t.Integer({ minimum: 0, maximum: 1_000_000_000 }),
-  reservedQuantity: t.Integer({ minimum: 0, maximum: 1_000_000_000 }),
-  eligibleQuantity: t.Integer({ minimum: 0, maximum: 1_000_000_000 }),
-  sellableQuantity: t.Integer({ minimum: 0, maximum: 1_000_000_000 }),
+  onHandQuantity: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  reservedQuantity: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  eligibleQuantity: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  sellableQuantity: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 }, { additionalProperties: false })
 
 const movement = t.Object({

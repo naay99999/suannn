@@ -135,12 +135,15 @@ describe('inventory adjustments', () => {
     }, { actor, idempotencyKey: 'write-off-spoiled' })
     const movements = await database.db.select().from(stockMovement).where(eq(stockMovement.lotId, lot.id))
     const events = await database.db.select().from(auditLog).where(eq(auditLog.targetId, lot.id))
+    const adjustmentMovement = movements.filter(({ type }) => type === 'write_off')
+    const adjustmentEvents = events.filter(({ action }) => action === 'inventory.written-off')
 
     expect(adjusted.onHandQuantity).toBe(5)
     expect(movements).toHaveLength(2)
-    expect(movements.at(-1)).toMatchObject({ type: 'write_off', reasonCode: 'spoiled', quantityDelta: -3, balanceAfter: 5 })
-    expect(events.at(-1)?.action).toBe('inventory.written-off')
-    expect(events.at(-1)?.metadata).not.toHaveProperty('note')
+    expect(adjustmentMovement).toHaveLength(1)
+    expect(adjustmentMovement[0]).toMatchObject({ type: 'write_off', reasonCode: 'spoiled', quantityDelta: -3, balanceAfter: 5 })
+    expect(adjustmentEvents).toHaveLength(1)
+    expect(adjustmentEvents[0]?.metadata).not.toHaveProperty('note')
   })
 
   it('rejects the expired reason for a lot that is still valid', async () => {
@@ -164,10 +167,12 @@ describe('inventory adjustments', () => {
       reason: 'cycle_count',
     }, { actor, idempotencyKey: 'count-adjust-down' })
     const movements = await database.db.select().from(stockMovement).where(eq(stockMovement.lotId, lot.id))
+    const adjustmentMovements = movements.filter(({ type }) => type === 'count_adjustment')
 
     expect(adjusted.onHandQuantity).toBe(5)
     expect(movements).toHaveLength(2)
-    expect(movements.at(-1)).toMatchObject({ type: 'count_adjustment', reasonCode: 'cycle_count', quantityDelta: -3, balanceAfter: 5 })
+    expect(adjustmentMovements).toHaveLength(1)
+    expect(adjustmentMovements[0]).toMatchObject({ type: 'count_adjustment', reasonCode: 'cycle_count', quantityDelta: -3, balanceAfter: 5 })
   })
 
   it('allows a zero count delta without adding a physical movement', async () => {
@@ -209,9 +214,11 @@ describe('inventory adjustments', () => {
       reason: 'expired',
     }, { actor, idempotencyKey: 'write-off-expired' })
     const movement = await database.db.select().from(stockMovement).where(eq(stockMovement.lotId, lot.id))
+    const writeOffMovements = movement.filter(({ type }) => type === 'write_off')
 
     expect(adjusted.onHandQuantity).toBe(6)
-    expect(movement.at(-1)).toMatchObject({ type: 'write_off', reasonCode: 'expired', quantityDelta: -2, balanceAfter: 6 })
+    expect(writeOffMovements).toHaveLength(1)
+    expect(writeOffMovements[0]).toMatchObject({ type: 'write_off', reasonCode: 'expired', quantityDelta: -2, balanceAfter: 6 })
   })
 
   it('replays a repeated adjustment key without applying its movement twice', async () => {

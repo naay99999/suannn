@@ -64,7 +64,7 @@ export function createStoreProductsModule(service: ProductService) {
       response: { 200: 'product.storePage', 422: 'http.error' },
       detail: {
         summary: 'List published products',
-        description: 'Returns published product summaries and their lowest active variant prices. Storefront access is public. canPurchase reflects the manual sales switch, not stock availability.',
+        description: 'Returns published product summaries and their lowest active variant prices. canPurchase is true only when an active variant has eligible, unreserved stock and sales are enabled. Storefront access is public.',
         tags: ['Store Products'],
         security: [],
       },

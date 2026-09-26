@@ -218,6 +218,25 @@ describe('inventory HTTP contracts', () => {
     expect(calls).toEqual(['getDefaultWarehouse', 'getReservation'])
   })
 
+  it('returns aggregate variant totals above the per-lot quantity limit', async () => {
+    const expected = {
+      variantId,
+      warehouseId,
+      onHandQuantity: 1_200_000_000,
+      reservedQuantity: 0,
+      eligibleQuantity: 1_200_000_000,
+      sellableQuantity: 1_200_000_000,
+    }
+    const { app } = await createTestApp({ getVariantSummary: async () => expected })
+    const response = await app.handle(request(
+      `/api/v1/admin/inventory/variants/${variantId}/summary`,
+      { cookie: 'owner' },
+    ))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(expected)
+  })
+
   it('requires a staff session and inventory permission for reads', async () => {
     const { app, calls } = await createTestApp()
     const missing = await app.handle(request('/api/v1/admin/inventory/warehouses'))
