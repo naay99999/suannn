@@ -107,7 +107,7 @@ export function createStoreOrdersModule(
     .use(createRequestContextPlugin(config))
     .model(httpModels)
     .model(ordersModels)
-    .get('/', async ({ request, query }) => {
+    .get('', async ({ request, query }) => {
       const customerId = await requireCustomer(auth, request)
       return service.listCustomer(customerId, query.cursor, query.limit ?? 50)
     }, {
@@ -135,14 +135,7 @@ export function createStoreOrdersModule(
         summary: 'Get an owned store order',
         description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response.',
         tags: ['Store Orders'],
-        security: [],
-        parameters: [{
-          name: 'X-Order-Access-Token',
-          in: 'header',
-          required: false,
-          schema: { type: 'string' },
-          description: 'Guest order access token issued by checkout. Customer sessions always use customer ownership.',
-        }],
+        security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
       },
     })
     .post('/:orderId/cancel', async ({ request, params, headers, requestContext, set }) => {
@@ -163,14 +156,7 @@ export function createStoreOrdersModule(
         summary: 'Cancel an owned store order',
         description: 'Cancels an eligible customer or guest COD order before shipment. The command is idempotent and restores the original inventory allocations once.',
         tags: ['Store Orders'],
-        security: [{ sessionCookie: [] }],
-        parameters: [{
-          name: 'X-Order-Access-Token',
-          in: 'header',
-          required: false,
-          schema: { type: 'string' },
-          description: 'Guest order access token issued by checkout. Customer sessions always use customer ownership.',
-        }],
+        security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
       },
     })
 }

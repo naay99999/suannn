@@ -115,6 +115,10 @@ export function authOpenApiComponents(components: Record<string, unknown>) {
         type: 'apiKey', in: 'cookie', name: 'better-auth.two_factor',
         description: 'Short-lived Better Auth two-factor challenge cookie. HTTPS deployments may use the __Secure- prefix.',
       },
+      orderAccessToken: {
+        type: 'apiKey', in: 'header', name: 'X-Order-Access-Token',
+        description: 'Guest order access token issued by checkout.',
+      },
     },
   }
 }

@@ -434,19 +434,35 @@ describe('store checkout and order HTTP contracts', () => {
     const { appPromise } = createHarness()
     const app = await appPromise
     const response = await app.handle(new Request('http://localhost/api/v1/openapi.json'))
-    const document = await response.json() as { paths: Record<string, Record<string, Record<string, unknown>>>; components: { schemas: Record<string, unknown> } }
+    const document = await response.json() as {
+      paths: Record<string, Record<string, Record<string, unknown>>>
+      components: { schemas: Record<string, unknown>; securitySchemes: Record<string, Record<string, unknown>> }
+    }
     const serialized = JSON.stringify(document)
 
     expect(response.status).toBe(200)
     for (const [path, method] of [
       ['/api/v1/store/checkout/quote', 'post'],
       ['/api/v1/store/checkout/orders', 'post'],
-      ['/api/v1/store/orders/', 'get'],
+      ['/api/v1/store/orders', 'get'],
       ['/api/v1/store/orders/{orderId}', 'get'],
       ['/api/v1/store/orders/{orderId}/cancel', 'post'],
     ]) {
       expect(document.paths[path]?.[method]).toBeDefined()
       expect(document.paths[path]?.[method]?.responses).toBeDefined()
+    }
+    expect(document.paths['/api/v1/store/orders/']).toBeUndefined()
+    expect(document.components.securitySchemes.orderAccessToken).toMatchObject({
+      type: 'apiKey',
+      in: 'header',
+      name: 'X-Order-Access-Token',
+    })
+    for (const operation of [
+      document.paths['/api/v1/store/orders/{orderId}']?.get,
+      document.paths['/api/v1/store/orders/{orderId}/cancel']?.post,
+    ]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }, { orderAccessToken: [] }])
+      expect(operation?.parameters).not.toContainEqual(expect.objectContaining({ name: 'X-Order-Access-Token' }))
     }
     expect(JSON.stringify(document.paths['/api/v1/store/checkout/orders']?.post).toLowerCase()).toContain('idempotency-key')
     expect(serialized).not.toContain('guestAccessTokenHash')
