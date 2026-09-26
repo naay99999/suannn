@@ -13,6 +13,7 @@ export type DomainErrorCode =
   | 'WAREHOUSE_NOT_FOUND'
   | 'LOT_CODE_CONFLICT'
   | 'INVENTORY_OPERATION_CONFLICT'
+  | 'RESERVATION_NOT_CONFIRMABLE'
   | 'INVALID_IDEMPOTENCY_KEY'
   | 'INVALID_INVENTORY_COMMAND'
   | 'INVALID_INVENTORY_QUERY'
@@ -35,6 +36,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   WAREHOUSE_NOT_FOUND: { status: 404, message: 'Warehouse not found' },
   LOT_CODE_CONFLICT: { status: 409, message: 'Lot code is already in use for this variant' },
   INVENTORY_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
+  RESERVATION_NOT_CONFIRMABLE: { status: 409, message: 'Inventory reservation is no longer eligible for confirmation' },
   INVALID_IDEMPOTENCY_KEY: { status: 422, message: 'Idempotency key is invalid' },
   INVALID_INVENTORY_COMMAND: { status: 422, message: 'Inventory command is invalid' },
   INVALID_INVENTORY_QUERY: { status: 422, message: 'Inventory query is invalid' },

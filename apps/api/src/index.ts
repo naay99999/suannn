@@ -28,7 +28,9 @@ import { SystemSettingsService } from './modules/settings/service'
 import { ProductRepository } from './modules/products/repository'
 import { ProductService } from './modules/products/service'
 import { InventoryReadRepository } from './modules/inventory/read-repository'
+import { InventoryStockRepository } from './modules/inventory/stock-repository'
 import { InventoryReservationRepository } from './modules/inventory/reservation-repository'
+import { InventoryService } from './modules/inventory/service'
 import { startInventoryMaintenanceLoop } from './modules/inventory/maintenance'
 
 const config = loadConfig()
@@ -54,6 +56,11 @@ const audit = new AuditService(new AuditRepository(database.db))
 const systemSettingsRepository = new SystemSettingsRepository(database.db, audit)
 const systemSettings = new SystemSettingsService(systemSettingsRepository)
 const inventoryReadRepository = new InventoryReadRepository(database.db)
+const inventory = new InventoryService(
+  new InventoryStockRepository(database.db, audit),
+  inventoryReadRepository,
+  inventoryReservations,
+)
 const products = new ProductService(new ProductRepository(database.db, audit, inventoryReadRepository))
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
@@ -98,6 +105,7 @@ const app = await createApp(config, {
   staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
   systemSettings,
   products,
+  inventory,
   staffMfaRequired,
   identityReservations: claims,
   limiter,

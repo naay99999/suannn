@@ -38,6 +38,8 @@ After changing Better Auth plugins or schema options, run `bun --filter api auth
 
 Apply migrations before starting the new API. In particular, apply `0008_adorable_doomsday.sql` before deploying the products API, which queries the product and product-variant tables. Existing identities are backfilled as customers; no migration promotes an existing user to staff.
 
+Apply `0009_pale_typhoid_mary.sql` before deploying the inventory API. It creates the `MAIN` warehouse, inventory lots, immutable stock movements, reservations, idempotency records, and the variant shelf-life setting used by inventory reads.
+
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
 ## Authentication operations
@@ -91,7 +93,7 @@ Requesting an email change verifies the current password and sends an eight-digi
 
 ## Product catalog API
 
-Store catalog routes are public and return only published products and active variants. Product list routes accept `q`, `category` (`fresh` or `processed`), `sort` (`newest`, `price-asc`, or `price-desc`), `limit`, and `cursor`; `limit` defaults to 50 and is capped at 100. Product detail is addressed by its immutable slug. Store variant `canPurchase` mirrors the staff-controlled `salesEnabled` setting and does not indicate inventory availability.
+Store catalog routes are public and return only published products and active variants. Product list routes accept `q`, `category` (`fresh` or `processed`), `sort` (`newest`, `price-asc`, or `price-desc`), `limit`, and `cursor`; `limit` defaults to 50 and is capped at 100. Product detail is addressed by its immutable slug. Store `canPurchase` fields are read-time availability hints based on published products, active sales-enabled variants, and eligible unreserved stock in the default warehouse; reservations remain the purchase authority.
 
 Admin routes require an active staff session with the listed catalog permission. Browser mutations also require `Origin: <ADMIN_URL>` and `Content-Type: application/json`. Product and variant deletes archive records, preserving their IDs and reserving archived SKUs. Staff list filters are `q`, `status`, `limit`, and `cursor`.
 
@@ -111,3 +113,28 @@ Admin routes require an active staff session with the listed catalog permission.
 | `DELETE` | `/api/v1/admin/products/{id}/variants/{variantId}` | `catalog:delete` | Empty `200` response; variant archived |
 
 Known product failures use `{ "code", "message" }`: unauthenticated staff requests return 401, insufficient permissions or a rejected browser origin return 403, unknown or non-public products return 404, lifecycle and uniqueness conflicts return 409, and invalid requests return 422. Create, update, publish, unpublish, and archive actions write audit records using the authenticated staff identity and request context.
+
+## Inventory API
+
+Staff inventory reads require `inventory:read`. Stock commands require `inventory:adjust`, an active staff session, the exact configured `ADMIN_URL` origin, and `Content-Type: application/json`. Every mutation requires an `Idempotency-Key` containing 1–128 visible ASCII characters without whitespace. Repeating the same command with the same key replays its result; using that key for different input returns 409. No body accepts an actor ID or staff role. All writes are audited with the authenticated staff identity.
+
+List endpoints use `limit` (default 50, maximum 100) and opaque `cursor` pagination. Lot filters are `warehouseId` and `variantId`; movement filters are `warehouseId`, `variantId`, and `lotId`. Empty filters and unknown query fields return 422. Lot reads show physical, reserved, and sellable quantities separately; expired, quarantined, and depleted lots remain visible to staff. Reservation allocation uses FIFO among lots that satisfy the variant's shelf-life policy, and each hold expires after 15 minutes.
+
+| Method | Path | Permission | Success |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/admin/inventory/warehouses` | `inventory:read` | Default `MAIN` warehouse |
+| `GET` | `/api/v1/admin/inventory/variants/{variantId}/summary` | `inventory:read` | Physical, held, eligible, and sellable totals |
+| `GET` | `/api/v1/admin/inventory/lots` | `inventory:read` | Filtered lot page |
+| `GET` | `/api/v1/admin/inventory/lots/{lotId}` | `inventory:read` | Lot detail |
+| `GET` | `/api/v1/admin/inventory/movements` | `inventory:read` | Filtered stock movement page |
+| `POST` | `/api/v1/admin/inventory/lots` | `inventory:adjust` | Received lot (`201`) |
+| `POST` | `/api/v1/admin/inventory/lots/{lotId}/quarantine` | `inventory:adjust` | Quarantined lot and cancelled holds |
+| `POST` | `/api/v1/admin/inventory/lots/{lotId}/release-quarantine` | `inventory:adjust` | Released lot |
+| `POST` | `/api/v1/admin/inventory/lots/{lotId}/write-offs` | `inventory:adjust` | Written-off lot |
+| `POST` | `/api/v1/admin/inventory/lots/{lotId}/count-adjustments` | `inventory:adjust` | Reconciled lot |
+| `POST` | `/api/v1/admin/inventory/reservations` | `inventory:adjust` | New 15-minute reservation (`201`) |
+| `GET` | `/api/v1/admin/inventory/reservations/{reservationId}` | `inventory:read` | Reservation status and allocations |
+| `POST` | `/api/v1/admin/inventory/reservations/{reservationId}/confirm` | `inventory:adjust` | Confirmed reservation |
+| `POST` | `/api/v1/admin/inventory/reservations/{reservationId}/release` | `inventory:adjust` | Released reservation |
+
+The API process expires overdue reservations in bounded batches at least once per minute. Startup should run after the inventory migration is applied; graceful shutdown stops the cleanup timer and waits for an in-flight cleanup batch. Application errors use `{ "code", "message" }`: missing resources return 404, lifecycle or stock conflicts return 409, and invalid requests return 422.

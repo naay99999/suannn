@@ -11,6 +11,15 @@ export interface CommandContext {
   idempotencyKey: string
 }
 
+export interface WarehouseDetail {
+  id: string
+  code: string
+  name: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ReceiveLotInput {
   warehouseId: string
   variantId: string

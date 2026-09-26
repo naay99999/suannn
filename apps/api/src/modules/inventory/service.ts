@@ -13,6 +13,7 @@ import type {
   ReceiveLotInput,
   WriteOffInput,
   VariantStockSummary,
+  WarehouseDetail,
 } from './types'
 
 export class InventoryService {
@@ -62,12 +63,20 @@ export class InventoryService {
     return this.reads.getVariantSummary(variantId, warehouseId)
   }
 
+  getDefaultWarehouse(): Promise<WarehouseDetail> {
+    return this.reads.getDefaultWarehouse()
+  }
+
   listLots(query: LotQuery) {
     return this.reads.listLots(query)
   }
 
   getLot(id: string): Promise<LotDetail> {
     return this.reads.getLot(id)
+  }
+
+  getReservation(id: string): Promise<ReservationDetail> {
+    return this.reservations.getReservation(id)
   }
 
   listMovements(query: MovementQuery): Promise<import('./types').InventoryCursorPage<MovementDetail>> {

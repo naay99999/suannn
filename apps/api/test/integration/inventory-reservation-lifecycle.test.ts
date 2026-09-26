@@ -219,7 +219,7 @@ describe('inventory reservation lifecycle', () => {
       .where(eq(productVariant.id, variantId))
 
     await expect(createService().confirm(reservation.id, command('lifecycle-disabled-confirm')))
-      .rejects.toMatchObject({ code: 'PRODUCT_STATE_CONFLICT' })
+      .rejects.toMatchObject({ code: 'RESERVATION_NOT_CONFIRMABLE' })
 
     const [stored] = await database.db.select().from(inventoryReservation)
       .where(eq(inventoryReservation.id, reservation.id))
@@ -227,7 +227,7 @@ describe('inventory reservation lifecycle', () => {
       .where(eq(inventoryOperation.idempotencyKey, 'lifecycle-disabled-confirm'))
     expect(stored?.status).toBe('cancelled')
     expect(operation?.httpStatus).toBe(409)
-    expect(operation?.resultPayload).toMatchObject({ body: { code: 'PRODUCT_STATE_CONFLICT' } })
+    expect(operation?.resultPayload).toMatchObject({ body: { code: 'RESERVATION_NOT_CONFIRMABLE' } })
     expect(await createService().getLot(lot.id)).toMatchObject({ onHandQuantity: 5, reservedQuantity: 0 })
   })
 
@@ -239,7 +239,7 @@ describe('inventory reservation lifecycle', () => {
       .where(eq(product.id, productId))
 
     await expect(createService().confirm(reservation.id, command('lifecycle-archived-confirm')))
-      .rejects.toMatchObject({ code: 'PRODUCT_STATE_CONFLICT' })
+      .rejects.toMatchObject({ code: 'RESERVATION_NOT_CONFIRMABLE' })
 
     const [stored] = await database.db.select().from(inventoryReservation)
       .where(eq(inventoryReservation.id, reservation.id))

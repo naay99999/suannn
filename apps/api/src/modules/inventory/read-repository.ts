@@ -12,6 +12,7 @@ import type {
   MovementDetail,
   MovementQuery,
   VariantStockSummary,
+  WarehouseDetail,
 } from './types'
 
 const defaultPageSize = 50
@@ -153,6 +154,19 @@ function toLotDetail(row: LotReadRow, now: Date): LotDetail {
 
 export class InventoryReadRepository {
   constructor(private readonly db: Database) {}
+
+  async getDefaultWarehouse(): Promise<WarehouseDetail> {
+    const [row] = await this.db.select().from(warehouse).where(eq(warehouse.code, 'MAIN')).limit(1)
+    if (!row) throw new DomainError('WAREHOUSE_NOT_FOUND')
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      isActive: row.isActive,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
 
   async getSellableVariantIds(variantIds: readonly string[]): Promise<Set<string>> {
     const requestedIds = [...new Set(variantIds)]

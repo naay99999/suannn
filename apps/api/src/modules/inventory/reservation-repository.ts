@@ -253,7 +253,7 @@ async function expireReservations(
 }
 
 type ReservationConflict = {
-  code: 'INVENTORY_STOCK_CONFLICT' | 'PRODUCT_STATE_CONFLICT' | 'VARIANT_NOT_FOUND' | 'PRODUCT_NOT_FOUND'
+  code: 'INVENTORY_STOCK_CONFLICT' | 'PRODUCT_STATE_CONFLICT' | 'RESERVATION_NOT_CONFIRMABLE' | 'VARIANT_NOT_FOUND' | 'PRODUCT_NOT_FOUND'
 }
 type ReservationConflictBody = {
   code: ReservationConflict['code']
@@ -607,6 +607,21 @@ export async function releaseInTransaction(
 export class InventoryReservationRepository {
   constructor(private readonly db: Database) {}
 
+  async getReservation(reservationId: string): Promise<ReservationDetail> {
+    const [reservation] = await this.db.select().from(inventoryReservation)
+      .where(eq(inventoryReservation.id, reservationId)).limit(1)
+    if (!reservation) throw new DomainError('RESERVATION_NOT_FOUND')
+    const allocations = await this.db.select({
+      reservationId: inventoryReservationAllocation.reservationId,
+      variantId: inventoryReservationAllocation.variantId,
+      lotId: inventoryReservationAllocation.lotId,
+      quantity: inventoryReservationAllocation.quantity,
+    }).from(inventoryReservationAllocation)
+      .where(eq(inventoryReservationAllocation.reservationId, reservationId))
+      .orderBy(asc(inventoryReservationAllocation.variantId), asc(inventoryReservationAllocation.lotId))
+    return reservationDetail(reservation, allocations)
+  }
+
   async confirm(reservationId: string, context: CommandContext): Promise<ReservationDetail> {
     const result = await runInventoryCommand<ReservationDetail | ReservationConflictBody>(
       this.db,
@@ -617,7 +632,7 @@ export class InventoryReservationRepository {
       async (tx, operationId) => {
         const detail = await confirmInTransaction(tx, reservationId, context.actor, operationId)
         if (detail.status === 'confirmed') return { status: 200, body: detail }
-        const code = detail.status === 'cancelled' ? 'PRODUCT_STATE_CONFLICT' : 'INVENTORY_STOCK_CONFLICT'
+        const code = detail.status === 'cancelled' ? 'RESERVATION_NOT_CONFIRMABLE' : 'INVENTORY_STOCK_CONFLICT'
         const error = new DomainError(code)
         return { status: error.status, body: { code, message: error.publicMessage } }
       },

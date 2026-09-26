@@ -219,6 +219,23 @@ describe('products HTTP contracts', () => {
     expect(calls).toEqual([])
   })
 
+  it('rejects shelf-life requirements above 365 days through the admin HTTP contract', async () => {
+    const { app, calls } = createApp()
+    const response = await app.handle(request(`/api/v1/admin/products/${productId}/variants`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sku: 'COCO-1L',
+        name: '1 litre',
+        unit: 'bottle',
+        priceSatang: 2500,
+        minRemainingShelfLifeDays: 366,
+      }),
+    }, 'catalog_manager'))
+
+    expect(response.status).toBe(422)
+    expect(calls).toEqual([])
+  })
+
   it('documents all Store and Admin product routes with request and response schemas', async () => {
     const { app } = createApp()
     const response = await app.handle(request('/api/v1/openapi.json'))
