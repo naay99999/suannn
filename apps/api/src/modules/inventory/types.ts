@@ -35,6 +35,37 @@ export interface CountAdjustmentInput {
   reason: string
 }
 
+export interface ReserveLine {
+  variantId: string
+  quantity: number
+}
+
+export interface ReserveInput {
+  warehouseId: string
+  lines: ReserveLine[]
+  externalReference?: string
+}
+
+export type ReservationStatus = 'active' | 'confirmed' | 'released' | 'expired' | 'cancelled'
+
+export interface ReservationAllocation {
+  variantId: string
+  lotId: string
+  quantity: number
+}
+
+export interface ReservationDetail {
+  id: string
+  warehouseId: string
+  externalReference: string | null
+  status: ReservationStatus
+  createdAt: string
+  expiresAt: string
+  completedAt: string | null
+  actorId: string
+  allocations: ReservationAllocation[]
+}
+
 export interface LotDetail {
   id: string
   warehouseId: string

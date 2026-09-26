@@ -12,6 +12,7 @@ import {
 } from '../../src/database/schema'
 import { bangkokDate } from '../../src/modules/inventory/policy'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
+import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import type { CommandContext, ReceiveLotInput } from '../../src/modules/inventory/types'
@@ -68,6 +69,7 @@ function createService() {
   return new InventoryService(
     new InventoryStockRepository(database.db),
     new InventoryReadRepository(database.db),
+    new InventoryReservationRepository(database.db),
   )
 }
 

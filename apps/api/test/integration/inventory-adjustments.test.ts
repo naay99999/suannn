@@ -12,6 +12,7 @@ import {
 } from '../../src/database/schema'
 import { bangkokDate } from '../../src/modules/inventory/policy'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
+import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import { AuditService } from '../../src/modules/audit/service'
@@ -69,6 +70,7 @@ function createService(audit?: AuditService) {
   return new InventoryService(
     new InventoryStockRepository(database.db, audit),
     new InventoryReadRepository(database.db),
+    new InventoryReservationRepository(database.db),
   )
 }
 

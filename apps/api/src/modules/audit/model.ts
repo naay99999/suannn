@@ -26,6 +26,11 @@ export const auditMetadataKeys = {
   'inventory.received': ['variantId', 'warehouseId', 'quantity'],
   'inventory.written-off': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],
   'inventory.count-adjusted': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],
+  'inventory.reserved': ['warehouseId', 'reservationId', 'operationId', 'allocationCount', 'quantity'],
+  'inventory.reservation-expired': ['warehouseId', 'reservationId', 'reasonCode'],
+  'inventory.reservation-cancelled': ['warehouseId', 'reservationId', 'lotId', 'reasonCode'],
+  'inventory.quarantined': ['variantId', 'warehouseId', 'reasonCode'],
+  'inventory.quarantine-released': ['variantId', 'warehouseId'],
 } as const
 
 const auditRecord = t.Object({

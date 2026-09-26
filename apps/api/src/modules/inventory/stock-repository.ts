@@ -205,8 +205,11 @@ export class InventoryStockRepository {
         const quantityDelta = -normalized.quantity
         const [updated] = await tx.update(inventoryLot).set({
           onHandQuantity: locked.lot.onHandQuantity + quantityDelta,
-        }).where(eq(inventoryLot.id, locked.lot.id)).returning(lotProjection)
-        if (!updated) throw new DomainError('LOT_NOT_FOUND')
+        }).where(and(
+          eq(inventoryLot.id, locked.lot.id),
+          sql`${inventoryLot.onHandQuantity} - ${inventoryLot.reservedQuantity} >= ${normalized.quantity}`,
+        )).returning(lotProjection)
+        if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
 
         await tx.insert(stockMovement).values({
           id: crypto.randomUUID(),
@@ -262,8 +265,11 @@ export class InventoryStockRepository {
         const quantityDelta = normalized.countedQuantity - locked.lot.onHandQuantity
         const [updated] = await tx.update(inventoryLot).set({
           onHandQuantity: normalized.countedQuantity,
-        }).where(eq(inventoryLot.id, locked.lot.id)).returning(lotProjection)
-        if (!updated) throw new DomainError('LOT_NOT_FOUND')
+        }).where(and(
+          eq(inventoryLot.id, locked.lot.id),
+          sql`${inventoryLot.reservedQuantity} <= ${normalized.countedQuantity}`,
+        )).returning(lotProjection)
+        if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
 
         if (quantityDelta !== 0) {
           await tx.insert(stockMovement).values({

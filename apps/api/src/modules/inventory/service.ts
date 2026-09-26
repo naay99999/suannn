@@ -1,11 +1,14 @@
 import type { InventoryReadRepository } from './read-repository'
 import type { InventoryStockRepository } from './stock-repository'
+import type { InventoryReservationRepository } from './reservation-repository'
 import type {
   CommandContext,
   LotDetail,
   LotQuery,
   MovementDetail,
   MovementQuery,
+  ReserveInput,
+  ReservationDetail,
   CountAdjustmentInput,
   ReceiveLotInput,
   WriteOffInput,
@@ -16,6 +19,7 @@ export class InventoryService {
   constructor(
     private readonly stock: InventoryStockRepository,
     private readonly reads: InventoryReadRepository,
+    private readonly reservations: InventoryReservationRepository,
   ) {}
 
   receiveLot(input: ReceiveLotInput, context: CommandContext): Promise<LotDetail> {
@@ -28,6 +32,18 @@ export class InventoryService {
 
   adjustCount(lotId: string, input: CountAdjustmentInput, context: CommandContext): Promise<LotDetail> {
     return this.stock.adjustCount(lotId, input, context)
+  }
+
+  reserve(input: ReserveInput, context: CommandContext): Promise<ReservationDetail> {
+    return this.reservations.reserve(input, context)
+  }
+
+  quarantineLot(lotId: string, reason: string, context: CommandContext): Promise<LotDetail> {
+    return this.reservations.quarantineLot(lotId, reason, context)
+  }
+
+  releaseQuarantine(lotId: string, context: CommandContext): Promise<LotDetail> {
+    return this.reservations.releaseQuarantine(lotId, context)
   }
 
   getVariantSummary(variantId: string, warehouseId: string): Promise<VariantStockSummary> {

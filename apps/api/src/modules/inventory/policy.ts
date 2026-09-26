@@ -1,5 +1,5 @@
 import { DomainError } from '../../shared/domain-error'
-import type { ReceiveLotInput } from './types'
+import type { ReceiveLotInput, ReserveInput } from './types'
 
 const bangkokCalendar = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Asia/Bangkok',
@@ -95,5 +95,44 @@ export function normalizeReceiveLot(input: ReceiveLotInput): NormalizedReceiveLo
     ...(receivedAt ? { receivedAt } : {}),
     quarantined,
     ...(quarantineReason ? { quarantineReason } : {}),
+  }
+}
+
+export function normalizeReserveInput(input: ReserveInput): ReserveInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new DomainError('INVALID_INVENTORY_COMMAND')
+  }
+  const allowedKeys = ['warehouseId', 'lines', 'externalReference']
+  if (Object.keys(input).some((key) => !allowedKeys.includes(key))
+    || typeof input.warehouseId !== 'string' || !input.warehouseId.trim()
+    || !Array.isArray(input.lines) || input.lines.length < 1 || input.lines.length > 50) {
+    throw new DomainError('INVALID_INVENTORY_COMMAND')
+  }
+
+  const seen = new Set<string>()
+  const lines = input.lines.map((line) => {
+    if (!line || typeof line !== 'object' || Array.isArray(line)
+      || Object.keys(line).some((key) => !['variantId', 'quantity'].includes(key))
+      || typeof line.variantId !== 'string' || !line.variantId.trim()
+      || !Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 1_000_000) {
+      throw new DomainError('INVALID_INVENTORY_COMMAND')
+    }
+    const variantId = line.variantId.trim()
+    if (seen.has(variantId)) throw new DomainError('INVALID_INVENTORY_COMMAND')
+    seen.add(variantId)
+    return { variantId, quantity: line.quantity }
+  }).sort((left, right) => left.variantId < right.variantId ? -1 : left.variantId > right.variantId ? 1 : 0)
+
+  let externalReference: string | undefined
+  if (input.externalReference !== undefined) {
+    if (typeof input.externalReference !== 'string' || !input.externalReference.trim()
+      || input.externalReference.length > 255) throw new DomainError('INVALID_INVENTORY_COMMAND')
+    externalReference = input.externalReference
+  }
+
+  return {
+    warehouseId: input.warehouseId.trim(),
+    lines,
+    ...(externalReference === undefined ? {} : { externalReference }),
   }
 }
