@@ -20,6 +20,10 @@ export type DomainErrorCode =
   | 'INVALID_LOT_CODE'
   | 'INVALID_RECEIPT'
   | 'INVENTORY_STOCK_CONFLICT'
+  | 'INVALID_CART'
+  | 'CART_VARIANT_UNAVAILABLE'
+  | 'CART_LINE_LIMIT_REACHED'
+  | 'CART_QUANTITY_LIMIT_REACHED'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -43,6 +47,10 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_LOT_CODE: { status: 422, message: 'Lot code is invalid' },
   INVALID_RECEIPT: { status: 422, message: 'Inventory receipt is invalid' },
   INVENTORY_STOCK_CONFLICT: { status: 409, message: 'Inventory stock does not allow this action' },
+  INVALID_CART: { status: 422, message: 'Cart request is invalid' },
+  CART_VARIANT_UNAVAILABLE: { status: 409, message: 'Cart item is unavailable' },
+  CART_LINE_LIMIT_REACHED: { status: 409, message: 'Cart line limit has been reached' },
+  CART_QUANTITY_LIMIT_REACHED: { status: 422, message: 'Cart item quantity is above the allowed limit' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
