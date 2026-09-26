@@ -15,4 +15,13 @@ export class CodPaymentProvider implements PaymentProvider {
       status: 'awaiting_collection',
     }
   }
+
+  recordCollection(amountSatang: number, orderTotalSatang: number): { status: 'collected'; amountSatang: number } {
+    if (!Number.isSafeInteger(amountSatang) || amountSatang < 0
+      || !Number.isSafeInteger(orderTotalSatang) || orderTotalSatang < 0) {
+      throw new DomainError('INVALID_PAYMENT_AMOUNT')
+    }
+    if (amountSatang !== orderTotalSatang) throw new DomainError('COD_AMOUNT_MISMATCH')
+    return { status: 'collected', amountSatang }
+  }
 }

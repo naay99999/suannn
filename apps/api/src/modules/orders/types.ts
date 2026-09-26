@@ -1,7 +1,18 @@
+import type { AuditContext } from '../audit/model'
+
 export type OrderPrincipal =
   | { kind: 'customer'; userId: string }
   | { kind: 'guest'; accessToken: string }
-  | { kind: 'staff'; userId: string }
+  | OrderStaffActor
+
+export type OrderStatus = 'pending_payment' | 'placed' | 'processing' | 'packed' | 'shipped' | 'delivered' | 'cancelled'
+export type OrderPaymentStatus = 'awaiting_collection' | 'collected' | 'void'
+
+export interface OrderStaffActor {
+  kind: 'staff'
+  userId: string
+  auditContext?: AuditContext
+}
 
 export interface CheckoutContact {
   email: string
@@ -43,7 +54,7 @@ export interface OrderItemSnapshot {
 export interface OrderSnapshot {
   id: string
   orderNumber: string
-  status: string
+  status: OrderStatus
   customerId: string | null
   contactEmail: string
   contactPhone: string
@@ -61,6 +72,24 @@ export interface OrderSnapshot {
   paymentMethod: 'cod'
   createdAt: string
   items: OrderItemSnapshot[]
+}
+
+export interface OrderPaymentSnapshot {
+  id: string
+  method: string
+  provider: string
+  amountSatang: number
+  currency: 'THB'
+  status: OrderPaymentStatus
+}
+
+export interface OrderDetail extends OrderSnapshot {
+  payment: OrderPaymentSnapshot
+}
+
+export interface OrderPage {
+  items: OrderDetail[]
+  nextCursor: string | null
 }
 
 export interface CheckoutResult {

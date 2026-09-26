@@ -53,7 +53,7 @@ export async function runOrderCommand<T>(
     payload: unknown
   },
   replay: (tx: DatabaseTransaction, existing: OrderOperationRecord) => Promise<T>,
-  perform: (tx: DatabaseTransaction, requestHash: string) => Promise<OrderCommandResult<T>>,
+  perform: (tx: DatabaseTransaction, requestHash: string, operationId: string) => Promise<OrderCommandResult<T>>,
 ): Promise<T> {
   if (typeof input.scope !== 'string' || input.scope.trim().length < 1 || input.scope.length > 200
     || typeof input.command !== 'string' || input.command.trim().length < 1 || input.command.length > 80) {
@@ -78,12 +78,14 @@ export async function runOrderCommand<T>(
       return replay(tx, existing)
     }
 
-    const result = await perform(tx, requestHash)
+    const operationId = crypto.randomUUID()
+    const result = await perform(tx, requestHash, operationId)
     if (!Number.isInteger(result.httpStatus) || result.httpStatus < 100 || result.httpStatus > 599
       || !result.resultPayload || typeof result.resultPayload !== 'object' || Array.isArray(result.resultPayload)) {
       throw new DomainError('INVALID_ORDER_COMMAND')
     }
     await tx.insert(orderOperation).values({
+      id: operationId,
       orderId: result.orderId,
       scope: input.scope,
       command: input.command,

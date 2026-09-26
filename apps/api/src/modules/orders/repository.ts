@@ -1,12 +1,13 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, lt, or } from 'drizzle-orm'
 import type { DatabaseTransaction } from '../../database/types'
-import { commerceOrder, orderItem } from '../../database/schema'
+import { commerceOrder, orderItem, payment } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
-import type { OrderItemSnapshot, OrderSnapshot } from './types'
+import { encodeCursor, decodeCursor } from '../../shared/cursor'
+import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderSnapshot } from './types'
 
 export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string): Promise<OrderSnapshot> {
   const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
-  if (!order) throw new DomainError('INVALID_ORDER_COMMAND')
+  if (!order) throw new DomainError('ORDER_NOT_FOUND')
   const itemRows = await tx.select().from(orderItem)
     .where(eq(orderItem.orderId, orderId))
     .orderBy(asc(orderItem.createdAt), asc(orderItem.id))
@@ -43,5 +44,53 @@ export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string
     paymentMethod: 'cod',
     createdAt: order.createdAt.toISOString(),
     items,
+  }
+}
+
+export async function lockOrder(tx: DatabaseTransaction, orderId: string) {
+  const [order] = await tx.select().from(commerceOrder)
+    .where(eq(commerceOrder.id, orderId)).for('update').limit(1)
+  if (!order) throw new DomainError('ORDER_NOT_FOUND')
+  return order
+}
+
+export async function readOrderDetail(tx: DatabaseTransaction, orderId: string): Promise<OrderDetail> {
+  const order = await readOrderSnapshot(tx, orderId)
+  const [savedPayment] = await tx.select({
+    id: payment.id,
+    method: payment.method,
+    provider: payment.provider,
+    amountSatang: payment.amountSatang,
+    currency: payment.currency,
+    status: payment.status,
+  }).from(payment).where(eq(payment.orderId, orderId)).limit(1)
+  if (!savedPayment) throw new DomainError('ORDER_PAYMENT_CONFLICT')
+  return {
+    ...order,
+    payment: { ...savedPayment, currency: 'THB' },
+  }
+}
+
+export async function listOrderDetails(
+  tx: DatabaseTransaction,
+  query: { customerId?: string; cursor?: string; limit: number },
+): Promise<OrderPage> {
+  const cursor = decodeCursor(query.cursor, ['createdAt', 'id'])
+  const rows = await tx.select({ id: commerceOrder.id, createdAt: commerceOrder.createdAt })
+    .from(commerceOrder).where(and(
+      query.customerId ? eq(commerceOrder.customerId, query.customerId) : undefined,
+      cursor ? or(
+        lt(commerceOrder.createdAt, new Date(cursor.createdAt)),
+        and(eq(commerceOrder.createdAt, new Date(cursor.createdAt)), lt(commerceOrder.id, cursor.id)),
+      ) : undefined,
+    )).orderBy(desc(commerceOrder.createdAt), desc(commerceOrder.id)).limit(query.limit + 1)
+  const hasMore = rows.length > query.limit
+  const pageRows = rows.slice(0, query.limit)
+  const items: OrderDetail[] = []
+  for (const row of pageRows) items.push(await readOrderDetail(tx, row.id))
+  const last = pageRows.at(-1)
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null,
   }
 }

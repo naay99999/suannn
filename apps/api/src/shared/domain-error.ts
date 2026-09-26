@@ -36,6 +36,12 @@ export type DomainErrorCode =
   | 'INVALID_ORDER_INPUT'
   | 'ORDER_OPERATION_CONFLICT'
   | 'ORDER_ADDRESS_NOT_FOUND'
+  | 'ORDER_NOT_FOUND'
+  | 'ORDER_ACCESS_DENIED'
+  | 'INVALID_ORDER_TRANSITION'
+  | 'ORDER_PAYMENT_CONFLICT'
+  | 'COD_AMOUNT_MISMATCH'
+  | 'INVALID_ORDER_QUERY'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -75,6 +81,12 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_ORDER_INPUT: { status: 422, message: 'Order request is invalid' },
   ORDER_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
   ORDER_ADDRESS_NOT_FOUND: { status: 404, message: 'Saved address not found' },
+  ORDER_NOT_FOUND: { status: 404, message: 'Order not found' },
+  ORDER_ACCESS_DENIED: { status: 403, message: 'Order access denied' },
+  INVALID_ORDER_TRANSITION: { status: 409, message: 'Order state does not allow this action' },
+  ORDER_PAYMENT_CONFLICT: { status: 409, message: 'Order payment state does not allow this action' },
+  COD_AMOUNT_MISMATCH: { status: 422, message: 'Collected amount must match the order total' },
+  INVALID_ORDER_QUERY: { status: 422, message: 'Order query is invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

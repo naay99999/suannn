@@ -28,6 +28,7 @@ const lotProjection = {
   quarantineReason: inventoryLot.quarantineReason,
   onHandQuantity: inventoryLot.onHandQuantity,
   reservedQuantity: inventoryLot.reservedQuantity,
+  reversibleQuantity: inventoryLot.reversibleQuantity,
   createdAt: inventoryLot.createdAt,
   updatedAt: inventoryLot.updatedAt,
 }
@@ -43,6 +44,7 @@ interface ReceiptLotRow {
   quarantineReason: string | null
   onHandQuantity: number
   reservedQuantity: number
+  reversibleQuantity: number
   createdAt: Date
   updatedAt: Date
 }
@@ -262,6 +264,9 @@ export class InventoryStockRepository {
         if (normalized.countedQuantity < locked.lot.reservedQuantity) {
           throw new DomainError('INVENTORY_STOCK_CONFLICT')
         }
+        if (normalized.countedQuantity + locked.lot.reversibleQuantity > 1_000_000_000) {
+          throw new DomainError('INVENTORY_STOCK_CONFLICT')
+        }
 
         const quantityDelta = normalized.countedQuantity - locked.lot.onHandQuantity
         const [updated] = await tx.update(inventoryLot).set({
@@ -269,6 +274,7 @@ export class InventoryStockRepository {
         }).where(and(
           eq(inventoryLot.id, locked.lot.id),
           sql`${inventoryLot.reservedQuantity} <= ${normalized.countedQuantity}`,
+          sql`${inventoryLot.reversibleQuantity} + ${normalized.countedQuantity} <= 1000000000`,
         )).returning(lotProjection)
         if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
 

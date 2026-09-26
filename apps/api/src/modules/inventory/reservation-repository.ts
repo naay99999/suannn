@@ -2,9 +2,11 @@ import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import {
   auditLog,
+  inventoryOperation,
   inventoryLot,
   inventoryReservation,
   inventoryReservationAllocation,
+  orderItemAllocation,
   product,
   productVariant,
   stockMovement,
@@ -121,6 +123,151 @@ export async function getReservationAllocationRows(tx: DatabaseTransaction, rese
   }).from(inventoryReservationAllocation)
     .where(eq(inventoryReservationAllocation.reservationId, reservationId))
     .orderBy(asc(inventoryReservationAllocation.variantId), asc(inventoryReservationAllocation.lotId), asc(inventoryReservationAllocation.id))
+}
+
+interface LockedOrderAllocationContext {
+  allocations: Array<typeof orderItemAllocation.$inferSelect>
+  lots: Map<string, ReservationLot>
+  now: Date
+}
+
+async function lockOrderAllocationContext(
+  tx: DatabaseTransaction,
+  orderId: string,
+): Promise<LockedOrderAllocationContext> {
+  const initial = await tx.select({
+    lotId: orderItemAllocation.lotId,
+    variantId: inventoryLot.variantId,
+    reservationId: orderItemAllocation.reservationId,
+  }).from(orderItemAllocation)
+    .innerJoin(inventoryLot, eq(inventoryLot.id, orderItemAllocation.lotId))
+    .where(eq(orderItemAllocation.orderId, orderId))
+    .orderBy(asc(orderItemAllocation.lotId), asc(orderItemAllocation.id))
+  if (initial.length === 0) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+
+  const variantIds = [...new Set(initial.map(({ variantId }) => variantId))].sort()
+  const variantIdentities = await tx.select({ id: productVariant.id, productId: productVariant.productId })
+    .from(productVariant).where(inArray(productVariant.id, variantIds))
+  if (variantIdentities.length !== variantIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  const productIds = [...new Set(variantIdentities.map(({ productId }) => productId))].sort()
+  const products = await tx.select({ id: product.id }).from(product)
+    .where(inArray(product.id, productIds)).orderBy(asc(product.id)).for('update')
+  if (products.length !== productIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  const variants = await tx.select({ id: productVariant.id, productId: productVariant.productId })
+    .from(productVariant).where(inArray(productVariant.id, variantIds))
+    .orderBy(asc(productVariant.id)).for('update')
+  if (variants.length !== variantIds.length
+    || variants.some((variant) => !productIds.includes(variant.productId))) {
+    throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+
+  const reservationIds = [...new Set(initial.map(({ reservationId }) => reservationId))].sort()
+  const reservations = await tx.select({ id: inventoryReservation.id })
+    .from(inventoryReservation).where(inArray(inventoryReservation.id, reservationIds))
+    .orderBy(asc(inventoryReservation.id)).for('update')
+  if (reservations.length !== reservationIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+
+  const lotIds = [...new Set(initial.map(({ lotId }) => lotId))].sort()
+  const lockedLots = await tx.select().from(inventoryLot).where(inArray(inventoryLot.id, lotIds))
+    .orderBy(asc(inventoryLot.id)).for('update')
+  if (lockedLots.length !== lotIds.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+
+  const allocations = await tx.select().from(orderItemAllocation)
+    .where(eq(orderItemAllocation.orderId, orderId))
+    .orderBy(asc(orderItemAllocation.lotId), asc(orderItemAllocation.id))
+  if (allocations.length !== initial.length
+    || allocations.some((allocation) => !lotIds.includes(allocation.lotId))) {
+    throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+  const [{ now: rawNow }] = await tx.select({ now: sql<Date>`transaction_timestamp()` }).from(warehouse).limit(1)
+
+  return {
+    allocations,
+    lots: new Map(lockedLots.map((lot) => [lot.id, lot])),
+    now: dateFromDatabase(rawNow),
+  }
+}
+
+/** Restore each order's exact confirmed allocations, including lots that are no longer sellable. */
+export async function restoreOrderAllocations(
+  tx: DatabaseTransaction,
+  orderId: string,
+  operationId: string,
+): Promise<number> {
+  const context = await lockOrderAllocationContext(tx, orderId)
+  const { allocations, lots, now } = context
+  if (allocations.some(({ restorationStatus }) => restorationStatus !== 'reversible')) {
+    throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+  const [operation] = await tx.select({ actorId: inventoryOperation.actorId })
+    .from(inventoryOperation).where(eq(inventoryOperation.id, operationId)).limit(1)
+  if (!operation) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+
+  const byLot = new Map<string, number>()
+  for (const allocation of allocations) {
+    byLot.set(allocation.lotId, (byLot.get(allocation.lotId) ?? 0) + allocation.quantity)
+  }
+  for (const [lotId, quantity] of [...byLot].sort(([left], [right]) => left.localeCompare(right))) {
+    const lot = lots.get(lotId)
+    if (!lot || lot.reversibleQuantity < quantity) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    const [updated] = await tx.update(inventoryLot).set({
+      onHandQuantity: sql`${inventoryLot.onHandQuantity} + ${quantity}`,
+      reversibleQuantity: sql`${inventoryLot.reversibleQuantity} - ${quantity}`,
+    }).where(and(
+      eq(inventoryLot.id, lotId),
+      gte(inventoryLot.reversibleQuantity, quantity),
+      sql`${inventoryLot.onHandQuantity} + ${quantity} <= 1000000000`,
+    )).returning({ onHandQuantity: inventoryLot.onHandQuantity })
+    if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    await tx.insert(stockMovement).values({
+      id: crypto.randomUUID(),
+      lotId,
+      operationId,
+      quantityDelta: quantity,
+      balanceAfter: updated.onHandQuantity,
+      type: 'order_cancel_restore',
+      reasonCode: 'order_cancelled',
+      occurredAt: now,
+      actorId: operation.actorId,
+    })
+  }
+
+  const restored = await tx.update(orderItemAllocation).set({ restorationStatus: 'restored', restoredAt: now })
+    .where(and(eq(orderItemAllocation.orderId, orderId), eq(orderItemAllocation.restorationStatus, 'reversible')))
+    .returning({ id: orderItemAllocation.id })
+  if (restored.length !== allocations.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  return allocations.reduce((total, allocation) => total + allocation.quantity, 0)
+}
+
+/** Release the future restoration capacity when an order ships, without changing physical stock. */
+export async function releaseOrderAllocations(
+  tx: DatabaseTransaction,
+  orderId: string,
+): Promise<number> {
+  const { allocations, lots } = await lockOrderAllocationContext(tx, orderId)
+  if (allocations.every(({ restorationStatus }) => restorationStatus === 'released')) return 0
+  if (allocations.some(({ restorationStatus }) => restorationStatus !== 'reversible')) {
+    throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+
+  const byLot = new Map<string, number>()
+  for (const allocation of allocations) {
+    byLot.set(allocation.lotId, (byLot.get(allocation.lotId) ?? 0) + allocation.quantity)
+  }
+  for (const [lotId, quantity] of [...byLot].sort(([left], [right]) => left.localeCompare(right))) {
+    const lot = lots.get(lotId)
+    if (!lot || lot.reversibleQuantity < quantity) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+    const [updated] = await tx.update(inventoryLot).set({
+      reversibleQuantity: sql`${inventoryLot.reversibleQuantity} - ${quantity}`,
+    }).where(and(eq(inventoryLot.id, lotId), gte(inventoryLot.reversibleQuantity, quantity)))
+      .returning({ id: inventoryLot.id })
+    if (!updated) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  }
+  const released = await tx.update(orderItemAllocation).set({ restorationStatus: 'released' })
+    .where(and(eq(orderItemAllocation.orderId, orderId), eq(orderItemAllocation.restorationStatus, 'reversible')))
+    .returning({ id: orderItemAllocation.id })
+  if (released.length !== allocations.length) throw new DomainError('INVENTORY_STOCK_CONFLICT')
+  return allocations.reduce((total, allocation) => total + allocation.quantity, 0)
 }
 
 function asLotDetail(context: LotContext, lot = context.lot): LotDetail {
