@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
@@ -59,6 +60,7 @@ export const inventoryLot = pgTable('inventory_lot', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
+  unique('inventory_lot_id_variant_unique').on(table.id, table.variantId),
   uniqueIndex('inventory_lot_normalized_code_unique')
     .on(table.warehouseId, table.variantId, sql`upper(btrim(${table.lotCode}))`),
   index('inventory_lot_allocation_fifo_idx')
@@ -123,14 +125,9 @@ export const inventoryReservationAllocation = pgTable('inventory_reservation_all
     foreignColumns: [inventoryReservation.id],
   }).onDelete('restrict'),
   foreignKey({
-    name: 'inventory_reservation_allocation_variant_fk',
-    columns: [table.variantId],
-    foreignColumns: [productVariant.id],
-  }).onDelete('restrict'),
-  foreignKey({
-    name: 'inventory_reservation_allocation_lot_fk',
-    columns: [table.lotId],
-    foreignColumns: [inventoryLot.id],
+    name: 'inventory_reservation_allocation_lot_variant_fk',
+    columns: [table.lotId, table.variantId],
+    foreignColumns: [inventoryLot.id, inventoryLot.variantId],
   }).onDelete('restrict'),
   uniqueIndex('inventory_reservation_allocation_reservation_lot_unique').on(table.reservationId, table.lotId),
   index('inventory_reservation_allocation_lot_idx').on(table.lotId),

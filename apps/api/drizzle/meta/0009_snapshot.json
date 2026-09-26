@@ -1,5 +1,5 @@
 {
-  "id": "98b214b0-d60c-4d54-9ef6-e30d63d5ecec",
+  "id": "ae52a88d-ef98-4039-949f-2ee0d1f20cef",
   "prevId": "099c888a-e5f0-4e0d-9cbf-41c969f4b2f3",
   "version": "7",
   "dialect": "postgresql",
@@ -981,7 +981,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "inventory_lot_id_variant_unique": {
+          "name": "inventory_lot_id_variant_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "variant_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "inventory_lot_code_format_check": {
@@ -1317,28 +1326,17 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "inventory_reservation_allocation_variant_fk": {
-          "name": "inventory_reservation_allocation_variant_fk",
-          "tableFrom": "inventory_reservation_allocation",
-          "tableTo": "product_variant",
-          "columnsFrom": [
-            "variant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "inventory_reservation_allocation_lot_fk": {
-          "name": "inventory_reservation_allocation_lot_fk",
+        "inventory_reservation_allocation_lot_variant_fk": {
+          "name": "inventory_reservation_allocation_lot_variant_fk",
           "tableFrom": "inventory_reservation_allocation",
           "tableTo": "inventory_lot",
           "columnsFrom": [
-            "lot_id"
+            "lot_id",
+            "variant_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "variant_id"
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"

@@ -11,6 +11,7 @@ CREATE TABLE "inventory_lot" (
 	"reserved_quantity" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "inventory_lot_id_variant_unique" UNIQUE("id","variant_id"),
 	CONSTRAINT "inventory_lot_code_format_check" CHECK (btrim("inventory_lot"."lot_code") ~* '^[a-z0-9._/-]{1,100}$'),
 	CONSTRAINT "inventory_lot_on_hand_quantity_range_check" CHECK ("inventory_lot"."on_hand_quantity" between 0 and 1000000000),
 	CONSTRAINT "inventory_lot_reserved_quantity_range_check" CHECK ("inventory_lot"."reserved_quantity" between 0 and 1000000000),
@@ -91,8 +92,7 @@ ALTER TABLE "inventory_lot" ADD CONSTRAINT "inventory_lot_warehouse_id_warehouse
 ALTER TABLE "inventory_lot" ADD CONSTRAINT "inventory_lot_variant_id_product_variant_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variant"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_reservation" ADD CONSTRAINT "inventory_reservation_warehouse_id_warehouse_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouse"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_reservation_allocation" ADD CONSTRAINT "inventory_reservation_allocation_reservation_fk" FOREIGN KEY ("reservation_id") REFERENCES "public"."inventory_reservation"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_reservation_allocation" ADD CONSTRAINT "inventory_reservation_allocation_variant_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variant"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_reservation_allocation" ADD CONSTRAINT "inventory_reservation_allocation_lot_fk" FOREIGN KEY ("lot_id") REFERENCES "public"."inventory_lot"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory_reservation_allocation" ADD CONSTRAINT "inventory_reservation_allocation_lot_variant_fk" FOREIGN KEY ("lot_id","variant_id") REFERENCES "public"."inventory_lot"("id","variant_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_movement" ADD CONSTRAINT "stock_movement_lot_id_inventory_lot_id_fk" FOREIGN KEY ("lot_id") REFERENCES "public"."inventory_lot"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_movement" ADD CONSTRAINT "stock_movement_operation_id_inventory_operation_id_fk" FOREIGN KEY ("operation_id") REFERENCES "public"."inventory_operation"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "inventory_lot_normalized_code_unique" ON "inventory_lot" USING btree ("warehouse_id","variant_id",upper(btrim("lot_code")));--> statement-breakpoint

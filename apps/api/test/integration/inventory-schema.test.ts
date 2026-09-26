@@ -111,6 +111,26 @@ describe('inventory schema migration', () => {
       .rejects.toMatchObject({ code: '23514' })
   })
 
+  it('rejects reservation allocations whose variant does not own the lot', async () => {
+    const lotVariantId = await insertVariant()
+    const otherVariantId = await insertVariant()
+    const lotId = crypto.randomUUID()
+    const reservationId = crypto.randomUUID()
+    await insertLot({ id: lotId, variantId: lotVariantId, lotCode: 'MATCHED-LOT', onHand: 2 })
+    await database.client.unsafe(`
+      insert into inventory_reservation (id, warehouse_id, expires_at, actor_id)
+      values ($1, $2, now() + interval '15 minutes', 'schema-test-actor')
+    `, [reservationId, MAIN_WAREHOUSE_ID])
+
+    await expect((async () => {
+      await database.client.unsafe(`
+        insert into inventory_reservation_allocation (
+          id, reservation_id, variant_id, lot_id, quantity
+        ) values ($1, $2, $3, $4, 1)
+      `, [crypto.randomUUID(), reservationId, otherVariantId, lotId])
+    })()).rejects.toMatchObject({ code: '23503' })
+  })
+
   it('restricts deletion of warehouse and variant records referenced by a lot', async () => {
     const variantId = await insertVariant()
     await insertLot({ variantId, lotCode: 'REFERENCED', onHand: 1 })
