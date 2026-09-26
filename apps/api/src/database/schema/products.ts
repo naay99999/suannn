@@ -46,9 +46,11 @@ export const productVariant = pgTable('product_variant', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
+  minRemainingShelfLifeDays: integer('min_remaining_shelf_life_days').default(0).notNull(),
 }, (table) => [
   uniqueIndex('product_variant_sku_unique').on(table.sku),
   index('product_variant_product_display_order_id_idx').on(table.productId, table.displayOrder, table.id),
   check('product_variant_price_satang_range_check', sql`${table.priceSatang} between 1 and 1000000000`),
   check('product_variant_display_order_range_check', sql`${table.displayOrder} between 0 and 1000000`),
+  check('product_variant_min_remaining_shelf_life_days_range_check', sql`${table.minRemainingShelfLifeDays} between 0 and 365`),
 ])
