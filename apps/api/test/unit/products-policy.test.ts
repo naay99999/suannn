@@ -49,6 +49,7 @@ function activeVariant(overrides: Partial<AdminVariant> = {}): AdminVariant {
     priceSatang: 4500,
     salesEnabled: true,
     displayOrder: 0,
+    minRemainingShelfLifeDays: 0,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     updatedAt: new Date('2026-01-01T00:00:00Z'),
     archivedAt: null,
@@ -164,6 +165,21 @@ describe('product catalog policy', () => {
     })
     expect(() => normalizeVariantUpdate({ sku: 'OTHER-SKU' } as never)).toThrow('INVALID_PRODUCT')
     expect(() => normalizeVariantUpdate({ id: 'caller-id' } as never)).toThrow('INVALID_PRODUCT')
+  })
+
+  it('accepts shelf-life limits through 365 days and rejects values outside the range', () => {
+    expect(normalizeVariantCreate({
+      sku: 'SKU', name: 'Bag', unit: 'bag', priceSatang: 1, minRemainingShelfLifeDays: 365,
+    })).toMatchObject({ minRemainingShelfLifeDays: 365 })
+    expect(normalizeVariantUpdate({ minRemainingShelfLifeDays: 0 })).toEqual({ minRemainingShelfLifeDays: 0 })
+    expect(() => normalizeVariantCreate({
+      sku: 'SKU', name: 'Bag', unit: 'bag', priceSatang: 1, minRemainingShelfLifeDays: 366,
+    })).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeVariantCreate({
+      sku: 'SKU', name: 'Bag', unit: 'bag', priceSatang: 1, minRemainingShelfLifeDays: -1,
+    })).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeVariantUpdate({ minRemainingShelfLifeDays: 1.5 })).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeVariantUpdate({ minRemainingShelfLifeDays: 366 })).toThrow('INVALID_PRODUCT')
   })
 
   it('enforces display order bounds and rejects empty or unknown updates', () => {

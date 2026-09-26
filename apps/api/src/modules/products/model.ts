@@ -64,6 +64,7 @@ const adminVariant = t.Object({
   priceSatang: t.Integer({ minimum: 1, maximum: 1_000_000_000 }),
   salesEnabled: t.Boolean(),
   displayOrder: t.Integer({ minimum: 0, maximum: 1_000_000 }),
+  minRemainingShelfLifeDays: t.Integer({ minimum: 0, maximum: 365 }),
   createdAt: t.Date(),
   updatedAt: t.Date(),
   archivedAt: nullableDate,
@@ -142,6 +143,7 @@ const createVariantBody = t.Object({
   priceSatang: t.Integer({ minimum: 1, maximum: 1_000_000_000 }),
   salesEnabled: t.Optional(t.Boolean()),
   displayOrder: t.Optional(t.Integer({ minimum: 0, maximum: 1_000_000 })),
+  minRemainingShelfLifeDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
 }, { additionalProperties: false })
 
 const updateVariantBody = t.Object({
@@ -150,6 +152,7 @@ const updateVariantBody = t.Object({
   priceSatang: t.Optional(t.Integer({ minimum: 1, maximum: 1_000_000_000 })),
   salesEnabled: t.Optional(t.Boolean()),
   displayOrder: t.Optional(t.Integer({ minimum: 0, maximum: 1_000_000 })),
+  minRemainingShelfLifeDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
 }, { additionalProperties: false, minProperties: 1 })
 
 export const productModels = {

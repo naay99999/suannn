@@ -193,7 +193,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       return service.createVariant(params.id, body as CreateVariantInput, productActor(user.id, requestContext))
     }, {
       parse: [parseStrictJsonBody([
-        'sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder',
+        'sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays',
       ]), 'json'],
       browserMutation: 'admin',
       permission: { catalog: ['create'] },
@@ -210,7 +210,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       params.id, params.variantId, body as UpdateVariantInput, productActor(user.id, requestContext),
     ), {
       parse: [parseStrictJsonBody([
-        'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder',
+        'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays',
       ]), 'json'],
       browserMutation: 'admin',
       permission: { catalog: ['update'] },

@@ -22,8 +22,8 @@ const productTextLimits = {
 const variantTextLimits = { name: 120, unit: 40 } as const
 const productCreateFields = ['slug', 'name', 'category', ...Object.keys(productTextLimits), 'imageUrl']
 const productUpdateFields = ['name', 'category', ...Object.keys(productTextLimits), 'imageUrl']
-const variantCreateFields = ['sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder']
-const variantUpdateFields = ['name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder']
+const variantCreateFields = ['sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
+const variantUpdateFields = ['name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
 
 function invalidProduct(): never {
   throw new DomainError('INVALID_PRODUCT')
@@ -85,6 +85,10 @@ function assertDisplayOrder(value: unknown) {
   if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 1_000_000) invalidProduct()
 }
 
+function assertMinRemainingShelfLifeDays(value: unknown) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 365) invalidProduct()
+}
+
 export function normalizeSlug(value: string): string {
   if (typeof value !== 'string') return invalidProduct()
   const slug = value.trim().toLowerCase()
@@ -137,6 +141,7 @@ export function normalizeVariantCreate(input: CreateVariantInput): CreateVariant
   assertPrice(input.priceSatang)
   if (input.salesEnabled !== undefined && typeof input.salesEnabled !== 'boolean') invalidProduct()
   if (input.displayOrder !== undefined) assertDisplayOrder(input.displayOrder)
+  if (input.minRemainingShelfLifeDays !== undefined) assertMinRemainingShelfLifeDays(input.minRemainingShelfLifeDays)
   return {
     sku,
     name,
@@ -144,6 +149,8 @@ export function normalizeVariantCreate(input: CreateVariantInput): CreateVariant
     priceSatang: input.priceSatang,
     ...(input.salesEnabled !== undefined ? { salesEnabled: input.salesEnabled } : {}),
     ...(input.displayOrder !== undefined ? { displayOrder: input.displayOrder } : {}),
+    ...(input.minRemainingShelfLifeDays !== undefined
+      ? { minRemainingShelfLifeDays: input.minRemainingShelfLifeDays } : {}),
   }
 }
 
@@ -164,6 +171,10 @@ export function normalizeVariantUpdate(input: UpdateVariantInput): UpdateVariant
   if (input.displayOrder !== undefined) {
     assertDisplayOrder(input.displayOrder)
     result.displayOrder = input.displayOrder
+  }
+  if (input.minRemainingShelfLifeDays !== undefined) {
+    assertMinRemainingShelfLifeDays(input.minRemainingShelfLifeDays)
+    result.minRemainingShelfLifeDays = input.minRemainingShelfLifeDays
   }
   return result
 }

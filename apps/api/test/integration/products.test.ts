@@ -102,6 +102,29 @@ describe('product catalog write persistence', () => {
     expect(storedVariant?.sku).toBe('FRESH-TOMATO-500G')
   })
 
+  it('returns and persists variant shelf-life limits on staff create and update', async () => {
+    const service = serviceWith()
+    const createdProduct = await createProduct(service, 'shelf-life-product')
+    const created = await service.createVariant(createdProduct.id, {
+      sku: 'SHELF-LIFE-SKU',
+      name: 'Fresh pack',
+      unit: 'pack',
+      priceSatang: 500,
+      minRemainingShelfLifeDays: 365,
+    }, actor)
+
+    expect(created.minRemainingShelfLifeDays).toBe(365)
+    const [storedCreated] = await database.db.select().from(productVariant).where(eq(productVariant.id, created.id))
+    expect(storedCreated?.minRemainingShelfLifeDays).toBe(365)
+
+    const updated = await service.updateVariant(createdProduct.id, created.id, {
+      minRemainingShelfLifeDays: 2,
+    }, actor)
+    expect(updated.minRemainingShelfLifeDays).toBe(2)
+    const [storedUpdated] = await database.db.select().from(productVariant).where(eq(productVariant.id, created.id))
+    expect(storedUpdated?.minRemainingShelfLifeDays).toBe(2)
+  })
+
   it('prevents normalized duplicate slugs and reserves archived normalized SKUs', async () => {
     const service = serviceWith()
     await createProduct(service)

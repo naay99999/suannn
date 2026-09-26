@@ -29,6 +29,7 @@ export interface CreateVariantInput {
   priceSatang: number
   salesEnabled?: boolean
   displayOrder?: number
+  minRemainingShelfLifeDays?: number
 }
 
 export type UpdateVariantInput = Partial<Omit<CreateVariantInput, 'sku'>>
@@ -61,6 +62,7 @@ export interface AdminVariant {
   priceSatang: number
   salesEnabled: boolean
   displayOrder: number
+  minRemainingShelfLifeDays: number
   createdAt: Date
   updatedAt: Date
   archivedAt: Date | null

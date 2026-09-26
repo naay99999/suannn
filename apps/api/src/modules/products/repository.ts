@@ -51,6 +51,7 @@ const variantProjection = {
   priceSatang: productVariant.priceSatang,
   salesEnabled: productVariant.salesEnabled,
   displayOrder: productVariant.displayOrder,
+  minRemainingShelfLifeDays: productVariant.minRemainingShelfLifeDays,
   createdAt: productVariant.createdAt,
   updatedAt: productVariant.updatedAt,
   archivedAt: productVariant.archivedAt,
