@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-26
 
-**Status:** Awaiting written-spec review
+**Status:** Approved for implementation planning
 
 **Scope:** `apps/api` database and HTTP API only
 
