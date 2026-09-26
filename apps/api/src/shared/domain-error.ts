@@ -2,11 +2,23 @@ export type DomainErrorCode =
   | 'IDENTITY_UNAVAILABLE'
   | 'IDENTITY_LOCK_TIMEOUT'
   | 'CLIENT_IP_UNAVAILABLE'
+  | 'PRODUCT_NOT_FOUND'
+  | 'VARIANT_NOT_FOUND'
+  | 'PRODUCT_SLUG_CONFLICT'
+  | 'SKU_CONFLICT'
+  | 'PRODUCT_STATE_CONFLICT'
+  | 'INVALID_PRODUCT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
   IDENTITY_LOCK_TIMEOUT: { status: 503, message: 'Service temporarily unavailable' },
   CLIENT_IP_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
+  PRODUCT_NOT_FOUND: { status: 404, message: 'Product not found' },
+  VARIANT_NOT_FOUND: { status: 404, message: 'Variant not found' },
+  PRODUCT_SLUG_CONFLICT: { status: 409, message: 'Product slug is already in use' },
+  SKU_CONFLICT: { status: 409, message: 'Variant SKU is already in use' },
+  PRODUCT_STATE_CONFLICT: { status: 409, message: 'Product state does not allow this action' },
+  INVALID_PRODUCT: { status: 422, message: 'Product data is invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

@@ -15,6 +15,14 @@ export const auditMetadataKeys = {
   'staff.mfa-activated': [],
   'staff.backup-codes-regenerated': [],
   'settings.staff-mfa-policy-changed': ['previousRequired', 'required'],
+  'product.created': ['fields'],
+  'product.updated': ['fields'],
+  'product.published': [],
+  'product.unpublished': [],
+  'product.archived': [],
+  'product.variant-created': ['fields', 'productId'],
+  'product.variant-updated': ['fields', 'productId'],
+  'product.variant-archived': ['productId'],
 } as const
 
 const auditRecord = t.Object({
