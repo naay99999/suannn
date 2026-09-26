@@ -2,6 +2,7 @@ export const testEnv = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/suannn_test',
   BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-thirty-two-characters',
+  COMMERCE_SECRET: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
   BETTER_AUTH_URL: 'http://localhost:6767',
   STOREFRONT_URL: 'http://localhost:5183',
   ADMIN_URL: 'http://localhost:5184',

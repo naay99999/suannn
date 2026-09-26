@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+
 export const developmentCorsOrigins = [
   'http://localhost:5183',
   'http://127.0.0.1:5183',
@@ -17,6 +19,7 @@ export interface AppConfig {
   corsOrigins: string[]
   databaseUrl: string
   betterAuthSecret: string
+  commerceSecret: Uint8Array
   betterAuthUrl: string
   secureCookies: boolean
   storefrontUrl: string
@@ -94,6 +97,21 @@ function requiredValue(name: string, value: string | undefined) {
   return parsed
 }
 
+function parseCommerceSecret(value: string | undefined) {
+  const secret = requiredValue('COMMERCE_SECRET', value)
+
+  if (!/^[A-Za-z0-9_-]+$/.test(secret)) {
+    throw new Error('COMMERCE_SECRET must be a base64url value decoding to at least 32 bytes')
+  }
+
+  const decoded = Buffer.from(secret, 'base64url')
+  if (decoded.length < 32 || decoded.toString('base64url') !== secret) {
+    throw new Error('COMMERCE_SECRET must be a base64url value decoding to at least 32 bytes')
+  }
+
+  return new Uint8Array(decoded)
+}
+
 function parseUrl(name: string, value: string, protocols: string[]) {
   try {
     const url = new URL(value)
@@ -138,6 +156,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     ['postgres:', 'postgresql:'],
   )
   const betterAuthSecret = requiredValue('BETTER_AUTH_SECRET', env.BETTER_AUTH_SECRET)
+  const commerceSecret = parseCommerceSecret(env.COMMERCE_SECRET)
 
   if (betterAuthSecret.length < 32) {
     throw new Error('BETTER_AUTH_SECRET must be at least 32 characters')
@@ -174,6 +193,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     corsOrigins: corsOrigins.length > 0 ? corsOrigins : developmentCorsOrigins,
     databaseUrl,
     betterAuthSecret,
+    commerceSecret,
     betterAuthUrl,
     secureCookies: isProduction || betterAuthUrl.startsWith('https://'),
     storefrontUrl,

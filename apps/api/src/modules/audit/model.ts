@@ -15,6 +15,7 @@ export const auditMetadataKeys = {
   'staff.mfa-activated': [],
   'staff.backup-codes-regenerated': [],
   'settings.staff-mfa-policy-changed': ['previousRequired', 'required'],
+  'settings.commerce-updated': ['fields'],
   'product.created': ['fields'],
   'product.updated': ['fields'],
   'product.published': [],

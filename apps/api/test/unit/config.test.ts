@@ -10,6 +10,7 @@ describe('API configuration', () => {
       corsOrigins: developmentCorsOrigins,
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
+      commerceSecret: new Uint8Array(32),
       betterAuthUrl: testEnv.BETTER_AUTH_URL,
       secureCookies: false,
       storefrontUrl: testEnv.STOREFRONT_URL,
@@ -33,6 +34,7 @@ describe('API configuration', () => {
       CORS_ORIGINS: 'https://store.example.com, https://admin.example.com,https://store.example.com',
       DATABASE_URL: testEnv.DATABASE_URL,
       BETTER_AUTH_SECRET: testEnv.BETTER_AUTH_SECRET,
+      COMMERCE_SECRET: testEnv.COMMERCE_SECRET,
       BETTER_AUTH_URL: 'https://api.example.com',
       STOREFRONT_URL: 'https://store.example.com',
       ADMIN_URL: 'https://admin.example.com',
@@ -45,6 +47,7 @@ describe('API configuration', () => {
       corsOrigins: ['https://store.example.com', 'https://admin.example.com'],
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
+      commerceSecret: new Uint8Array(32),
       betterAuthUrl: 'https://api.example.com',
       secureCookies: true,
       storefrontUrl: 'https://store.example.com',
@@ -61,6 +64,9 @@ describe('API configuration', () => {
     expect(() => loadConfig({ ...testEnv, CORS_ORIGINS: 'not-a-url' })).toThrow('CORS_ORIGINS')
     expect(() => loadConfig({ ...testEnv, DATABASE_URL: undefined })).toThrow('DATABASE_URL')
     expect(() => loadConfig({ ...testEnv, BETTER_AUTH_SECRET: 'too-short' })).toThrow('BETTER_AUTH_SECRET')
+    expect(() => loadConfig({ ...testEnv, COMMERCE_SECRET: undefined })).toThrow('COMMERCE_SECRET')
+    expect(() => loadConfig({ ...testEnv, COMMERCE_SECRET: 'invalid' })).toThrow('COMMERCE_SECRET')
+    expect(() => loadConfig({ ...testEnv, COMMERCE_SECRET: 'AQ' })).toThrow('COMMERCE_SECRET')
     expect(() => loadConfig({ ...testEnv, BETTER_AUTH_URL: 'not-a-url' })).toThrow('BETTER_AUTH_URL')
     expect(() => loadConfig({ ...testEnv, STOREFRONT_URL: 'https://example.com/path' })).toThrow('STOREFRONT_URL')
     expect(() => loadConfig({ ...testEnv, TRUSTED_PROXY_HEADERS: 'forwarded' })).toThrow('TRUSTED_PROXY_HEADERS')

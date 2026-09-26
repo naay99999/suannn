@@ -24,6 +24,14 @@ export type DomainErrorCode =
   | 'CART_VARIANT_UNAVAILABLE'
   | 'CART_LINE_LIMIT_REACHED'
   | 'CART_QUANTITY_LIMIT_REACHED'
+  | 'INVALID_COMMERCE_SETTINGS'
+  | 'COMMERCE_SETTINGS_UNAVAILABLE'
+  | 'CHECKOUT_DISABLED'
+  | 'SHIPPING_FEE_UNSET'
+  | 'CART_NOT_PURCHASABLE'
+  | 'QUOTE_STALE'
+  | 'CHECKOUT_TOTAL_OUT_OF_RANGE'
+  | 'INVALID_PAYMENT_AMOUNT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -51,6 +59,14 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   CART_VARIANT_UNAVAILABLE: { status: 409, message: 'Cart item is unavailable' },
   CART_LINE_LIMIT_REACHED: { status: 409, message: 'Cart line limit has been reached' },
   CART_QUANTITY_LIMIT_REACHED: { status: 422, message: 'Cart item quantity is above the allowed limit' },
+  INVALID_COMMERCE_SETTINGS: { status: 422, message: 'Commerce settings are invalid' },
+  COMMERCE_SETTINGS_UNAVAILABLE: { status: 503, message: 'Commerce settings are unavailable' },
+  CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },
+  SHIPPING_FEE_UNSET: { status: 409, message: 'Shipping fee is not configured' },
+  CART_NOT_PURCHASABLE: { status: 409, message: 'One or more cart items cannot be purchased' },
+  QUOTE_STALE: { status: 409, message: 'Checkout quote is expired or no longer current' },
+  CHECKOUT_TOTAL_OUT_OF_RANGE: { status: 422, message: 'Checkout total is outside the supported range' },
+  INVALID_PAYMENT_AMOUNT: { status: 422, message: 'Payment amount is invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
