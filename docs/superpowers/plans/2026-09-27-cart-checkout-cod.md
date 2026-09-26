@@ -57,7 +57,7 @@
 
 **Files:** Create `apps/api/src/modules/cart/{types,repository,service}.ts`, `apps/api/test/integration/cart.test.ts`; modify `apps/api/src/shared/domain-error.ts`.
 
-**Interfaces:** Define `CartPrincipal = { kind: 'customer'; userId: string } | { kind: 'guest'; tokenHash: string }`. `CartService` exposes `get(principal)`, `setItem(principal, variantId, quantity)`, `removeItem(principal, variantId)`, `mergeGuest(userId, guestTokenHash): Promise<{ cart: CartDetail; skipped: MergeSkippedLine[] }>`. `CartDetail` includes live product/variant display fields, current price, `canPurchase`, and line issue codes; it never promises stock. Use a transaction and cart-row locks for merge; increment cart version on mutation.
+**Interfaces:** Define `CartPrincipal = { kind: 'customer'; userId: string } | { kind: 'guest'; tokenHash: string }`. `CartService` exposes `get(principal)`, `setItem(principal, variantId, quantity)`, `removeItem(principal, variantId)`, `mergeGuest(userId, guestTokenHash): Promise<{ cart: CartDetail; skipped: MergeSkippedLine[] }>`. `CartDetail` includes `cartVersion: number`, live product/variant display fields, current price, `canPurchase`, and line issue codes; it never promises stock. Use a transaction and cart-row locks for merge; increment cart version on mutation.
 
 - [ ] Write tests for customer/guest isolation, 50 lines, 99 units, absolute `PUT` replay, missing/archived variant, temporarily out-of-stock retained line, 30-day guest expiry, and merge replay that sums duplicates once and reports skipped invalid lines.
 - [ ] Run `TEST_DATABASE_URL="$TEST_DATABASE_URL" bun test test/integration/cart.test.ts`; confirm the new methods/behavior fail first.
@@ -79,7 +79,7 @@
 
 **Files:** Modify `apps/api/src/database/schema/{commerce,inventory,index}.ts`; create `apps/api/test/integration/orders-schema.test.ts`; generate `apps/api/drizzle/0011_*.sql` and snapshot.
 
-**Interfaces:** Export `commerceOrder`, `orderItem`, `orderItemAllocation`, `payment`, `orderOperation`, `orderEvent`, and `orderOutbox`. Use `bigint({ mode: 'number' })` or equivalent safe integer mapping for aggregate satang totals; DB checks enforce `subtotal + shipping = total` and exact owner/contact/status invariants. `inventoryLot.reversibleQuantity` defaults 0 with `onHand + reversible <= 1_000_000_000`; `stockMovement` accepts positive `order_cancel_restore` with operation FK. Preserve existing receipt/adjustment invariants.
+**Interfaces:** Export `commerceOrder`, `orderItem`, `orderItemAllocation`, `payment`, `orderOperation`, `orderEvent`, and `orderOutbox`. Use `bigint({ mode: 'number' })` or equivalent safe integer mapping for aggregate satang totals; DB checks enforce each amount and `subtotal + shipping = total` within `Number.MAX_SAFE_INTEGER`, plus exact owner/contact/status invariants. `inventoryLot.reversibleQuantity` defaults 0 with `onHand + reversible <= 1_000_000_000`; `stockMovement` accepts positive `order_cancel_restore` with operation FK. Preserve existing receipt/adjustment invariants.
 
 - [ ] Write migration tests for order/item/allocation FKs, immutable snapshot fields, payment uniqueness/amount, operation key uniqueness, outbox event uniqueness, safe money bounds, lot capacity, and positive cancellation movement.
 - [ ] Run focused schema integration test to confirm RED; generate/review `0011` SQL and snapshot, with no older migration edits.
