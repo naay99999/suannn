@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import { openapi } from '@elysia/openapi'
 import type { AppConfig } from './config/env'
 import { systemModule } from './modules/system'
+import { createSystemSettingsModule } from './modules/settings'
 import { createAuditModule } from './modules/audit'
 import { createCustomerAuthModule } from './modules/auth/customer'
 import { createCustomerProfileModule } from './modules/customer/profile'
@@ -18,6 +19,7 @@ import type { CustomerEmailChangeService } from './modules/customer/email-change
 import type { StaffInvitationService } from './modules/auth/invitations/service'
 import type { StaffMfaService } from './modules/auth/mfa/service'
 import type { StaffService } from './modules/auth/staff/service'
+import type { SystemSettingsService } from './modules/settings/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
@@ -38,6 +40,8 @@ export interface AppDependencies {
   staffInvitations: StaffInvitationService
   staffMfa: StaffMfaService
   staff: StaffService
+  systemSettings: SystemSettingsService
+  staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
 }
@@ -70,6 +74,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createRequestLoggingPlugin())
     .use(createAuthPlugin(dependencies.auth, {
       identityReservations: dependencies.identityReservations,
+      staffMfaRequired: dependencies.staffMfaRequired,
     }))
     .use(createCustomerAuthModule(config, dependencies.customerSignup))
     .use(createCustomerProfileModule(config, dependencies.auth, dependencies.customerProfile))
@@ -86,6 +91,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createStaffSessionModule(config, dependencies.auth, dependencies.staff, dependencies.limiter))
     .use(createStaffModule(config, dependencies.auth, dependencies.staff, dependencies.limiter))
     .use(createAuditModule(dependencies.auth, dependencies.audit))
+    .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(systemModule)
 }
 

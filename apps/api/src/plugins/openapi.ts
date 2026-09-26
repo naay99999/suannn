@@ -27,6 +27,7 @@ export const apiTags = [
   { name: 'Staff Sessions', description: 'Inspect or revoke staff sessions.' },
   { name: 'Staff MFA', description: 'Enroll, verify, regenerate, or reset staff MFA.' },
   { name: 'Audit', description: 'Read security and administrative audit events.' },
+  { name: 'Settings', description: 'Read and update system security settings.' },
 ]
 
 const authDocumentation: Record<string, AuthDocumentation> = {

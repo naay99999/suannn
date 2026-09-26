@@ -51,5 +51,8 @@ export const staffInvitationModels = {
     items: t.Array(invitationListItem),
     nextCursor: t.Nullable(t.String({ description: 'Pass this as cursor to load the next page; null at the end.' })),
   }),
-  'staffInvitation.acceptResponse': t.Object({ accepted: t.Literal(true), next: t.Literal('mfa-enrollment') }),
+  'staffInvitation.acceptResponse': t.Object({
+    accepted: t.Literal(true),
+    next: t.Union([t.Literal('mfa-enrollment'), t.Literal('dashboard')]),
+  }),
 }

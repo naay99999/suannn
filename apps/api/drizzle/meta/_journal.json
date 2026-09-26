@@ -50,6 +50,13 @@
       "when": 1790250660999,
       "tag": "0006_sweet_mattie_franklin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790410329271,
+      "tag": "0007_narrow_nova",
+      "breakpoints": true
     }
   ]
 }

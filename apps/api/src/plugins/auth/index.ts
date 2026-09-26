@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia'
-import type { Auth } from './auth'
+import { withStaffMfaBypass, type Auth } from './auth'
 import { normalizeEmail } from '../../shared/email'
 import { authRelativePath, isAllowedAuthRequest } from './http-policy'
 import { hasPermissions, type PermissionRequirement, type Role } from './access-control'
@@ -10,13 +10,18 @@ export interface IdentityReservationLookup {
 
 export interface AuthHttpDependencies {
   identityReservations: IdentityReservationLookup
+  staffMfaRequired?(): Promise<boolean>
+  runStaffMfaBypass?(handler: () => Promise<Response>): Promise<Response>
 }
 
 const defaultDependencies: AuthHttpDependencies = {
   identityReservations: {
     findState: async () => null,
   },
+  staffMfaRequired: async () => true,
 }
+
+type PreparedAuthRequest = { request: Request; bypassStaffMfa: boolean } | Response
 
 function jsonResponse(status: number, body: Record<string, string>) {
   return Response.json(body, { status })
@@ -42,12 +47,13 @@ async function prepareAuthRequest(
   auth: Auth,
   request: Request,
   dependencies: AuthHttpDependencies,
-) {
+): Promise<PreparedAuthRequest> {
   if (!isAllowedAuthRequest(request)) {
     return jsonResponse(404, { code: 'NOT_FOUND', message: 'Not found' })
   }
 
   const path = authRelativePath(request)
+  let bypassStaffMfa = false
 
   if (request.method === 'POST' && path === '/sign-in/email') {
     const body = await readJsonObject(request)
@@ -64,10 +70,12 @@ async function prepareAuthRequest(
         })
       }
 
-      return new Request(request, {
+      bypassStaffMfa = state === 'staff' && !await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))
+
+      return { request: new Request(request, {
         method: request.method,
         body: JSON.stringify({ ...body, email }),
-      })
+      }), bypassStaffMfa }
     }
   }
 
@@ -109,7 +117,7 @@ async function prepareAuthRequest(
     }
   }
 
-  return request
+  return { request, bypassStaffMfa }
 }
 
 export function createAuthMacros(auth: Auth) {
@@ -218,7 +226,12 @@ export function createAuthPlugin(
     .all('/api/v1/auth/*', async ({ request }) => {
       const prepared = await prepareAuthRequest(auth, request, dependencies)
 
-      return prepared instanceof Request ? auth.handler(prepared) : prepared
+      if (prepared instanceof Response) return prepared
+      if (prepared.bypassStaffMfa) {
+        const runBypass = dependencies.runStaffMfaBypass ?? withStaffMfaBypass
+        return runBypass(() => auth.handler(prepared.request))
+      }
+      return auth.handler(prepared.request)
     }, {
       detail: {
         hide: true,

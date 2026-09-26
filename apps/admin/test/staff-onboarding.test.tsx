@@ -75,6 +75,18 @@ test('removes invitation token from the URL and accepts the supplied account', a
   expect(sessionStorage.length).toBe(0)
 })
 
+test('skips MFA onboarding after accepting an invitation when system enforcement is disabled', async () => {
+  acceptResult = async () => ({ accepted: true, next: 'dashboard' })
+  const router = renderPage('/staff/invitations/accept?token=secret-token-123456')
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Name'), 'Sam')
+  await user.type(screen.getByLabelText('New password'), 'strong-password-123')
+  await user.click(screen.getByRole('button', { name: 'Accept invitation' }))
+
+  expect(await screen.findByText('Dashboard')).toBeTruthy()
+  expect(router.state.location.pathname).toBe('/dashboard')
+})
+
 test('explains a missing or expired invitation link', async () => {
   renderPage('/staff/invitations/accept')
   expect(screen.getByText('Reopen the invitation link in your email.')).toBeTruthy()

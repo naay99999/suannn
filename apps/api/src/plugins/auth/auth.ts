@@ -33,12 +33,18 @@ export interface AuthDependencies {
   enqueueEmailTask?(task: () => Promise<unknown>): void
   emailLogger?: EmailDeliveryLogger
   audit?: AuditService
+  staffMfaRequired?(): Promise<boolean>
 }
 
 const backupCodeAuditContext = new AsyncLocalStorage<{ userId: string; context: AuditContext }>()
+const staffMfaBypass = new AsyncLocalStorage<boolean>()
 
 export function withBackupCodeAuditContext<T>(userId: string, context: AuditContext, callback: () => Promise<T>) {
   return backupCodeAuditContext.run({ userId, context }, callback)
+}
+
+export function withStaffMfaBypass<T>(callback: () => Promise<T>) {
+  return staffMfaBypass.run(true, callback)
 }
 
 const unconfiguredDependencies: AuthDependencies = {
@@ -64,6 +70,15 @@ export function createAuth(
       const adapter = drizzleAdapter(db, { provider: 'pg', schema })(options)
       return {
         ...adapter,
+        async findOne(input: Parameters<typeof adapter.findOne>[0]) {
+          const result = await adapter.findOne(input)
+          const foundUser = result as Record<string, unknown> | null
+          if (!foundUser || !staffMfaBypass.getStore() || input.model !== 'user'
+            || foundUser.accountType !== 'staff' || await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))) {
+            return result
+          }
+          return { ...foundUser, twoFactorEnabled: false } as typeof result
+        },
         async update(input: Parameters<typeof adapter.update>[0]) {
           const auditContext = backupCodeAuditContext.getStore()
           if (!auditContext || input.model !== 'twoFactor' || !('backupCodes' in input.update)) {
@@ -263,6 +278,7 @@ export function createAuth(
           role: schema.user.role,
           banned: schema.user.banned,
           staffActivatedAt: schema.user.staffActivatedAt,
+          twoFactorEnabled: schema.user.twoFactorEnabled,
           sessionId: schema.session.id,
           lastActivityAt: schema.session.lastActivityAt,
           absoluteExpiresAt: schema.session.absoluteExpiresAt,
@@ -299,10 +315,11 @@ export function createAuth(
               absoluteExpiresAt: persistedSession?.absoluteExpiresAt ?? null,
             },
           } satisfies StaffSessionContext
-          const validation = validateStaffSession(staffContext)
+          const staffMfaRequired = await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))
+          const validation = validateStaffSession(staffContext, new Date(), staffMfaRequired)
 
           if (!validation.valid) {
-            if (!isRestrictedStaffSession(staffContext)) {
+            if (!isRestrictedStaffSession(staffContext, new Date(), staffMfaRequired)) {
               await db.delete(schema.session).where(eq(schema.session.id, session.id))
               throw new APIError('UNAUTHORIZED', {
                 code: 'SESSION_EXPIRED',

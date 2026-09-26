@@ -44,6 +44,19 @@ describe('staff session policy', () => {
     }
   })
 
+  it('allows staff without MFA enrollment when the global MFA requirement is disabled', () => {
+    const result = validateStaffSession(context({ user: { staffActivatedAt: null } }), now, false)
+
+    expect(result).toMatchObject({ valid: true, role: 'support' })
+  })
+
+  it('keeps un-enrolled staff restricted while the global MFA requirement is enabled', () => {
+    expect(validateStaffSession(context({ user: { staffActivatedAt: null } }), now, true)).toEqual({
+      valid: false,
+      code: 'SESSION_EXPIRED',
+    })
+  })
+
   const invalidCases: Array<[string, StaffSessionContext]> = [
     ['customer', context({ user: { accountType: 'customer', role: 'customer' } })],
     ['inactive', context({ user: { staffActivatedAt: null } })],

@@ -18,7 +18,7 @@ export function Component() {
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="text-center">
           <h1 className="text-xl font-bold">Accept your staff invitation</h1>
-          <p className="text-sm text-muted-foreground">Create your account to continue to authenticator setup.</p>
+          <p className="text-sm text-muted-foreground">Create your staff account to continue.</p>
         </div>
         {token ? <InvitationForm token={token} /> : <p role="alert" className="text-center text-sm text-destructive">Reopen the invitation link in your email.</p>}
       </div>

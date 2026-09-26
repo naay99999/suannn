@@ -14,6 +14,7 @@ export const auditMetadataKeys = {
   'staff.mfa-reset': [],
   'staff.mfa-activated': [],
   'staff.backup-codes-regenerated': [],
+  'settings.staff-mfa-policy-changed': ['previousRequired', 'required'],
 } as const
 
 const auditRecord = t.Object({

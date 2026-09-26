@@ -68,6 +68,11 @@ const app = await createApp(config, {
     store: new DatabaseStaffMfaStore(database.db, audit),
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
+  systemSettings: {
+    getSecuritySettings: async () => ({ staffMfaRequired: true }),
+    setStaffMfaRequired: async (staffMfaRequired: boolean) => ({ staffMfaRequired }),
+  } as never,
+  staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
 })
@@ -186,6 +191,7 @@ describe('API routes', () => {
       'Staff Sessions',
       'Staff MFA',
       'Audit',
+      'Settings',
     ])
     expect(specification.components.securitySchemes.sessionCookie).toMatchObject({
       type: 'apiKey', in: 'cookie', name: 'better-auth.session_token',
@@ -305,7 +311,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(47)
+    expect(operations).toHaveLength(49)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

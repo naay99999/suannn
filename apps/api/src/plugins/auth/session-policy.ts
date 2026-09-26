@@ -37,12 +37,13 @@ export type StaffSessionValidation = {
 export function validateStaffSession(
   context: StaffSessionContext,
   now = new Date(),
+  staffMfaRequired = true,
 ): StaffSessionValidation {
   const { user, session } = context
   const active = user.accountType === 'staff'
     && isStaffRole(user.role)
     && user.emailVerified
-    && user.staffActivatedAt !== null
+    && (!staffMfaRequired || user.staffActivatedAt !== null)
     && !user.banned
     && session.lastActivityAt !== null
     && session.absoluteExpiresAt !== null
@@ -60,12 +61,13 @@ export function validateStaffSession(
   }
 }
 
-export function isRestrictedStaffSession(context: StaffSessionContext, now = new Date()) {
+export function isRestrictedStaffSession(context: StaffSessionContext, now = new Date(), staffMfaRequired = true) {
   const { user, session } = context
 
   return user.accountType === 'staff'
     && isStaffRole(user.role)
     && user.emailVerified
+    && staffMfaRequired
     && user.staffActivatedAt === null
     && !user.banned
     && session.lastActivityAt !== null

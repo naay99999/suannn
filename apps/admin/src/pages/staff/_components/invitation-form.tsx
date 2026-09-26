@@ -31,9 +31,9 @@ export function InvitationForm({ token }: { token: string }) {
     setSubmitError(null)
     setPending(true)
     try {
-      await acceptInvitation({ token, name: values.name, password: values.password })
+      const accepted = await acceptInvitation({ token, name: values.name, password: values.password })
       queryClient.removeQueries({ queryKey: authSessionQuery.queryKey })
-      navigate('/staff/onboarding', { replace: true })
+      navigate(accepted.next === 'mfa-enrollment' ? '/staff/onboarding' : '/dashboard', { replace: true })
     } catch (error) {
       if (error instanceof AuthRequestError && error.status === 410) {
         setSubmitError('This invitation expired. Ask an administrator for a new invitation.')

@@ -11,6 +11,7 @@ export class StaffRepository implements StaffRepositoryContract {
   constructor(
     private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly staffMfaRequired: () => Promise<boolean> = async () => true,
   ) {}
 
   async list(query: { limit: number; cursor?: string }) {
@@ -171,12 +172,13 @@ export class StaffRepository implements StaffRepositoryContract {
     })
   }
 
-  private lockActiveOwners(tx: DatabaseTransaction) {
+  private async lockActiveOwners(tx: DatabaseTransaction) {
+    const requireMfa = await this.staffMfaRequired()
     return tx.select({ id: user.id }).from(user).where(and(
       eq(user.accountType, 'staff'),
       eq(user.role, 'owner'),
       eq(user.banned, false),
-      isNotNull(user.staffActivatedAt),
+      requireMfa ? isNotNull(user.staffActivatedAt) : undefined,
     )).orderBy(asc(user.id)).for('update')
   }
 

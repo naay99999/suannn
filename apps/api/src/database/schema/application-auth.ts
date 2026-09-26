@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   check,
+  boolean,
   index,
   integer,
   jsonb,
@@ -95,6 +96,13 @@ export const applicationRateLimit = pgTable(
   },
   (table) => [index('application_rate_limit_expiry_idx').on(table.expiresAt)],
 )
+
+export const applicationSetting = pgTable('application_setting', {
+  key: text('key').primaryKey(),
+  booleanValue: boolean('boolean_value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+})
 
 export const auditLog = pgTable(
   'audit_log',

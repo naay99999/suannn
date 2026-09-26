@@ -106,7 +106,7 @@ export function createStaffInvitationAcceptanceModule(
         set.headers['set-cookie'] = cookies
       }
 
-      return { accepted: true as const, next: 'mfa-enrollment' as const }
+      return { accepted: true as const, next: result.next }
     }, {
       browserMutation: 'admin',
       body: 'staffInvitation.acceptBody',

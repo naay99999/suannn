@@ -125,6 +125,31 @@ describe('Better Auth HTTP policy', () => {
     expect(handled).toBe(0)
   })
 
+  it('bypasses the second factor only for staff sign-in while system MFA is disabled', async () => {
+    let bypassed = false
+    const auth = {
+      handler: async () => Response.json({ ok: true }),
+      api: { getSession: async () => null },
+    } as unknown as Auth
+    const app = new Elysia().use(createAuthPlugin(auth, {
+      identityReservations: { findState: async () => 'staff' },
+      staffMfaRequired: async () => false,
+      async runStaffMfaBypass(handler) {
+        bypassed = true
+        return handler()
+      },
+    }))
+
+    const response = await app.handle(new Request(`${base}/sign-in/email`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'staff@example.com', password: 'secret' }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(bypassed).toBe(true)
+  })
+
   it('returns 400 for malformed JSON and non-object auth bodies', async () => {
     const auth = {
       handler: async () => Response.json({ ok: true }),

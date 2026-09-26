@@ -6,7 +6,11 @@ import type { AuditService } from '../../audit/service'
 import type { StaffMfaStore } from './service'
 
 export class DatabaseStaffMfaStore implements StaffMfaStore {
-  constructor(private readonly db: Database, private readonly audit: AuditService) {}
+  constructor(
+    private readonly db: Database,
+    private readonly audit: AuditService,
+    private readonly staffMfaRequired: () => Promise<boolean> = async () => true,
+  ) {}
 
   async hasVerifiedEnrollment(userId: string) {
     const [enrollment] = await this.db.select({
@@ -46,14 +50,16 @@ export class DatabaseStaffMfaStore implements StaffMfaStore {
 
   async resetForRecovery(userId: string, auditContext?: AuditContext) {
     return this.db.transaction(async (tx) => {
+      const requireMfa = await this.staffMfaRequired()
       const owners = await tx.execute<{ count: number }>(sql`
         select count(*)::int as "count" from "user"
         where "account_type" = 'staff' and "role" = 'owner'
-          and "staff_activated_at" is not null and coalesce("banned", false) = false
+          and (${requireMfa} = false or "staff_activated_at" is not null)
+          and coalesce("banned", false) = false
       `)
       const [target] = await tx.select().from(user).where(eq(user.id, userId)).limit(1)
       if (owners[0]?.count !== 1 || target?.role !== 'owner' || target.accountType !== 'staff'
-        || !target.staffActivatedAt || target.banned) throw new Error('FINAL_ACTIVE_OWNER_REQUIRED')
+        || (requireMfa && !target.staffActivatedAt) || target.banned) throw new Error('FINAL_ACTIVE_OWNER_REQUIRED')
 
       await tx.delete(twoFactor).where(eq(twoFactor.userId, userId))
       await tx.delete(session).where(eq(session.userId, userId))

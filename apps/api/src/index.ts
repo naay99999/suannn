@@ -23,6 +23,8 @@ import { StaffRepository } from './modules/auth/staff/repository'
 import { StaffService } from './modules/auth/staff/service'
 import { StaffMfaService } from './modules/auth/mfa/service'
 import { DatabaseStaffMfaStore } from './modules/auth/mfa/repository'
+import { SystemSettingsRepository } from './modules/settings/repository'
+import { SystemSettingsService } from './modules/settings/service'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -43,8 +45,11 @@ const emailSender = createResendEmailSender({
   from: config.authEmailFrom,
 })
 const audit = new AuditService(new AuditRepository(database.db))
+const systemSettingsRepository = new SystemSettingsRepository(database.db, audit)
+const systemSettings = new SystemSettingsService(systemSettingsRepository)
+const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
-  emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit,
+  emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
 })
 const rateLimitRepository = new ApplicationRateLimitRepository(database.db)
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
@@ -73,15 +78,18 @@ const app = await createApp(config, {
     runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
     audit,
+    staffMfaRequired,
   }),
   staffMfa: new StaffMfaService({
     auth,
-    store: new DatabaseStaffMfaStore(database.db, audit),
+    store: new DatabaseStaffMfaStore(database.db, audit, staffMfaRequired),
     emailSender,
     runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
   }),
-  staff: new StaffService(new StaffRepository(database.db, audit)),
+  staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
+  systemSettings,
+  staffMfaRequired,
   identityReservations: claims,
   limiter,
 })

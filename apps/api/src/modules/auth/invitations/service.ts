@@ -1,4 +1,4 @@
-import type { Auth } from '../../../plugins/auth/auth'
+import { withStaffMfaBypass, type Auth } from '../../../plugins/auth/auth'
 import { isStaffRole, type StaffRole } from '../../../plugins/auth/access-control'
 import { createOpaqueToken, hashToken } from '../../../shared/crypto'
 import type { EmailSender } from '../../email/sender'
@@ -26,6 +26,7 @@ interface StaffInvitationDependencies {
   createId?: () => string
   audit: AuditService
   afterProvision?: () => Promise<void>
+  staffMfaRequired?(): Promise<boolean>
 }
 
 interface InvitationWithToken {
@@ -236,15 +237,17 @@ export class StaffInvitationService {
       return { email: invitation.normalizedEmail, userId: staffUser.id }
     })
 
-    const signedIn = await this.dependencies.auth.api.signInEmail({
+    const signIn = () => this.dependencies.auth.api.signInEmail({
       body: {
         email: credentials.email,
         password: command.password,
       },
       returnHeaders: true,
     })
+    const staffMfaRequired = await (this.dependencies.staffMfaRequired?.() ?? Promise.resolve(true))
+    const signedIn = staffMfaRequired ? await signIn() : await withStaffMfaBypass(signIn)
 
-    return { headers: signedIn.headers }
+    return { headers: signedIn.headers, next: staffMfaRequired ? 'mfa-enrollment' as const : 'dashboard' as const }
   }
 
   hasOwner() {
