@@ -24,6 +24,8 @@ export const auditMetadataKeys = {
   'product.variant-updated': ['fields', 'productId'],
   'product.variant-archived': ['productId'],
   'inventory.received': ['variantId', 'warehouseId', 'quantity'],
+  'inventory.written-off': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],
+  'inventory.count-adjusted': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],
 } as const
 
 const auditRecord = t.Object({

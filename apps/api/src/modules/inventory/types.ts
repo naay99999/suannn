@@ -22,6 +22,19 @@ export interface ReceiveLotInput {
   quarantineReason?: string
 }
 
+export type WriteOffReason = 'spoiled' | 'expired' | 'damaged'
+
+export interface WriteOffInput {
+  quantity: number
+  reason: WriteOffReason
+  note?: string
+}
+
+export interface CountAdjustmentInput {
+  countedQuantity: number
+  reason: string
+}
+
 export interface LotDetail {
   id: string
   warehouseId: string

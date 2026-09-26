@@ -17,6 +17,7 @@ export type DomainErrorCode =
   | 'INVALID_INVENTORY_QUERY'
   | 'INVALID_LOT_CODE'
   | 'INVALID_RECEIPT'
+  | 'INVENTORY_STOCK_CONFLICT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -37,6 +38,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_INVENTORY_QUERY: { status: 422, message: 'Inventory query is invalid' },
   INVALID_LOT_CODE: { status: 422, message: 'Lot code is invalid' },
   INVALID_RECEIPT: { status: 422, message: 'Inventory receipt is invalid' },
+  INVENTORY_STOCK_CONFLICT: { status: 409, message: 'Inventory stock does not allow this action' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

@@ -6,7 +6,9 @@ import type {
   LotQuery,
   MovementDetail,
   MovementQuery,
+  CountAdjustmentInput,
   ReceiveLotInput,
+  WriteOffInput,
   VariantStockSummary,
 } from './types'
 
@@ -18,6 +20,14 @@ export class InventoryService {
 
   receiveLot(input: ReceiveLotInput, context: CommandContext): Promise<LotDetail> {
     return this.stock.receiveLot(input, context)
+  }
+
+  writeOff(lotId: string, input: WriteOffInput, context: CommandContext): Promise<LotDetail> {
+    return this.stock.writeOff(lotId, input, context)
+  }
+
+  adjustCount(lotId: string, input: CountAdjustmentInput, context: CommandContext): Promise<LotDetail> {
+    return this.stock.adjustCount(lotId, input, context)
   }
 
   getVariantSummary(variantId: string, warehouseId: string): Promise<VariantStockSummary> {
