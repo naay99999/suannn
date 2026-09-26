@@ -10,14 +10,17 @@ export function createCorsPlugin(config: AppConfig) {
         if (!origin) return false
 
         const path = new URL(request.url).pathname
-        if (path === '/api/v1/store/cart' || path.startsWith('/api/v1/store/cart/')) {
+        if (path === '/api/v1/store' || path.startsWith('/api/v1/store/')) {
           return origin === config.storefrontUrl
+        }
+        if (path === '/api/v1/admin' || path.startsWith('/api/v1/admin/')) {
+          return origin === config.adminUrl
         }
 
         return config.corsOrigins.includes(origin)
       },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Order-Access-Token'],
       credentials: true,
       maxAge: 86_400,
     }))

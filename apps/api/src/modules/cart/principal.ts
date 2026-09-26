@@ -4,6 +4,7 @@ import { createOpaqueToken, hashToken } from '../../shared/crypto'
 import type { CartPrincipal } from './types'
 
 export const guestCartCookieName = 'suannn_cart'
+const guestCartCookiePath = '/api/v1/store'
 const guestTokenPattern = /^[A-Za-z0-9_-]{43}$/
 const anonymousReadTokenHash = hashToken('anonymous-cart-read')
 
@@ -26,7 +27,7 @@ function validGuestToken(token: string | null): token is string {
 }
 
 function cookieOptions(secure: boolean) {
-  return `Path=/api/v1/store/cart; Max-Age=${guestCartCookieMaxAgeSeconds}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`
+  return `Path=${guestCartCookiePath}; Max-Age=${guestCartCookieMaxAgeSeconds}; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`
 }
 
 function setGuestCartCookie(token: string, secure: boolean) {
@@ -39,7 +40,7 @@ export function readGuestCartTokenHash(request: Request) {
 }
 
 export function expireGuestCartCookie(secure: boolean) {
-  return `${guestCartCookieName}=; Path=/api/v1/store/cart; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`
+  return `${guestCartCookieName}=; Path=${guestCartCookiePath}; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`
 }
 
 export async function resolveCartPrincipal(

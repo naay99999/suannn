@@ -144,7 +144,7 @@ describe('store cart HTTP contract', () => {
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('SameSite=Lax')
     expect(setCookie).toContain('Max-Age=2592000')
-    expect(setCookie).toContain('Path=/api/v1/store/cart')
+    expect(setCookie).toContain('Path=/api/v1/store;')
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(harness.principals).toEqual([{ kind: 'guest', tokenHash: hashToken(token!) }])
     expect(await response.text()).not.toContain(token!)
@@ -220,6 +220,7 @@ describe('store cart HTTP contract', () => {
     expect(response.status).toBe(200)
     expect(harness.mergeCalls).toEqual([{ userId: 'customer-1', guestTokenHash: hashToken(token) }])
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0')
+    expect(response.headers.get('set-cookie')).toContain('Path=/api/v1/store;')
     expect(await response.text()).not.toContain(token)
   })
 
