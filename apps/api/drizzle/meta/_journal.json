@@ -57,6 +57,13 @@
       "when": 1790410329271,
       "tag": "0007_narrow_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790419883015,
+      "tag": "0008_adorable_doomsday",
+      "breakpoints": true
     }
   ]
 }
