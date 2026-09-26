@@ -56,6 +56,7 @@ const movement = t.Object({
   type: t.Union([
     t.Literal('receipt'), t.Literal('write_off'),
     t.Literal('count_adjustment'), t.Literal('reservation_confirm'),
+    t.Literal('order_cancel_restore'),
   ]),
   reasonCode: t.String({ minLength: 1, maxLength: 100 }),
   occurredAt: dateTime,

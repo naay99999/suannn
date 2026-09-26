@@ -78,6 +78,13 @@
       "when": 1790454951254,
       "tag": "0010_glamorous_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790456963940,
+      "tag": "0011_brown_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

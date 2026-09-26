@@ -121,7 +121,7 @@ export interface MovementDetail {
   operationId: string
   quantityDelta: number
   balanceAfter: number
-  type: 'receipt' | 'write_off' | 'count_adjustment' | 'reservation_confirm'
+  type: 'receipt' | 'write_off' | 'count_adjustment' | 'reservation_confirm' | 'order_cancel_restore'
   reasonCode: string
   occurredAt: string
   actorId: string

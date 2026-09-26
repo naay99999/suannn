@@ -57,6 +57,7 @@ export const inventoryLot = pgTable('inventory_lot', {
   quarantineReason: text('quarantine_reason'),
   onHandQuantity: integer('on_hand_quantity').default(0).notNull(),
   reservedQuantity: integer('reserved_quantity').default(0).notNull(),
+  reversibleQuantity: integer('reversible_quantity').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -71,6 +72,8 @@ export const inventoryLot = pgTable('inventory_lot', {
   check('inventory_lot_on_hand_quantity_range_check', sql`${table.onHandQuantity} between 0 and 1000000000`),
   check('inventory_lot_reserved_quantity_range_check', sql`${table.reservedQuantity} between 0 and 1000000000`),
   check('inventory_lot_reserved_not_over_on_hand_check', sql`${table.reservedQuantity} <= ${table.onHandQuantity}`),
+  check('inventory_lot_reversible_quantity_range_check', sql`${table.reversibleQuantity} between 0 and 1000000000`),
+  check('inventory_lot_on_hand_plus_reversible_capacity_check', sql`${table.onHandQuantity} + ${table.reversibleQuantity} <= 1000000000`),
 ])
 
 export const stockMovement = pgTable('stock_movement', {
@@ -79,19 +82,20 @@ export const stockMovement = pgTable('stock_movement', {
   operationId: uuid('operation_id').notNull().references(() => inventoryOperation.id, { onDelete: 'restrict' }),
   quantityDelta: integer('quantity_delta').notNull(),
   balanceAfter: integer('balance_after').notNull(),
-  type: text('type', { enum: ['receipt', 'write_off', 'count_adjustment', 'reservation_confirm'] }).notNull(),
+  type: text('type', { enum: ['receipt', 'write_off', 'count_adjustment', 'reservation_confirm', 'order_cancel_restore'] }).notNull(),
   reasonCode: text('reason_code').notNull(),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
   actorId: text('actor_id').notNull(),
 }, (table) => [
   index('stock_movement_lot_history_idx').on(table.lotId, table.occurredAt, table.id),
   index('stock_movement_operation_idx').on(table.operationId),
-  check('stock_movement_type_check', sql`${table.type} in ('receipt', 'write_off', 'count_adjustment', 'reservation_confirm')`),
+  check('stock_movement_type_check', sql`${table.type} in ('receipt', 'write_off', 'count_adjustment', 'reservation_confirm', 'order_cancel_restore')`),
   check('stock_movement_quantity_delta_nonzero_check', sql`${table.quantityDelta} <> 0`),
   check('stock_movement_balance_after_range_check', sql`${table.balanceAfter} between 0 and 1000000000`),
   check('stock_movement_type_delta_sign_check', sql`
     (${table.type} = 'receipt' and ${table.quantityDelta} > 0)
     or (${table.type} in ('write_off', 'reservation_confirm') and ${table.quantityDelta} < 0)
+    or (${table.type} = 'order_cancel_restore' and ${table.quantityDelta} > 0)
     or ${table.type} = 'count_adjustment'
   `),
   check('stock_movement_reason_code_nonblank_check', sql`length(btrim(${table.reasonCode})) between 1 and 100`),
@@ -119,6 +123,7 @@ export const inventoryReservationAllocation = pgTable('inventory_reservation_all
   lotId: uuid('lot_id').notNull(),
   quantity: integer('quantity').notNull(),
 }, (table) => [
+  unique('inventory_reservation_allocation_id_lot_quantity_unique').on(table.id, table.lotId, table.quantity),
   foreignKey({
     name: 'inventory_reservation_allocation_reservation_fk',
     columns: [table.reservationId],

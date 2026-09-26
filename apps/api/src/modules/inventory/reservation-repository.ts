@@ -34,6 +34,7 @@ const lotProjection = {
   quarantineReason: inventoryLot.quarantineReason,
   onHandQuantity: inventoryLot.onHandQuantity,
   reservedQuantity: inventoryLot.reservedQuantity,
+  reversibleQuantity: inventoryLot.reversibleQuantity,
   createdAt: inventoryLot.createdAt,
   updatedAt: inventoryLot.updatedAt,
 }
