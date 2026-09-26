@@ -124,6 +124,8 @@ export const inventoryReservationAllocation = pgTable('inventory_reservation_all
   quantity: integer('quantity').notNull(),
 }, (table) => [
   unique('inventory_reservation_allocation_id_lot_quantity_unique').on(table.id, table.lotId, table.quantity),
+  unique('inventory_res_alloc_identity_unique')
+    .on(table.reservationId, table.id, table.lotId, table.quantity),
   foreignKey({
     name: 'inventory_reservation_allocation_reservation_fk',
     columns: [table.reservationId],

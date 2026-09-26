@@ -98,6 +98,8 @@ export const commerceOrder = pgTable('commerce_order', {
 }, (table) => [
   uniqueIndex('commerce_order_number_unique').on(table.orderNumber),
   uniqueIndex('commerce_order_reservation_unique').on(table.reservationId),
+  unique('commerce_order_id_reservation_unique').on(table.id, table.reservationId),
+  unique('commerce_order_id_payment_method_total_unique').on(table.id, table.paymentMethod, table.totalSatang),
   index('commerce_order_customer_created_idx').on(table.customerId, table.createdAt, table.id),
   index('commerce_order_status_created_idx').on(table.status, table.createdAt, table.id),
   check('commerce_order_number_nonblank_check', sql`length(btrim(${table.orderNumber})) between 1 and 80`),
@@ -157,6 +159,7 @@ export const orderItem = pgTable('order_item', {
   lineTotalSatang: bigint('line_total_satang', { mode: 'number' }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
+  unique('order_item_id_order_unique').on(table.id, table.orderId),
   uniqueIndex('order_item_order_variant_unique').on(table.orderId, table.variantId),
   index('order_item_product_idx').on(table.productId),
   index('order_item_variant_idx').on(table.variantId),
@@ -177,8 +180,10 @@ export const orderItem = pgTable('order_item', {
 
 export const orderItemAllocation = pgTable('order_item_allocation', {
   id: uuid('id').defaultRandom().primaryKey(),
+  orderId: uuid('order_id').notNull(),
   orderItemId: uuid('order_item_id').notNull().references(() => orderItem.id, { onDelete: 'restrict' }),
   lotId: uuid('lot_id').notNull().references(() => inventoryLot.id, { onDelete: 'restrict' }),
+  reservationId: uuid('reservation_id').notNull(),
   reservationAllocationId: uuid('reservation_allocation_id').notNull(),
   quantity: integer('quantity').notNull(),
   restorationStatus: text('restoration_status', { enum: ['reversible', 'restored', 'released'] })
@@ -187,9 +192,19 @@ export const orderItemAllocation = pgTable('order_item_allocation', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   foreignKey({
+    name: 'order_item_allocation_item_order_fk',
+    columns: [table.orderItemId, table.orderId],
+    foreignColumns: [orderItem.id, orderItem.orderId],
+  }).onDelete('restrict'),
+  foreignKey({
+    name: 'order_item_allocation_order_reservation_fk',
+    columns: [table.orderId, table.reservationId],
+    foreignColumns: [commerceOrder.id, commerceOrder.reservationId],
+  }).onDelete('restrict'),
+  foreignKey({
     name: 'order_item_allocation_reservation_lot_quantity_fk',
-    columns: [table.reservationAllocationId, table.lotId, table.quantity],
-    foreignColumns: [inventoryReservationAllocation.id, inventoryReservationAllocation.lotId, inventoryReservationAllocation.quantity],
+    columns: [table.reservationId, table.reservationAllocationId, table.lotId, table.quantity],
+    foreignColumns: [inventoryReservationAllocation.reservationId, inventoryReservationAllocation.id, inventoryReservationAllocation.lotId, inventoryReservationAllocation.quantity],
   }).onDelete('restrict'),
   uniqueIndex('order_item_allocation_reservation_allocation_unique').on(table.reservationAllocationId),
   index('order_item_allocation_item_idx').on(table.orderItemId),
@@ -213,10 +228,16 @@ export const payment = pgTable('payment', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  foreignKey({
+    name: 'payment_order_method_amount_fk',
+    columns: [table.orderId, table.method, table.amountSatang],
+    foreignColumns: [commerceOrder.id, commerceOrder.paymentMethod, commerceOrder.totalSatang],
+  }).onDelete('restrict'),
   uniqueIndex('payment_one_active_per_order_unique').on(table.orderId).where(sql`${table.status} <> 'void'`),
   index('payment_status_created_idx').on(table.status, table.createdAt),
   check('payment_method_nonblank_check', sql`length(btrim(${table.method})) between 1 and 80`),
   check('payment_provider_nonblank_check', sql`length(btrim(${table.provider})) between 1 and 80`),
+  check('payment_cod_provider_check', sql`${table.method} <> 'cod' or ${table.provider} = 'cod'`),
   check('payment_amount_safe_range_check', sql`${table.amountSatang} between 0 and ${maxSafeSatangSql}`),
   check('payment_currency_check', sql`${table.currency} = 'THB'`),
   check('payment_status_check', sql`${table.status} in ('awaiting_collection', 'collected', 'void')`),
@@ -261,6 +282,10 @@ export const orderEvent = pgTable('order_event', {
   index('order_event_order_created_idx').on(table.orderId, table.createdAt, table.id),
   check('order_event_type_nonblank_check', sql`length(btrim(${table.eventType})) between 1 and 100`),
   check('order_event_actor_type_check', sql`${table.actorType} in ('customer', 'guest', 'staff', 'system')`),
+  check('order_event_status_values_check', sql`
+    (${table.fromStatus} is null or ${table.fromStatus} in ('pending_payment', 'placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled'))
+    and (${table.toStatus} is null or ${table.toStatus} in ('pending_payment', 'placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled'))
+  `),
   check('order_event_actor_identity_check', sql`
     (${table.actorType} = 'system' and ${table.actorId} is null)
     or (${table.actorType} in ('customer', 'guest', 'staff')
@@ -291,7 +316,7 @@ export const orderOutbox = pgTable('order_outbox', {
     columns: [table.orderEventId, table.orderId, table.eventType],
     foreignColumns: [orderEvent.id, orderEvent.orderId, orderEvent.eventType],
   }).onDelete('restrict'),
-  uniqueIndex('order_outbox_order_event_unique').on(table.orderId, table.eventType),
+  uniqueIndex('order_outbox_event_id_unique').on(table.orderEventId),
   index('order_outbox_due_idx').on(table.nextAttemptAt, table.createdAt).where(sql`${table.status} in ('pending', 'failed')`),
   check('order_outbox_event_type_check', sql`length(btrim(${table.eventType})) between 1 and 100`),
   check('order_outbox_template_id_check', sql`${table.templateId} ~ '^[a-z0-9_]{1,100}$'`),

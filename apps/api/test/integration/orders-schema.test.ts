@@ -88,6 +88,7 @@ async function insertOrder(input: {
   subtotal?: string | number
   shipping?: string | number
   total?: string | number
+  paymentMethod?: string
   status?: string
   guestFields?: boolean
   contactEmail?: string
@@ -111,7 +112,7 @@ async function insertOrder(input: {
     ) values (
       $1, $2, $3, $4, $5, $6, $7, $8, 'Order Recipient', '12 Sample Road',
       'Sample Subdistrict', 'Sample District', 'Bangkok', '10110',
-      $9, $10, $11, 'THB', 'cod', $12, $13, $14
+      $9, $10, $11, 'THB', $12, $13, $14, $15
     )
   `, [
     id,
@@ -125,6 +126,7 @@ async function insertOrder(input: {
     input.subtotal ?? 100,
     input.shipping ?? 25,
     input.total ?? 125,
+    input.paymentMethod ?? 'cod',
     input.status ?? 'placed',
     input.reservationId ?? await insertReservation(),
     'c'.repeat(64),
@@ -190,16 +192,19 @@ describe('order and reversible inventory schema migration', () => {
     await expectPostgresError(() => database.client.unsafe(`
       update commerce_order set subtotal_satang = 99, total_satang = 124 where id = $1
     `, [orderId]), '23514')
+    await database.client.unsafe(`
+      update commerce_order set status = 'processing', updated_at = now() where id = $1
+    `, [orderId])
     await expectPostgresError(() => database.client.unsafe(`delete from product where id = $1`, [productId]), '23503')
     await expectPostgresError(() => database.client.unsafe(`delete from product_variant where id = $1`, [variantId]), '23503')
   })
 
   it('requires valid order and product references and links item allocations to reservation allocations', async () => {
     const { productId, variantId } = await insertVariant()
-    const orderId = await insertOrder()
+    const reservationId = await insertReservation()
+    const orderId = await insertOrder({ reservationId })
     const itemId = await insertOrderItem({ orderId, productId, variantId })
     const lotId = await insertLot({ variantId, onHand: 2 })
-    const reservationId = await insertReservation()
     const reservationAllocationId = crypto.randomUUID()
 
     await database.client.unsafe(`
@@ -207,15 +212,41 @@ describe('order and reversible inventory schema migration', () => {
         id, reservation_id, variant_id, lot_id, quantity
       ) values ($1, $2, $3, $4, 1)
     `, [reservationAllocationId, reservationId, variantId, lotId])
+    const orderItemAllocationId = crypto.randomUUID()
     await database.client.unsafe(`
-      insert into order_item_allocation (order_item_id, lot_id, reservation_allocation_id, quantity)
-      values ($1, $2, $3, 1)
-    `, [itemId, lotId, reservationAllocationId])
+      insert into order_item_allocation (
+        id, order_id, order_item_id, lot_id, reservation_id, reservation_allocation_id, quantity
+      ) values ($1, $2, $3, $4, $5, $6, 1)
+    `, [orderItemAllocationId, orderId, itemId, lotId, reservationId, reservationAllocationId])
+    await expectPostgresError(() => database.client.unsafe(`
+      update order_item_allocation set order_id = $2 where id = $1
+    `, [orderItemAllocationId, crypto.randomUUID()]), '23514')
+    await expectPostgresError(() => database.client.unsafe(`
+      update order_item_allocation set reservation_id = $2 where id = $1
+    `, [orderItemAllocationId, crypto.randomUUID()]), '23514')
+    await database.client.unsafe(`
+      update order_item_allocation set restoration_status = 'restored', restored_at = now()
+      where id = $1
+    `, [orderItemAllocationId])
+
+    const otherReservationId = await insertReservation()
+    const otherReservationAllocationId = crypto.randomUUID()
+    await database.client.unsafe(`
+      insert into inventory_reservation_allocation (
+        id, reservation_id, variant_id, lot_id, quantity
+      ) values ($1, $2, $3, $4, 1)
+    `, [otherReservationAllocationId, otherReservationId, variantId, lotId])
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into order_item_allocation (
+        order_id, order_item_id, lot_id, reservation_id, reservation_allocation_id, quantity
+      ) values ($1, $2, $3, $4, $5, 1)
+    `, [orderId, itemId, lotId, reservationId, otherReservationAllocationId]), '23503')
 
     await expectPostgresError(() => database.client.unsafe(`
-      insert into order_item_allocation (order_item_id, lot_id, reservation_allocation_id, quantity)
-      values ($1, $2, $3, 1)
-    `, [itemId, lotId, crypto.randomUUID()]), '23503')
+      insert into order_item_allocation (
+        order_id, order_item_id, lot_id, reservation_id, reservation_allocation_id, quantity
+      ) values ($1, $2, $3, $4, $5, 1)
+    `, [orderId, itemId, lotId, reservationId, crypto.randomUUID()]), '23503')
     const otherVariant = await insertVariant()
     await expectPostgresError(() => database.client.unsafe(`
       insert into order_item (order_id, product_id, variant_id, sku, product_name,
@@ -232,6 +263,11 @@ describe('order and reversible inventory schema migration', () => {
       insert into payment (id, order_id, method, provider, amount_satang, currency, status)
       values ($1, $2, 'cod', 'cod', 125, 'THB', 'awaiting_collection')
     `, [paymentId, orderId])
+    const futureMethodOrderId = await insertOrder({ paymentMethod: 'bank_transfer' })
+    await database.client.unsafe(`
+      insert into payment (order_id, method, provider, amount_satang)
+      values ($1, 'bank_transfer', 'bank_gateway', 125)
+    `, [futureMethodOrderId])
     await expectPostgresError(() => database.client.unsafe(`
       insert into payment (order_id, method, provider, amount_satang, currency, status)
       values ($1, 'cod', 'cod', 125, 'THB', 'awaiting_collection')
@@ -246,6 +282,22 @@ describe('order and reversible inventory schema migration', () => {
       insert into payment (order_id, method, provider, amount_satang, currency, status)
       values ($1, 'cod', 'cod', 9007199254740992, 'THB', 'awaiting_collection')
     `, [oversizedAmountOrderId]), '23514')
+
+    const wrongAmountOrderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into payment (order_id, method, provider, amount_satang)
+      values ($1, 'cod', 'cod', 124)
+    `, [wrongAmountOrderId]), '23503')
+    const wrongMethodOrderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into payment (order_id, method, provider, amount_satang)
+      values ($1, 'card', 'card_gateway', 125)
+    `, [wrongMethodOrderId]), '23503')
+    const wrongCodProviderOrderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into payment (order_id, method, provider, amount_satang)
+      values ($1, 'cod', 'card_gateway', 125)
+    `, [wrongCodProviderOrderId]), '23514')
   })
 
   it('limits all order totals to safe integers and enforces subtotal plus shipping equals total', async () => {
@@ -256,6 +308,22 @@ describe('order and reversible inventory schema migration', () => {
       .rejects.toMatchObject({ code: '23514' })
     await expect(insertOrder({ subtotal: SAFE_MONEY_MAX, shipping: 1, total: '9007199254740992' }))
       .rejects.toMatchObject({ code: '23514' })
+  })
+
+  it('rejects unknown order event from-status values while allowing a null creation status', async () => {
+    const orderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into order_event (order_id, event_type, from_status, to_status, actor_type, metadata)
+      values ($1, 'order.transition', 'unknown', 'placed', 'system', '{}'::jsonb)
+    `, [orderId]), '23514')
+  })
+
+  it('rejects unknown order event to-status values', async () => {
+    const orderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into order_event (order_id, event_type, from_status, to_status, actor_type, metadata)
+      values ($1, 'order.transition', null, 'unknown', 'system', '{}'::jsonb)
+    `, [orderId]), '23514')
   })
 
   it('enforces scoped idempotency keys and one outbox intent per order event', async () => {
@@ -286,6 +354,16 @@ describe('order and reversible inventory schema migration', () => {
       insert into order_outbox (order_id, order_event_id, event_type, template_id)
       values ($1, $2, 'order.placed', 'order_confirmation_v1')
     `, [orderId, eventId]), '23505')
+
+    const secondEventId = crypto.randomUUID()
+    await database.client.unsafe(`
+      insert into order_event (id, order_id, event_type, to_status, actor_type, metadata, actor_id)
+      values ($1, $2, 'order.placed', 'placed', 'guest', '{}'::jsonb, 'guest:token-hash')
+    `, [secondEventId, orderId])
+    await database.client.unsafe(`
+      insert into order_outbox (order_id, order_event_id, event_type, template_id)
+      values ($1, $2, 'order.placed', 'order_confirmation_v1')
+    `, [orderId, secondEventId])
 
     const outboxColumns = await database.client.unsafe<{ column_name: string }[]>(`
       select column_name from information_schema.columns
