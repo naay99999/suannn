@@ -33,6 +33,7 @@ import { readOrderSnapshot } from '../orders/repository'
 import type {
   CheckoutContact,
   CheckoutResult,
+  OrderSnapshot,
   PlaceCodInput,
   ThaiAddress,
 } from '../orders/types'
@@ -73,6 +74,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const prototype = Object.getPrototypeOf(value)
   return prototype === Object.prototype || prototype === null
+}
+
+function isSafeNonnegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function readPlacementSnapshot(value: unknown): OrderSnapshot {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.orderNumber !== 'string'
+    || value.status !== 'placed'
+    || (value.customerId !== null && typeof value.customerId !== 'string')
+    || typeof value.contactEmail !== 'string'
+    || typeof value.contactPhone !== 'string'
+    || typeof value.recipientName !== 'string'
+    || typeof value.addressLine1 !== 'string'
+    || (value.addressLine2 !== null && typeof value.addressLine2 !== 'string')
+    || typeof value.subdistrict !== 'string'
+    || typeof value.district !== 'string'
+    || typeof value.province !== 'string'
+    || typeof value.postalCode !== 'string'
+    || !isSafeNonnegativeInteger(value.subtotalSatang)
+    || !isSafeNonnegativeInteger(value.shippingSatang)
+    || !isSafeNonnegativeInteger(value.totalSatang)
+    || value.currency !== 'THB'
+    || value.paymentMethod !== 'cod'
+    || typeof value.createdAt !== 'string'
+    || !Number.isFinite(Date.parse(value.createdAt))
+    || !Array.isArray(value.items)) {
+    throw new DomainError('INVALID_ORDER_COMMAND')
+  }
+  for (const item of value.items) {
+    if (!isRecord(item)
+      || typeof item.id !== 'string'
+      || typeof item.productId !== 'string'
+      || typeof item.variantId !== 'string'
+      || typeof item.sku !== 'string'
+      || typeof item.productName !== 'string'
+      || typeof item.variantName !== 'string'
+      || typeof item.unit !== 'string'
+      || !isSafeNonnegativeInteger(item.unitPriceSatang)
+      || !Number.isSafeInteger(item.quantity) || (item.quantity as number) < 1
+      || !isSafeNonnegativeInteger(item.lineTotalSatang)) {
+      throw new DomainError('INVALID_ORDER_COMMAND')
+    }
+  }
+  return value as unknown as OrderSnapshot
 }
 
 function exactKeys(value: Record<string, unknown>, required: readonly string[], optional: readonly string[] = []) {
@@ -182,12 +230,18 @@ function quoteFingerprint(canonicalQuote: string) {
 }
 
 function operationResultPayload(
-  orderId: string,
+  order: OrderSnapshot,
   guestAccessTokenHash: string | null,
   guestAccessTokenNonce: string | null,
   guestAccessTokenVersion: number | null,
 ) {
-  return { orderId, guestAccessTokenHash, guestAccessTokenNonce, guestAccessTokenVersion }
+  return {
+    orderId: order.id,
+    order,
+    guestAccessTokenHash,
+    guestAccessTokenNonce,
+    guestAccessTokenVersion,
+  }
 }
 
 async function lockedCart(tx: DatabaseTransaction, principal: CartPrincipal): Promise<LockedCart> {
@@ -298,39 +352,45 @@ export class CheckoutService {
       command: commandName,
       idempotencyKey,
       payload,
-    }, async (tx, operation) => this.replay(tx, operation, principal), async (tx, requestHash) =>
+    }, async (_tx, operation) => this.replay(operation, principal), async (tx, requestHash) =>
       this.placeFirstOrder(tx, normalized, principal, requestHash))
   }
 
   private async replay(
-    tx: DatabaseTransaction,
     operation: OrderOperationRecord,
     principal: CartPrincipal,
   ): Promise<CheckoutResult> {
-    const orderId = operation.resultPayload.orderId
-    if (typeof orderId !== 'string') throw new DomainError('INVALID_ORDER_COMMAND')
-    const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
-    if (!order) throw new DomainError('INVALID_ORDER_COMMAND')
-    if (principal.kind === 'customer' && order.customerId !== principal.userId) {
-      throw new DomainError('ORDER_OPERATION_CONFLICT')
-    }
-    if (principal.kind === 'guest' && order.customerId !== null) throw new DomainError('ORDER_OPERATION_CONFLICT')
-    const orderSnapshot = await readOrderSnapshot(tx, orderId)
-    if (order.customerId !== null) return { order: orderSnapshot }
-    if (!order.guestAccessTokenNonce || !order.guestAccessTokenVersion || !order.guestAccessTokenHash) {
+    const orderId = operation.orderId
+    if (typeof orderId !== 'string' || operation.resultPayload.orderId !== orderId) {
       throw new DomainError('INVALID_ORDER_COMMAND')
     }
-    if (operation.resultPayload.guestAccessTokenHash !== order.guestAccessTokenHash
-      || operation.resultPayload.guestAccessTokenNonce !== order.guestAccessTokenNonce
-      || operation.resultPayload.guestAccessTokenVersion !== order.guestAccessTokenVersion) {
+    const orderSnapshot = readPlacementSnapshot(operation.resultPayload.order)
+    if (orderSnapshot.id !== orderId || orderSnapshot.status !== 'placed') {
+      throw new DomainError('INVALID_ORDER_COMMAND')
+    }
+    const guestAccessTokenHash = operation.resultPayload.guestAccessTokenHash
+    const guestAccessTokenNonce = operation.resultPayload.guestAccessTokenNonce
+    const guestAccessTokenVersion = operation.resultPayload.guestAccessTokenVersion
+    if (principal.kind === 'customer') {
+      if (orderSnapshot.customerId !== principal.userId) throw new DomainError('ORDER_OPERATION_CONFLICT')
+      if (guestAccessTokenHash !== null || guestAccessTokenNonce !== null || guestAccessTokenVersion !== null) {
+        throw new DomainError('INVALID_ORDER_COMMAND')
+      }
+      return { order: orderSnapshot }
+    }
+    if (orderSnapshot.customerId !== null) throw new DomainError('ORDER_OPERATION_CONFLICT')
+    if (typeof guestAccessTokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(guestAccessTokenHash)
+      || typeof guestAccessTokenNonce !== 'string' || !guestAccessTokenNonce
+      || !Number.isSafeInteger(guestAccessTokenVersion) || (guestAccessTokenVersion as number) < 1) {
       throw new DomainError('INVALID_ORDER_COMMAND')
     }
     const guestAccessToken = deriveGuestOrderToken(
-      order.id,
-      order.guestAccessTokenNonce,
+      orderId,
+      guestAccessTokenNonce,
       this.secret,
-      order.guestAccessTokenVersion,
+      guestAccessTokenVersion as number,
     )
+    if (hashGuestOrderToken(guestAccessToken) !== guestAccessTokenHash) throw new DomainError('INVALID_ORDER_COMMAND')
     return { order: orderSnapshot, guestAccessToken }
   }
 
@@ -575,7 +635,7 @@ export class CheckoutService {
       orderId,
       httpStatus: 201,
       resultPayload: operationResultPayload(
-        orderId,
+        order,
         guestAccessTokenHash,
         guestAccessTokenNonce,
         guestAccessTokenVersion,

@@ -167,7 +167,7 @@ async function prepareCheckout(
   return { ...seeded, principal, input, displayQuote, cartService, checkout }
 }
 
-async function countRows(tableName: 'commerce_order' | 'order_operation' | 'order_outbox' | 'inventory_operation' | 'inventory_reservation' | 'payment' | 'stock_movement' | 'order_event' | 'audit_log') {
+async function countRows(tableName: 'commerce_order' | 'order_item' | 'order_item_allocation' | 'order_operation' | 'order_outbox' | 'inventory_operation' | 'inventory_reservation' | 'inventory_reservation_allocation' | 'payment' | 'stock_movement' | 'order_event' | 'audit_log') {
   const [row] = await database.db.execute<{ count: number }>(sql`select count(*)::int as count from ${sql.identifier(tableName)}`)
   return Number(row?.count ?? 0)
 }
@@ -269,10 +269,17 @@ describe('atomic COD checkout', () => {
     const service = new CheckoutService(database.db, commerceSecret, () => now)
     const first = await service.placeCod(prepared.input, principal, 'checkout-replay-1')
     now = new Date(now.getTime() + 16 * 60 * 1000)
+    await database.db.update(commerceOrder).set({ status: 'processing' })
+      .where(eq(commerceOrder.id, first.order.id))
 
     const replay = await service.placeCod(prepared.input, principal, 'checkout-replay-1')
 
     expect(replay).toEqual(first)
+    expect(replay.order.status).toBe('placed')
+    expect(replay.guestAccessToken).toBe(first.guestAccessToken)
+    const [currentOrder] = await database.db.select().from(commerceOrder)
+      .where(eq(commerceOrder.id, first.order.id))
+    expect(currentOrder?.status).toBe('processing')
     expect(await countRows('commerce_order')).toBe(1)
     expect(await countRows('order_operation')).toBe(1)
     expect(await countRows('order_outbox')).toBe(1)
@@ -328,19 +335,46 @@ describe('atomic COD checkout', () => {
 
   checkoutBehavior('rolls back order, inventory, payment, event, audit, outbox, and cart writes on downstream insert failures', async () => {
     const prepared = await prepareCheckout()
+    const originalCart = await prepared.cartService.get(prepared.principal)
+    const originalLots = await database.db.select({
+      id: inventoryLot.id,
+      onHandQuantity: inventoryLot.onHandQuantity,
+      reservedQuantity: inventoryLot.reservedQuantity,
+      reversibleQuantity: inventoryLot.reversibleQuantity,
+    }).from(inventoryLot).where(eq(inventoryLot.variantId, prepared.variantId))
     const rejectingTargets = [
-      `create trigger fail_checkout_payment before insert on payment for each row execute function reject_checkout_write()`,
-      `create trigger fail_checkout_outbox before insert on order_outbox for each row execute function reject_checkout_write()`,
-      `create trigger fail_checkout_audit before insert on audit_log for each row when (new.action = 'order.placed') execute function reject_checkout_write()`,
+      {
+        name: 'fail_checkout_payment',
+        table: 'payment',
+        statement: `create trigger fail_checkout_payment before insert on payment for each row execute function reject_checkout_write()`,
+      },
+      {
+        name: 'fail_checkout_outbox',
+        table: 'order_outbox',
+        statement: `create trigger fail_checkout_outbox before insert on order_outbox for each row execute function reject_checkout_write()`,
+      },
+      {
+        name: 'fail_checkout_audit',
+        table: 'audit_log',
+        statement: `create trigger fail_checkout_audit before insert on audit_log for each row when (new.action = 'order.placed') execute function reject_checkout_write()`,
+      },
+      {
+        name: 'fail_checkout_operation',
+        table: 'order_operation',
+        statement: `create trigger fail_checkout_operation before insert on order_operation for each row execute function reject_checkout_write()`,
+      },
     ]
     await database.db.execute(sql`create function reject_checkout_write() returns trigger language plpgsql as $$ begin raise exception 'CHECKOUT_WRITE_REJECTED'; end $$`)
     try {
-      for (const trigger of rejectingTargets) {
-        await database.db.execute(sql.raw(trigger))
+      for (const target of rejectingTargets) {
+        await database.db.execute(sql.raw(target.statement))
         await expect(prepared.checkout.placeCod(prepared.input, prepared.principal, `checkout-rollback-${crypto.randomUUID()}`))
           .rejects.toBeTruthy()
         expect(await countRows('commerce_order')).toBe(0)
+        expect(await countRows('order_item')).toBe(0)
+        expect(await countRows('order_item_allocation')).toBe(0)
         expect(await countRows('inventory_reservation')).toBe(0)
+        expect(await countRows('inventory_reservation_allocation')).toBe(0)
         expect(await countRows('inventory_operation')).toBe(0)
         expect(await countRows('order_operation')).toBe(0)
         expect(await countRows('stock_movement')).toBe(0)
@@ -348,13 +382,23 @@ describe('atomic COD checkout', () => {
         expect(await countRows('order_event')).toBe(0)
         expect(await countRows('order_outbox')).toBe(0)
         expect(await countRows('audit_log')).toBe(0)
-        expect((await prepared.cartService.get(prepared.principal)).lines).toHaveLength(1)
-        await database.db.execute(sql.raw(`drop trigger ${trigger.match(/fail_checkout_[a-z]+/)?.[0]} on ${trigger.match(/on ([a-z_]+)/)?.[1]}`))
+        const cartAfterFailure = await prepared.cartService.get(prepared.principal)
+        expect(cartAfterFailure.cartVersion).toBe(originalCart.cartVersion)
+        expect(cartAfterFailure.lines).toEqual(originalCart.lines)
+        const lotsAfterFailure = await database.db.select({
+          id: inventoryLot.id,
+          onHandQuantity: inventoryLot.onHandQuantity,
+          reservedQuantity: inventoryLot.reservedQuantity,
+          reversibleQuantity: inventoryLot.reversibleQuantity,
+        }).from(inventoryLot).where(eq(inventoryLot.variantId, prepared.variantId))
+        expect(lotsAfterFailure).toEqual(originalLots)
+        await database.db.execute(sql.raw(`drop trigger ${target.name} on ${target.table}`))
       }
     } finally {
       await database.db.execute(sql`drop trigger if exists fail_checkout_payment on payment`)
       await database.db.execute(sql`drop trigger if exists fail_checkout_outbox on order_outbox`)
       await database.db.execute(sql`drop trigger if exists fail_checkout_audit on audit_log`)
+      await database.db.execute(sql`drop trigger if exists fail_checkout_operation on order_operation`)
       await database.db.execute(sql`drop function if exists reject_checkout_write()`)
     }
   })
