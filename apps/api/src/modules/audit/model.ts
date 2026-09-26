@@ -23,6 +23,7 @@ export const auditMetadataKeys = {
   'product.variant-created': ['fields', 'productId'],
   'product.variant-updated': ['fields', 'productId'],
   'product.variant-archived': ['productId'],
+  'inventory.received': ['variantId', 'warehouseId', 'quantity'],
 } as const
 
 const auditRecord = t.Object({

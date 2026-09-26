@@ -8,6 +8,15 @@ export type DomainErrorCode =
   | 'SKU_CONFLICT'
   | 'PRODUCT_STATE_CONFLICT'
   | 'INVALID_PRODUCT'
+  | 'LOT_NOT_FOUND'
+  | 'WAREHOUSE_NOT_FOUND'
+  | 'LOT_CODE_CONFLICT'
+  | 'INVENTORY_OPERATION_CONFLICT'
+  | 'INVALID_IDEMPOTENCY_KEY'
+  | 'INVALID_INVENTORY_COMMAND'
+  | 'INVALID_INVENTORY_QUERY'
+  | 'INVALID_LOT_CODE'
+  | 'INVALID_RECEIPT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -19,6 +28,15 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   SKU_CONFLICT: { status: 409, message: 'Variant SKU is already in use' },
   PRODUCT_STATE_CONFLICT: { status: 409, message: 'Product state does not allow this action' },
   INVALID_PRODUCT: { status: 422, message: 'Product data is invalid' },
+  LOT_NOT_FOUND: { status: 404, message: 'Inventory lot not found' },
+  WAREHOUSE_NOT_FOUND: { status: 404, message: 'Warehouse not found' },
+  LOT_CODE_CONFLICT: { status: 409, message: 'Lot code is already in use for this variant' },
+  INVENTORY_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
+  INVALID_IDEMPOTENCY_KEY: { status: 422, message: 'Idempotency key is invalid' },
+  INVALID_INVENTORY_COMMAND: { status: 422, message: 'Inventory command is invalid' },
+  INVALID_INVENTORY_QUERY: { status: 422, message: 'Inventory query is invalid' },
+  INVALID_LOT_CODE: { status: 422, message: 'Lot code is invalid' },
+  INVALID_RECEIPT: { status: 422, message: 'Inventory receipt is invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
