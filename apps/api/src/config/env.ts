@@ -9,6 +9,8 @@ export const developmentCorsOrigins = [
   'http://127.0.0.1:4184',
 ]
 
+export const guestCartCookieMaxAgeSeconds = 60 * 60 * 24 * 30
+
 export interface AppConfig {
   host: string
   port: number

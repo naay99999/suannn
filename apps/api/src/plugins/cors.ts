@@ -5,7 +5,17 @@ import type { AppConfig } from '../config/env'
 export function createCorsPlugin(config: AppConfig) {
   return new Elysia({ name: 'cors' })
     .use(cors({
-      origin: config.corsOrigins,
+      origin: (request) => {
+        const origin = request.headers.get('origin')
+        if (!origin) return false
+
+        const path = new URL(request.url).pathname
+        if (path === '/api/v1/store/cart' || path.startsWith('/api/v1/store/cart/')) {
+          return origin === config.storefrontUrl
+        }
+
+        return config.corsOrigins.includes(origin)
+      },
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true,

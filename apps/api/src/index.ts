@@ -32,6 +32,8 @@ import { InventoryStockRepository } from './modules/inventory/stock-repository'
 import { InventoryReservationRepository } from './modules/inventory/reservation-repository'
 import { InventoryService } from './modules/inventory/service'
 import { startInventoryMaintenanceLoop } from './modules/inventory/maintenance'
+import { CartRepository } from './modules/cart/repository'
+import { CartService } from './modules/cart/service'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -62,6 +64,7 @@ const inventory = new InventoryService(
   inventoryReservations,
 )
 const products = new ProductService(new ProductRepository(database.db, audit, inventoryReadRepository))
+const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
@@ -106,6 +109,7 @@ const app = await createApp(config, {
   systemSettings,
   products,
   inventory,
+  cart,
   staffMfaRequired,
   identityReservations: claims,
   limiter,

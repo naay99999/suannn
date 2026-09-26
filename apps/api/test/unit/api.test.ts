@@ -31,6 +31,8 @@ import { InventoryReadRepository } from '../../src/modules/inventory/read-reposi
 import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
+import { CartRepository } from '../../src/modules/cart/repository'
+import { CartService } from '../../src/modules/cart/service'
 import type { ProductService } from '../../src/modules/products/service'
 import { testEnv } from '../fixtures'
 
@@ -41,6 +43,7 @@ const emailSender = { send: async () => ({ id: 'test-email' }) }
 const auth = createAuth(config, database.db, { emailSender, runInBackground: (task) => void task, audit })
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
+const inventoryReadRepository = new InventoryReadRepository(database.db)
 const app = await createApp(config, {
   auth,
   audit,
@@ -80,9 +83,10 @@ const app = await createApp(config, {
   products: {} as ProductService,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit),
-    new InventoryReadRepository(database.db),
+    inventoryReadRepository,
     new InventoryReservationRepository(database.db),
   ),
+  cart: new CartService(new CartRepository(database.db, inventoryReadRepository)),
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -192,6 +196,7 @@ describe('API routes', () => {
       'Customer Addresses',
       'Customer Email Change',
       'Store Products',
+      'Store Cart',
       'Admin Products',
       'Admin Inventory',
       'Sign-in',
@@ -325,7 +330,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(75)
+    expect(operations).toHaveLength(79)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
