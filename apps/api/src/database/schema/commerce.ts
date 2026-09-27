@@ -228,6 +228,7 @@ export const payment = pgTable('payment', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  uniqueIndex('payment_id_order_unique').on(table.id, table.orderId),
   foreignKey({
     name: 'payment_order_method_amount_fk',
     columns: [table.orderId, table.method, table.amountSatang],
@@ -283,8 +284,8 @@ export const stripeEvent = pgTable('stripe_event', {
 
 export const stripeRefund = pgTable('stripe_refund', {
   id: uuid('id').defaultRandom().primaryKey(),
-  paymentId: uuid('payment_id').notNull().references(() => payment.id, { onDelete: 'restrict' }),
-  orderId: uuid('order_id').notNull().references(() => commerceOrder.id, { onDelete: 'restrict' }),
+  paymentId: uuid('payment_id').notNull(),
+  orderId: uuid('order_id').notNull(),
   requestActorType: text('request_actor_type', { enum: ['staff', 'system'] }).notNull().default('staff'),
   requestActorId: text('request_actor_id'),
   idempotencyKey: text('idempotency_key').notNull(),
@@ -295,6 +296,11 @@ export const stripeRefund = pgTable('stripe_refund', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  foreignKey({
+    name: 'stripe_refund_payment_order_fk',
+    columns: [table.paymentId, table.orderId],
+    foreignColumns: [payment.id, payment.orderId],
+  }).onDelete('restrict'),
   uniqueIndex('stripe_refund_payment_idempotency_unique').on(table.paymentId, table.idempotencyKey),
   uniqueIndex('stripe_refund_stripe_idempotency_unique').on(table.stripeIdempotencyKey),
   uniqueIndex('stripe_refund_stripe_id_unique').on(table.stripeRefundId).where(sql`${table.stripeRefundId} is not null`),

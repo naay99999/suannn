@@ -52,6 +52,10 @@ async function expectUniqueViolation(query: () => Promise<unknown>) {
   await expect((async () => { await query() })()).rejects.toMatchObject({ code: '23505' })
 }
 
+async function expectForeignKeyViolation(query: () => Promise<unknown>) {
+  await expect((async () => { await query() })()).rejects.toMatchObject({ code: '23503' })
+}
+
 describe('Stripe persistence schema', () => {
   it('enforces unique checkout attempts per order and Session IDs', async () => {
     const orderId = await insertOrder()
@@ -86,6 +90,12 @@ describe('Stripe persistence schema', () => {
 
     const orderId = await insertOrder()
     const paymentId = await insertStripePayment(orderId)
+    const mismatchedOrderId = await insertOrder()
+    await expectForeignKeyViolation(() => database.client.unsafe(`
+      insert into stripe_refund (payment_id, order_id, request_actor_id, idempotency_key, stripe_idempotency_key, amount_satang)
+      values ($1, $2, 'staff-schema-test', 'refund-mismatch', 'refund-stripe-mismatch', 1000)
+    `, [paymentId, mismatchedOrderId]))
+
     const refundId = 're_SchemaUnique'
     await database.client.unsafe(`
       insert into stripe_refund (payment_id, order_id, request_actor_id, idempotency_key, stripe_idempotency_key, amount_satang, status, stripe_refund_id)
