@@ -16,14 +16,16 @@
 
 - **RED:** New route assertions initially received 422 for Stripe checkout instead of 201, and received 422 for unconfigured Stripe instead of 503. After implementation, both pass.
 - **RED:** The COD replay regression failed because a corrupted `pending_payment` result payload resolved. The COD replay guard now requires `status === 'placed'`; the regression passes.
+- **RED:** The early-webhook race regression marked the attempt `completed` inside the injected gateway before returning the Session; Session persistence then incorrectly changed it to `open`.
 - **GREEN:** Integration tests verify pending order/payment/attempt state, stock allocation, cleared cart, no confirmation outbox item, exact approved Stripe gateway fields, replay after quote expiry, changed-payload conflict, same-key recovery after an ambiguous SDK failure, and stale-quote rejection before Stripe is called.
+- **GREEN:** Session persistence locks and checks the current attempt before updating it. It saves Session details while retaining `completed`, `expired`, or `failed`; the early-webhook regression now passes with the attempt still `completed`.
 - Stripe gateway unit tests verify separate shipping line construction and 30-minute Session expiry.
 
 ## Verification
 
 - `bun test apps/api/test/unit/checkout-routes.test.ts apps/api/test/unit/stripe-gateway.test.ts` — 18 passed.
-- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun test apps/api/test/integration/checkout.test.ts` — 15 passed.
-- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun --filter api test:integration` — 222 passed, 0 failed, 32 files.
+- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun test apps/api/test/integration/checkout.test.ts` — 16 passed.
+- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun --filter api test:integration` — 223 passed, 0 failed, 32 files.
 - `bun --filter api typecheck` — passed.
 - `bun --filter api lint` — passed.
 - `git diff --check` — passed before commit.
@@ -39,6 +41,7 @@
 - `apps/api/src/modules/checkout/service.ts`
 - `apps/api/src/modules/checkout/stripe-service.ts`
 - `apps/api/src/modules/orders/model.ts`
+- `apps/api/src/modules/payments/stripe/repository.ts`
 - `apps/api/src/modules/orders/types.ts`
 - `apps/api/src/shared/domain-error.ts`
 - `apps/api/test/integration/checkout.test.ts`
@@ -48,5 +51,7 @@
 ## Self-review and limitations
 
 The database transaction commits before the gateway call. If the call fails, the order and creating attempt remain retryable; the error response does not expose the Stripe URL or provider exception. COD replay preserves the prior status invariant and legacy operation payload compatibility. No shipping address or phone data is included in the Checkout gateway input.
+
+Session persistence serializes with webhook updates by locking the attempt row. A webhook terminal update committed before the Session write is retained while Session identifiers are saved; a webhook arriving after the lock applies its terminal transition afterward.
 
 Verification used an injected Stripe gateway stub and the Stripe adapter unit tests; no live Stripe sandbox checkout was run.

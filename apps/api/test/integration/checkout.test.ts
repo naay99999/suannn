@@ -643,6 +643,33 @@ describe('pending Stripe order placement', () => {
     expect(await countRows('stripe_checkout_attempt')).toBe(1)
   })
 
+  it('preserves a terminal attempt status when a webhook wins the Session persistence race', async () => {
+    const prepared = await prepareCheckout(undefined, { quantity: 1 })
+    const stripePayments = new StripePaymentRepository(database.db)
+    const gateway = makeStripeGateway(async ({ orderId }) => {
+      const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+        .where(eq(stripeCheckoutAttempt.orderId, orderId))
+      if (!attempt) throw new Error('Expected creating attempt before Stripe call')
+      await database.db.transaction((tx) => stripePayments.markAttemptStatus(tx, attempt.id, 'completed'))
+      return {
+        sessionId: 'cs_test_early_webhook',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_early_webhook',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      }
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway)
+
+    const placed = await service.place(stripeInput(prepared), prepared.principal, 'stripe-early-webhook-1')
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, placed.order.id))
+
+    expect(attempt).toMatchObject({
+      status: 'completed',
+      stripeSessionId: 'cs_test_early_webhook',
+      checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_early_webhook',
+    })
+  })
+
   it('rejects a stale server quote before creating a Stripe order or Session', async () => {
     const prepared = await prepareCheckout(undefined, { quantity: 1 })
     let calls = 0

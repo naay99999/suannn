@@ -91,11 +91,18 @@ export class StripePaymentRepository {
     url: string
     expiresAt: Date
   }) {
+    const [current] = await tx.select({ status: stripeCheckoutAttempt.status })
+      .from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.id, attemptId))
+      .for('update')
+      .limit(1)
+    if (!current) return null
+
     const [attempt] = await tx.update(stripeCheckoutAttempt).set({
       stripeSessionId: input.sessionId,
       checkoutUrl: input.url,
       expiresAt: input.expiresAt,
-      status: 'open',
+      ...(['completed', 'expired', 'failed'].includes(current.status) ? {} : { status: 'open' as const }),
       updatedAt: new Date(),
     }).where(eq(stripeCheckoutAttempt.id, attemptId)).returning()
     return attempt ?? null
