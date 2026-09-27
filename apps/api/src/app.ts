@@ -15,6 +15,7 @@ import { createAdminProductsModule, createStoreProductsModule } from './modules/
 import { createAdminInventoryModule } from './modules/inventory'
 import { createStoreCartModule } from './modules/cart'
 import { createStoreCheckoutModule } from './modules/checkout'
+import { createStripeWebhookModule } from './modules/payments/stripe'
 import { createAdminOrdersModule, createStoreOrdersModule } from './modules/orders'
 import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
 import type { AuditService } from './modules/audit/service'
@@ -32,6 +33,7 @@ import type { CartService } from './modules/cart/service'
 import type { QuoteService } from './modules/checkout/quote'
 import type { CheckoutService } from './modules/checkout/service'
 import type { StripeCheckoutService } from './modules/checkout/stripe-service'
+import type { StripeEventService } from './modules/payments/stripe/events'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { RateLimiter } from './modules/rate-limit/service'
@@ -61,6 +63,7 @@ export interface AppDependencies {
   quote: QuoteService
   checkout: CheckoutService
   stripeCheckout?: StripeCheckoutService
+  stripeEvents?: StripeEventService
   orders: OrderService
   commerceSettings: CommerceSettingsService
   staffMfaRequired(): Promise<boolean>
@@ -94,6 +97,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createRequestContextPlugin(config))
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
+    .use(createStripeWebhookModule(dependencies.stripeEvents))
     .use(createAuthPlugin(dependencies.auth, {
       identityReservations: dependencies.identityReservations,
       staffMfaRequired: dependencies.staffMfaRequired,

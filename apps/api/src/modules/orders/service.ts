@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import {
@@ -6,6 +6,7 @@ import {
   commerceOrder,
   inventoryOperation,
   orderEvent,
+  orderItem,
   orderOutbox,
   payment,
 } from '../../database/schema'
@@ -152,6 +153,156 @@ async function replayAuthorizedOrder(
 
 function inventoryActorIdFor(principal: OrderPrincipal, orderId: string) {
   return principal.kind === 'guest' ? orderId : principal.userId
+}
+
+export async function settleStripeOrderInTransaction(tx: DatabaseTransaction, input: {
+  order: typeof commerceOrder.$inferSelect
+  payment: typeof payment.$inferSelect
+  eventId: string
+  sessionId: string
+  paymentIntentId: string | null
+}) {
+  if (input.order.status !== 'pending_payment' || input.payment.status !== 'awaiting_collection') return false
+  const [collected] = await tx.update(payment).set({
+    status: 'collected',
+    providerReference: input.paymentIntentId,
+    updatedAt: sql`transaction_timestamp()`,
+  }).where(and(eq(payment.id, input.payment.id), eq(payment.status, 'awaiting_collection')))
+    .returning({ id: payment.id })
+  if (!collected) return false
+
+  const [placed] = await tx.update(commerceOrder).set({
+    status: 'placed',
+    terminalAt: null,
+    updatedAt: sql`transaction_timestamp()`,
+  }).where(and(eq(commerceOrder.id, input.order.id), eq(commerceOrder.status, 'pending_payment')))
+    .returning({ id: commerceOrder.id })
+  if (!placed) throw new DomainError('ORDER_PAYMENT_CONFLICT')
+
+  const orderEventId = crypto.randomUUID()
+  await tx.insert(orderEvent).values({
+    id: orderEventId,
+    orderId: input.order.id,
+    paymentId: input.payment.id,
+    eventType: 'order.placed',
+    fromStatus: 'pending_payment',
+    toStatus: 'placed',
+    actorType: 'system',
+    actorId: null,
+    reasonCode: 'stripe_payment_collected',
+    metadata: {
+      stripeEventId: input.eventId,
+      stripeSessionId: input.sessionId,
+      paymentIntentId: input.paymentIntentId,
+      totalSatang: input.order.totalSatang,
+    },
+  })
+  await tx.insert(orderOutbox).values({
+    id: crypto.randomUUID(),
+    orderId: input.order.id,
+    orderEventId,
+    eventType: 'order.placed',
+    templateId: 'order_confirmation',
+    status: 'pending',
+    attemptCount: 0,
+  })
+  const [lineCount] = await tx.select({ count: sql<number>`count(*)::int` }).from(orderItem)
+    .where(eq(orderItem.orderId, input.order.id))
+  await recordOrderAudit(tx, {
+    id: crypto.randomUUID(),
+    actorUserId: null,
+    action: 'order.placed',
+    targetType: 'commerce_order',
+    targetId: input.order.id,
+    requestId: input.order.id,
+    ipAddress: null,
+    userAgent: null,
+    metadata: {
+      actorType: 'system',
+      principalId: input.order.id,
+      reservationId: input.order.reservationId,
+      paymentId: input.payment.id,
+      totalSatang: input.order.totalSatang,
+      lineCount: Number(lineCount?.count ?? 0),
+    },
+  })
+  return true
+}
+
+export async function cancelStripeOrderInTransaction(tx: DatabaseTransaction, input: {
+  order: typeof commerceOrder.$inferSelect
+  payment: typeof payment.$inferSelect
+  eventId: string
+  sessionId: string
+  reason: 'stripe_payment_failed' | 'stripe_session_expired'
+}) {
+  if (input.order.status !== 'pending_payment' || input.payment.status !== 'awaiting_collection') return false
+  const operationId = crypto.randomUUID()
+  const requestHash = createHash('sha256')
+    .update(`${input.reason}:${input.eventId}:${input.order.id}`)
+    .digest('hex')
+  await tx.insert(inventoryOperation).values({
+    id: operationId,
+    scope: 'orders.cancel.restore',
+    idempotencyKey: operationId,
+    requestHash,
+    httpStatus: 200,
+    resultPayload: { orderId: input.order.id, restoredQuantity: 0 },
+    actorId: input.order.id,
+  })
+  const restoredQuantity = await restoreOrderAllocations(tx, input.order.id, operationId)
+  await tx.update(inventoryOperation).set({ resultPayload: { orderId: input.order.id, restoredQuantity } })
+    .where(eq(inventoryOperation.id, operationId))
+  const [voided] = await tx.update(payment).set({
+    status: 'void',
+    updatedAt: sql`transaction_timestamp()`,
+  }).where(and(eq(payment.id, input.payment.id), eq(payment.status, 'awaiting_collection')))
+    .returning({ id: payment.id })
+  if (!voided) throw new DomainError('ORDER_PAYMENT_CONFLICT')
+  const [cancelled] = await tx.update(commerceOrder).set({
+    status: 'cancelled',
+    terminalAt: sql`transaction_timestamp()`,
+    updatedAt: sql`transaction_timestamp()`,
+  }).where(and(eq(commerceOrder.id, input.order.id), eq(commerceOrder.status, 'pending_payment')))
+    .returning({ id: commerceOrder.id })
+  if (!cancelled) throw new DomainError('ORDER_PAYMENT_CONFLICT')
+
+  await tx.insert(orderEvent).values({
+    id: crypto.randomUUID(),
+    orderId: input.order.id,
+    paymentId: input.payment.id,
+    eventType: 'order.cancelled',
+    fromStatus: 'pending_payment',
+    toStatus: 'cancelled',
+    actorType: 'system',
+    actorId: null,
+    reasonCode: input.reason,
+    metadata: {
+      operationId,
+      stripeEventId: input.eventId,
+      stripeSessionId: input.sessionId,
+      restoredQuantity,
+      totalSatang: input.order.totalSatang,
+    },
+  })
+  await recordOrderAudit(tx, {
+    id: crypto.randomUUID(),
+    actorUserId: null,
+    action: 'order.cancelled',
+    targetType: 'commerce_order',
+    targetId: input.order.id,
+    requestId: input.order.id,
+    ipAddress: null,
+    userAgent: null,
+    metadata: {
+      actorType: 'system',
+      principalId: input.order.id,
+      operationId,
+      restoredQuantity,
+      totalSatang: input.order.totalSatang,
+    },
+  })
+  return true
 }
 
 export class OrderService {

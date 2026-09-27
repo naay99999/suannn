@@ -209,6 +209,7 @@ describe('API routes', () => {
       'Store Products',
       'Store Cart',
       'Store Checkout',
+      'Payments',
       'Store Orders',
       'Admin Orders',
       'Admin Commerce Settings',
@@ -238,6 +239,17 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/health'].get).toMatchObject({
       summary: 'Check API health',
       tags: ['System'],
+    })
+    expect(specification.paths['/api/v1/webhooks/stripe'].post).toMatchObject({
+      summary: 'Receive a verified Stripe webhook event',
+      tags: ['Payments'],
+      security: [],
+      responses: {
+        200: expect.anything(),
+        400: expect.anything(),
+        500: expect.anything(),
+        503: expect.anything(),
+      },
     })
     expect(specification.paths['/api/v1/auth/sign-up/email']).toBeUndefined()
     expect(specification.paths['/api/v1/auth/sign-in/social']).toBeUndefined()
@@ -345,7 +357,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(93)
+    expect(operations).toHaveLength(94)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

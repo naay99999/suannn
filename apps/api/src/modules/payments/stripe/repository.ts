@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../../database/types'
-import { stripeCheckoutAttempt, stripeEvent, stripeRefund } from '../../../database/schema'
+import { payment, stripeCheckoutAttempt, stripeEvent, stripeRefund } from '../../../database/schema'
 
 export interface CreateStripeCheckoutAttemptInput {
   orderId: string
@@ -50,6 +50,12 @@ export class StripePaymentRepository {
       .onConflictDoNothing({ target: stripeEvent.stripeEventId })
       .returning({ stripeEventId: stripeEvent.stripeEventId })
     return claimed !== undefined
+  }
+
+  async lockPaymentByOrder(tx: DatabaseTransaction, orderId: string) {
+    const [savedPayment] = await tx.select().from(payment)
+      .where(eq(payment.orderId, orderId)).for('update').limit(1)
+    return savedPayment ?? null
   }
 
   async createRefundClaim(tx: DatabaseTransaction, input: CreateStripeRefundClaimInput) {
