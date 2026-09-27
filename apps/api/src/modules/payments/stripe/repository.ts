@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../../database/types'
 import { payment, stripeCheckoutAttempt, stripeEvent, stripeRefund } from '../../../database/schema'
 
@@ -72,9 +72,15 @@ export class StripePaymentRepository {
     return { refund: existing, replayed: true }
   }
 
-  async lockRefundByStripeId(tx: DatabaseTransaction, refundId: string) {
+  async findRefundByStripeId(tx: DatabaseTransaction, refundId: string) {
     const [refund] = await tx.select().from(stripeRefund)
-      .where(eq(stripeRefund.stripeRefundId, refundId)).for('update').limit(1)
+      .where(eq(stripeRefund.stripeRefundId, refundId)).limit(1)
+    return refund ?? null
+  }
+
+  async findRefundById(tx: DatabaseTransaction, refundId: string) {
+    const [refund] = await tx.select().from(stripeRefund)
+      .where(eq(stripeRefund.id, refundId)).limit(1)
     return refund ?? null
   }
 
@@ -100,7 +106,10 @@ export class StripePaymentRepository {
 
   async listUnresolvedRefunds(limit: number) {
     return this.db.select().from(stripeRefund)
-      .where(inArray(stripeRefund.status, ['pending', 'requires_action']))
+      .where(and(
+        inArray(stripeRefund.status, ['pending', 'requires_action']),
+        isNotNull(stripeRefund.stripeRefundId),
+      ))
       .orderBy(asc(stripeRefund.updatedAt), asc(stripeRefund.createdAt))
       .limit(Math.max(0, Math.floor(limit)))
   }

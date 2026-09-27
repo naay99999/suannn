@@ -406,6 +406,140 @@ describe('Stripe admin refund lifecycle', () => {
       .rejects.toMatchObject({ code: 'ORDER_REFUND_CONFLICT' })
   })
 
+  it('does not let ID-less ambiguous claims starve a bounded reconciliation batch', async () => {
+    const ambiguous = await preparePaidCancelledStripeOrder()
+    const known = await preparePaidCancelledStripeOrder()
+    let createCount = 0
+    const retrieved: string[] = []
+    const gateway = makeGateway({
+      onCreateRefund: async (input) => {
+        createCount += 1
+        if (createCount === 1) throw new Error('ambiguous create response')
+        return {
+          refundId: 're_batchknown',
+          orderId: input.orderId,
+          refundClaimId: input.refundClaimId,
+          paymentIntentId: input.paymentIntentId,
+          amountSatang: 1925,
+          currency: 'thb',
+          status: 'pending',
+        }
+      },
+      onRetrieveRefund: async (refundId) => {
+        retrieved.push(refundId)
+        return {
+          refundId,
+          orderId: known.orderId,
+          refundClaimId: null,
+          paymentIntentId: known.paymentIntentId,
+          amountSatang: 1925,
+          currency: 'thb',
+          status: 'succeeded',
+        }
+      },
+    })
+    const service = createRefundService(gateway)
+    await expect(service.requestFullRefund(ambiguous.orderId, ambiguous.actor, 'refund-ambiguous-batch'))
+      .rejects.toMatchObject({ code: 'STRIPE_REFUND_UNAVAILABLE' })
+    await service.requestFullRefund(known.orderId, known.actor, 'refund-known-batch')
+    const [unknownClaim] = await database.db.select().from(stripeRefund)
+      .where(eq(stripeRefund.idempotencyKey, 'refund-ambiguous-batch'))
+    if (!unknownClaim) throw new Error('Expected unresolved claim after ambiguous create response')
+    await database.db.update(stripeRefund).set({ updatedAt: new Date('2000-01-01T00:00:00.000Z') })
+      .where(eq(stripeRefund.id, unknownClaim.id))
+
+    expect(await service.reconcileRefunds(1)).toBe(1)
+    expect(retrieved).toEqual(['re_batchknown'])
+  })
+
+  it('does not regress webhook success when reconciliation returns a stale pending read', async () => {
+    const fixture = await preparePaidCancelledStripeOrder()
+    let signalRetrieved: (() => void) | undefined
+    let returnStaleRead: ((state: StripeRefundState) => void) | undefined
+    const retrieveStarted = new Promise<void>((resolve) => { signalRetrieved = resolve })
+    const staleRead = new Promise<StripeRefundState>((resolve) => { returnStaleRead = resolve })
+    const gateway = makeGateway({
+      onCreateRefund: async (input) => ({
+        refundId: 're_reconcileorder',
+        orderId: input.orderId,
+        refundClaimId: input.refundClaimId,
+        paymentIntentId: input.paymentIntentId,
+        amountSatang: 1925,
+        currency: 'thb',
+        status: 'pending',
+      }),
+      onRetrieveRefund: async () => {
+        signalRetrieved?.()
+        return staleRead
+      },
+    })
+    const service = createRefundService(gateway)
+    await service.requestFullRefund(fixture.orderId, fixture.actor, 'refund-reconcile-order')
+    const reconciliation = service.reconcileRefunds(1)
+    await retrieveStarted
+
+    const events = new StripeEventService(database.db, makeGateway())
+    await events.handle(JSON.stringify(stripeEvent('evt_reconcilewins', 'refund.updated', {
+      id: 're_reconcileorder',
+      object: 'refund',
+      metadata: { orderId: fixture.orderId },
+      payment_intent: fixture.paymentIntentId,
+      amount: 1925,
+      currency: 'thb',
+      status: 'succeeded',
+    })), 'valid-signature')
+    returnStaleRead?.({
+      refundId: 're_reconcileorder',
+      orderId: fixture.orderId,
+      refundClaimId: null,
+      paymentIntentId: fixture.paymentIntentId,
+      amountSatang: 1925,
+      currency: 'thb',
+      status: 'pending',
+    })
+    await reconciliation
+
+    const [claim] = await database.db.select().from(stripeRefund)
+      .where(eq(stripeRefund.idempotencyKey, 'refund-reconcile-order'))
+    expect(claim?.status).toBe('succeeded')
+  })
+
+  it('uses the same order-first lock order for concurrent requests and refund webhooks', async () => {
+    const fixture = await preparePaidCancelledStripeOrder()
+    const gateway = makeGateway({
+      onCreateRefund: async (input) => ({
+        refundId: 're_lockorder',
+        orderId: input.orderId,
+        refundClaimId: input.refundClaimId,
+        paymentIntentId: input.paymentIntentId,
+        amountSatang: 1925,
+        currency: 'thb',
+        status: 'pending',
+      }),
+    })
+    const service = createRefundService(gateway)
+    await service.requestFullRefund(fixture.orderId, fixture.actor, 'refund-lock-order')
+    const events = new StripeEventService(database.db, makeGateway())
+    const concurrentOperations = Array.from({ length: 12 }, (_, index) => [
+      service.requestFullRefund(fixture.orderId, fixture.actor, 'refund-lock-order'),
+      events.handle(JSON.stringify(stripeEvent(`evt_lockorder${index}`, 'refund.updated', {
+        id: 're_lockorder',
+        object: 'refund',
+        metadata: { orderId: fixture.orderId },
+        payment_intent: fixture.paymentIntentId,
+        amount: 1925,
+        currency: 'thb',
+        status: 'pending',
+      })), 'valid-signature'),
+    ]).flat()
+
+    const results = await Promise.allSettled(concurrentOperations)
+    expect(results.filter((result) => result.status === 'rejected')).toEqual([])
+    const [claim] = await database.db.select().from(stripeRefund)
+      .where(eq(stripeRefund.idempotencyKey, 'refund-lock-order'))
+    expect(claim?.status).toBe('pending')
+  })
+
   it('binds an early refund-created event without changing payment collection', async () => {
     const fixture = await preparePaidCancelledStripeOrder()
     const service = createRefundService(makeGateway({ onCreateRefund: async () => { throw new Error('ambiguous response') } }))

@@ -41,9 +41,8 @@ function checkedStripeState(
     && (refund.status === 'failed' || refund.status === 'canceled')
 }
 
-function canApplyRefundStatus(current: StripeRefundStatus, next: StripeRefundStatus, authoritative = false) {
+function canApplyRefundStatus(current: StripeRefundStatus, next: StripeRefundStatus) {
   const terminal = new Set<StripeRefundStatus>(['succeeded', 'failed', 'canceled'])
-  if (authoritative) return true
   if (terminal.has(current)) return current === next
   if (current === 'requires_action' && next === 'pending') return false
   return true
@@ -237,22 +236,28 @@ export class StripeRefundService {
     for (const claim of refunds) {
       if (!claim.stripeRefundId) continue
       const current = await this.gateway.retrieveRefund(claim.stripeRefundId)
-      await this.applyRefundState(current, undefined, true)
+      await this.applyRefundState(current)
       reconciled += 1
     }
     return reconciled
   }
 
-  async applyRefundState(state: StripeRefundState, event?: { id: string; type: string }, authoritative = false) {
+  async applyRefundState(state: StripeRefundState, event?: { id: string; type: string }) {
     return this.db.transaction(async (tx: DatabaseTransaction) => {
-      const claim = state.refundClaimId
-        ? await this.repository.lockRefundById(tx, state.refundClaimId)
-        : await this.repository.lockRefundByStripeId(tx, state.refundId)
-      if (!claim || (claim.stripeRefundId && claim.stripeRefundId !== state.refundId)) {
+      const candidate = state.refundClaimId
+        ? await this.repository.findRefundById(tx, state.refundClaimId)
+        : await this.repository.findRefundByStripeId(tx, state.refundId)
+      if (!candidate) {
         if (event) await this.repository.claimEvent(tx, event.id, event.type)
         return false
       }
-      const order = await lockOrder(tx, claim.orderId)
+      const order = await lockOrder(tx, candidate.orderId)
+      const claim = await this.repository.lockRefundById(tx, candidate.id)
+      if (!claim || claim.orderId !== candidate.orderId || claim.paymentId !== candidate.paymentId
+        || (claim.stripeRefundId && claim.stripeRefundId !== state.refundId)) {
+        if (event) await this.repository.claimEvent(tx, event.id, event.type)
+        return false
+      }
       const [savedPayment] = await tx.select().from(payment).where(eq(payment.id, claim.paymentId)).limit(1)
       const validState = savedPayment?.providerReference === state.paymentIntentId
         && savedPayment.method === 'stripe'
@@ -268,7 +273,7 @@ export class StripeRefundService {
         return false
       }
       if (event && !(await this.repository.claimEvent(tx, event.id, event.type))) return false
-      if (!canApplyRefundStatus(claim.status, state.status, authoritative)) return false
+      if (!canApplyRefundStatus(claim.status, state.status)) return false
       await this.repository.recordRefundState(tx, claim.id, {
         stripeRefundId: state.refundId,
         status: state.status as StripeRefundStatus,
