@@ -579,7 +579,7 @@ describe('pending Stripe order placement', () => {
     const principal = guestPrincipal('stripe-service-replay-owner')
     const prepared = await prepareCheckout(principal, { quantity: 1 })
     let now = new Date()
-    const plannedExpiry = new Date(Math.floor(now.getTime() / 1000) * 1000 + 30 * 60 * 1000 + STRIPE_CREATE_REQUEST_WINDOW_MS)
+    const plannedExpiry = new Date(Math.ceil(now.getTime() / 1000) * 1000 + 30 * 60 * 1000 + 2 * STRIPE_CREATE_REQUEST_WINDOW_MS)
     let received: Parameters<StripeGateway['createCheckout']>[0] | undefined
     const gateway = makeStripeGateway(async (input) => {
       received = input
@@ -630,6 +630,7 @@ describe('pending Stripe order placement', () => {
     const plannedExpiries: string[] = []
     let now = new Date()
     let calls = 0
+    let firstStripeReceiptAt: Date | undefined
     const gateway = makeStripeGateway(async ({ orderId, idempotencyKey, expiresAt }) => {
       calls += 1
       idempotencyKeys.push(idempotencyKey)
@@ -638,6 +639,8 @@ describe('pending Stripe order placement', () => {
         .where(eq(stripeCheckoutAttempt.orderId, orderId))
       expect(attempt?.plannedExpiresAt?.toISOString()).toBe(expiresAt?.toISOString())
       if (calls === 1) throw new Error('ambiguous network failure')
+      firstStripeReceiptAt = new Date(now.getTime() + STRIPE_CREATE_REQUEST_WINDOW_MS)
+      expect(expiresAt!.getTime() - firstStripeReceiptAt.getTime()).toBeGreaterThanOrEqual(30 * 60 * 1000)
       return {
         sessionId: 'cs_test_service_recovered',
         url: 'https://checkout.stripe.com/c/pay/cs_test_service_recovered',
@@ -648,7 +651,7 @@ describe('pending Stripe order placement', () => {
 
     await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1'))
       .rejects.toMatchObject({ code: 'STRIPE_CHECKOUT_UNAVAILABLE', status: 503 })
-    now = new Date(now.getTime() + STRIPE_CREATE_REQUEST_WINDOW_MS - 1_000)
+    now = new Date(now.getTime() + STRIPE_CREATE_REQUEST_WINDOW_MS)
     const recovered = await service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1')
 
     expect(recovered.checkout.url).toBe('https://checkout.stripe.com/c/pay/cs_test_service_recovered')

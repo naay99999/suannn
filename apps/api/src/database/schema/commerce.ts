@@ -257,13 +257,15 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   stripeIdempotencyKey: text('stripe_idempotency_key').notNull(),
   status: text('status', { enum: ['creating', 'open', 'completed', 'expired', 'failed', 'manual_review'] }).notNull().default('creating'),
   lastCreateCallAt: timestamp('last_create_call_at', { withTimezone: true }).notNull().defaultNow(),
+  lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true })
+    .notNull().default(sql`'1970-01-01T00:00:00.000Z'::timestamptz`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex('stripe_checkout_attempt_order_unique').on(table.orderId),
   uniqueIndex('stripe_checkout_attempt_session_unique').on(table.stripeSessionId).where(sql`${table.stripeSessionId} is not null`),
   uniqueIndex('stripe_checkout_attempt_idempotency_unique').on(table.stripeIdempotencyKey),
-  index('stripe_checkout_attempt_unresolved_idx').on(table.lastCreateCallAt, table.createdAt)
+  index('stripe_checkout_attempt_unresolved_idx').on(table.lastReconciledAt, table.lastCreateCallAt, table.createdAt)
     .where(sql`${table.status} in ('creating', 'open')`),
   check('stripe_checkout_attempt_session_shape_check', sql`
     (${table.stripeSessionId} is null and ${table.checkoutUrl} is null and ${table.expiresAt} is null)
@@ -296,6 +298,8 @@ export const stripeRefund = pgTable('stripe_refund', {
   stripeRefundId: text('stripe_refund_id'),
   amountSatang: bigint('amount_satang', { mode: 'number' }).notNull(),
   status: text('status', { enum: ['pending', 'requires_action', 'succeeded', 'failed', 'canceled'] }).notNull().default('pending'),
+  lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true })
+    .notNull().default(sql`'1970-01-01T00:00:00.000Z'::timestamptz`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
@@ -309,7 +313,7 @@ export const stripeRefund = pgTable('stripe_refund', {
   uniqueIndex('stripe_refund_stripe_id_unique').on(table.stripeRefundId).where(sql`${table.stripeRefundId} is not null`),
   uniqueIndex('stripe_refund_one_live_full_per_payment_unique').on(table.paymentId)
     .where(sql`${table.status} in ('pending', 'requires_action', 'succeeded')`),
-  index('stripe_refund_unresolved_idx').on(table.updatedAt, table.createdAt)
+  index('stripe_refund_unresolved_idx').on(table.lastReconciledAt, table.updatedAt, table.createdAt)
     .where(sql`${table.status} in ('pending', 'requires_action')`),
   check('stripe_refund_amount_safe_range_check', sql`${table.amountSatang} between 1 and ${maxSafeSatangSql}`),
   check('stripe_refund_actor_shape_check', sql`

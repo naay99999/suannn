@@ -236,6 +236,17 @@ export class StripeRefundService {
     for (const claim of refunds) {
       if (!claim.stripeRefundId) continue
       try {
+        await this.db.transaction((tx) => this.repository.markRefundReconciled(tx, claim.id))
+      } catch (error) {
+        console.error(JSON.stringify({
+          level: 'error',
+          code: 'STRIPE_REFUND_RECONCILIATION_CURSOR_FAILED',
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+          refundClaimId: claim.id,
+          orderId: claim.orderId,
+        }))
+      }
+      try {
         const current = await this.gateway.retrieveRefund(claim.stripeRefundId)
         await this.applyRefundState(current)
         reconciled += 1

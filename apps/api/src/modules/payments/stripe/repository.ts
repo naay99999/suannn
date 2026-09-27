@@ -112,7 +112,7 @@ export class StripePaymentRepository {
           ),
         ),
       ))
-      .orderBy(asc(stripeCheckoutAttempt.lastCreateCallAt), asc(stripeCheckoutAttempt.createdAt))
+      .orderBy(asc(stripeCheckoutAttempt.lastReconciledAt), asc(stripeCheckoutAttempt.lastCreateCallAt), asc(stripeCheckoutAttempt.createdAt))
       .limit(Math.max(0, Math.floor(limit)))
   }
 
@@ -122,8 +122,30 @@ export class StripePaymentRepository {
         inArray(stripeRefund.status, ['pending', 'requires_action']),
         isNotNull(stripeRefund.stripeRefundId),
       ))
-      .orderBy(asc(stripeRefund.updatedAt), asc(stripeRefund.createdAt))
+      .orderBy(asc(stripeRefund.lastReconciledAt), asc(stripeRefund.updatedAt), asc(stripeRefund.createdAt))
       .limit(Math.max(0, Math.floor(limit)))
+  }
+
+  async markAttemptReconciled(tx: DatabaseTransaction, attemptId: string, reconciledAt = new Date()) {
+    const [attempt] = await tx.update(stripeCheckoutAttempt)
+      .set({ lastReconciledAt: reconciledAt })
+      .where(and(
+        eq(stripeCheckoutAttempt.id, attemptId),
+        inArray(stripeCheckoutAttempt.status, ['creating', 'open']),
+      ))
+      .returning()
+    return attempt ?? null
+  }
+
+  async markRefundReconciled(tx: DatabaseTransaction, refundId: string, reconciledAt = new Date()) {
+    const [refund] = await tx.update(stripeRefund)
+      .set({ lastReconciledAt: reconciledAt })
+      .where(and(
+        eq(stripeRefund.id, refundId),
+        inArray(stripeRefund.status, ['pending', 'requires_action']),
+      ))
+      .returning()
+    return refund ?? null
   }
 
   async recordAttemptSession(tx: DatabaseTransaction, attemptId: string, input: {

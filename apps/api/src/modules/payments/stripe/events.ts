@@ -10,6 +10,8 @@ import { StripeRefundService } from './refunds'
 import { StripePaymentRepository } from './repository'
 
 export const STRIPE_ATTEMPT_CREATE_STALE_MS = 30 * 60 * 1000
+export const STRIPE_IDEMPOTENCY_RECOVERY_MAX_AGE_MS = 23 * 60 * 60 * 1000
+const STRIPE_PLANNED_EXPIRY_OFFSET_MS = 30 * 60 * 1000 + 2 * STRIPE_CREATE_REQUEST_WINDOW_MS
 
 const supportedEvents = new Set([
   'checkout.session.completed',
@@ -167,6 +169,17 @@ export class StripeEventService {
     let reconciled = 0
     for (const attempt of attempts) {
       try {
+        await this.db.transaction((tx) => this.repository.markAttemptReconciled(tx, attempt.id))
+      } catch (error) {
+        console.error(JSON.stringify({
+          level: 'error',
+          code: 'STRIPE_CHECKOUT_RECONCILIATION_CURSOR_FAILED',
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+          attemptId: attempt.id,
+          orderId: attempt.orderId,
+        }))
+      }
+      try {
         if (!attempt.stripeSessionId) {
           await this.recoverUnboundAttempt(attempt.id, staleExpiryBefore, legacyCallBefore)
           reconciled += 1
@@ -212,6 +225,13 @@ export class StripeEventService {
       const savedPayment = await this.repository.lockPaymentByOrder(tx, attempt.orderId)
       if (!savedPayment || order.paymentMethod !== 'stripe'
         || order.status !== 'pending_payment' || savedPayment.status !== 'awaiting_collection') return null
+      const plannedFirstCallAt = attempt.plannedExpiresAt
+        ? attempt.plannedExpiresAt.getTime() - STRIPE_PLANNED_EXPIRY_OFFSET_MS - 1000
+        : attempt.lastCreateCallAt.getTime()
+      if (plannedFirstCallAt <= Date.now() - STRIPE_IDEMPOTENCY_RECOVERY_MAX_AGE_MS) {
+        await this.repository.markAttemptManualReview(tx, attempt.id)
+        return { manualReview: true as const, attemptId: attempt.id, orderId: order.id }
+      }
       const snapshot = await readOrderSnapshot(tx, order.id)
       if (!attempt.plannedExpiresAt || !attempt.successUrl || !attempt.cancelUrl) {
         await this.repository.markAttemptManualReview(tx, attempt.id)
@@ -283,8 +303,18 @@ export class StripeEventService {
   }
 
   private async markManualReview(attemptId: string, orderId: string) {
-    await this.db.transaction((tx) => this.repository.markAttemptManualReview(tx, attemptId))
-    this.logManualReview(attemptId, orderId)
+    const marked = await this.db.transaction(async (tx) => {
+      const attempt = await this.repository.lockAttemptByOrder(tx, orderId)
+      if (!attempt || attempt.id !== attemptId || attempt.status !== 'creating'
+        || attempt.stripeSessionId) return false
+      const order = await lockOrder(tx, orderId)
+      const savedPayment = await this.repository.lockPaymentByOrder(tx, orderId)
+      if (!savedPayment || order.paymentMethod !== 'stripe'
+        || order.status !== 'pending_payment' || savedPayment.status !== 'awaiting_collection') return false
+      await this.repository.markAttemptManualReview(tx, attemptId)
+      return true
+    })
+    if (marked) this.logManualReview(attemptId, orderId)
   }
 
   private logManualReview(attemptId: string, orderId: string) {

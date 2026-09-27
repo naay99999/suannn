@@ -78,9 +78,9 @@ export class StripeCheckoutService {
       if (current.stripeSessionId && current.checkoutUrl && current.expiresAt) return current
       const calledAt = this.now()
       const plannedExpiry = current.plannedExpiresAt ?? current.expiresAt ?? new Date(
-        Math.floor(calledAt.getTime() / 1000) * 1000 + 30 * 60 * 1000 + STRIPE_CREATE_REQUEST_WINDOW_MS,
+        Math.ceil(calledAt.getTime() / 1000) * 1000 + 30 * 60 * 1000 + 2 * STRIPE_CREATE_REQUEST_WINDOW_MS,
       )
-      const latestSafeRetryAt = plannedExpiry.getTime() - 30 * 60 * 1000
+      const latestSafeRetryAt = plannedExpiry.getTime() - 30 * 60 * 1000 - STRIPE_CREATE_REQUEST_WINDOW_MS
       if (calledAt.getTime() > latestSafeRetryAt) {
         throw new DomainError('STRIPE_CHECKOUT_UNAVAILABLE')
       }
