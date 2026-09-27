@@ -78,6 +78,10 @@ const detail = t.Composite([snapshot, t.Object({ payment })], { additionalProper
 const page = t.Object({ items: t.Array(detail), nextCursor: t.Union([t.String(), t.Null()]) }, { additionalProperties: false })
 const createResponse = t.Object({
   order: snapshot,
+  checkout: t.Optional(t.Object({
+    url: t.String({ format: 'uri' }),
+    expiresAt: t.String({ format: 'date-time' }),
+  }, { additionalProperties: false })),
   guestAccessToken: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
 }, { additionalProperties: false })
 const idParams = t.Object({ orderId: uuid }, { additionalProperties: false })

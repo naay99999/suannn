@@ -99,7 +99,17 @@ function createHarness(options: {
   denyRateLimit?: boolean
   quoteError?: string
   checkoutError?: string
+  stripeConfigured?: boolean
 } = {}) {
+  const appConfig = options.stripeConfigured
+    ? loadConfig({
+      ...testEnv,
+      STRIPE_API_KEY: 'rk_test_checkout',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test_checkout',
+      STRIPE_SUCCESS_URL: `${testEnv.STOREFRONT_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      STRIPE_CANCEL_URL: `${testEnv.STOREFRONT_URL}/checkout/cancel`,
+    })
+    : config
   const calls: Array<{ method: string; args: unknown[] }> = []
   const rateLimitCalls: Array<Record<string, unknown>> = []
   const quoteService = {
@@ -117,6 +127,17 @@ function createHarness(options: {
       return {
         order: principal.kind === 'customer' ? customerOrder : guestOrder,
         ...(principal.kind === 'guest' ? { guestAccessToken: 'guest-access-secret' } : {}),
+      }
+    },
+  }
+  const stripeCheckoutService = {
+    place: async (...args: unknown[]) => {
+      calls.push({ method: 'checkout.placeStripe', args })
+      if (options.checkoutError) throw new DomainError(options.checkoutError as never)
+      return {
+        order: { ...guestOrder, status: 'pending_payment', paymentMethod: 'stripe' },
+        checkout: { url: 'https://checkout.stripe.com/c/pay/cs_test_route', expiresAt: '2026-09-27T00:30:00.000Z' },
+        guestAccessToken: 'guest-access-secret',
       }
     },
   }
@@ -193,12 +214,13 @@ function createHarness(options: {
     cart: { get: async () => ({ cartVersion: 3, lines: [] }) },
     quote: quoteService,
     checkout: checkoutService,
+    stripeCheckout: stripeCheckoutService,
     orders: ordersService,
     staffMfaRequired: async () => true,
     identityReservations: { findState: async () => null },
     limiter,
   } as unknown as AppDependencies
-  const appPromise = createApp(config, dependencies)
+  const appPromise = createApp(appConfig, dependencies)
 
   return { appPromise, calls, rateLimitCalls }
 }
@@ -220,6 +242,37 @@ function checkoutRequest(body: unknown, cookie = `suannn_cart=${guestCartToken}`
 }
 
 describe('store checkout and order HTTP contracts', () => {
+  it('accepts Stripe orders and keeps the COD response shape unchanged', async () => {
+    const { appPromise, calls } = createHarness({ stripeConfigured: true })
+    const app = await appPromise
+    const cod = await app.handle(checkoutRequest(validCheckoutBody))
+    const stripe = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'stripe' }, undefined, 'checkout-stripe-1'))
+    const invalid = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'wire' }, undefined, 'checkout-invalid-1'))
+
+    expect(cod.status).toBe(201)
+    expect(await cod.json()).toEqual({ order: guestOrder, guestAccessToken: 'guest-access-secret' })
+    expect(stripe.status).toBe(201)
+    expect(await stripe.json()).toEqual({
+      order: { ...guestOrder, status: 'pending_payment', paymentMethod: 'stripe' },
+      checkout: { url: 'https://checkout.stripe.com/c/pay/cs_test_route', expiresAt: '2026-09-27T00:30:00.000Z' },
+      guestAccessToken: 'guest-access-secret',
+    })
+    expect(invalid.status).toBe(422)
+    expect(calls.some((call) => call.method === 'checkout.placeStripe')).toBe(true)
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(true)
+  })
+
+  it('rejects Stripe checkout before service calls when Stripe is not configured', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'stripe' }))
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ code: 'STRIPE_NOT_CONFIGURED' })
+    expect(calls.some((call) => call.method === 'checkout.placeStripe')).toBe(false)
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+  })
+
   it('mounts the quote, create, customer list, detail, and cancel paths with public projections', async () => {
     const { appPromise } = createHarness()
     const app = await appPromise

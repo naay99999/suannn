@@ -11,6 +11,8 @@ import { resolveCartPrincipal } from '../cart/principal'
 import type { CartPrincipal } from '../cart/types'
 import type { CheckoutService } from './service'
 import type { QuoteService } from './quote'
+import type { StripeCheckoutService } from './stripe-service'
+import type { PlaceCodInput, PlaceStripeInput } from '../orders/types'
 import { checkoutModels } from './model'
 import { ordersModels } from '../orders/model'
 
@@ -97,9 +99,10 @@ export function createStoreCheckoutModule(
   auth: Auth,
   quotes: Pick<QuoteService, 'create'>,
   checkout: Pick<CheckoutService, 'placeCod'>,
+  stripeCheckout: Pick<StripeCheckoutService, 'place'> | undefined,
   limiter: Pick<RateLimiter, 'consume'>,
 ) {
-  const errors = { 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error' } as const
+  const errors = { 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error', 503: 'http.error' } as const
 
   return new Elysia({ name: 'store-checkout', prefix: '/api/v1/store/checkout' })
     .use(createBrowserMutationPlugin(config))
@@ -128,7 +131,13 @@ export function createStoreCheckoutModule(
       const { principal } = await resolveCheckoutPrincipal(auth, request, config.secureCookies)
       const limited = await rateLimitGuestCheckout(principal, limiter, requestContext, set)
       if (limited) return limited
-      const result = await checkout.placeCod(body, principal, headers['idempotency-key'])
+      let result
+      if (body.paymentMethod === 'cod') {
+        result = await checkout.placeCod(body as PlaceCodInput, principal, headers['idempotency-key'])
+      } else {
+        if (!config.stripe || !stripeCheckout) throw new DomainError('STRIPE_NOT_CONFIGURED')
+        result = await stripeCheckout.place(body as PlaceStripeInput, principal, headers['idempotency-key'])
+      }
       set.status = 201
       return result
     }, {
@@ -138,8 +147,8 @@ export function createStoreCheckoutModule(
       headers: 'checkout.idempotencyHeaders',
       response: { 201: 'orders.createResponse', ...errors, 429: 'http.error' },
       detail: {
-        summary: 'Place a COD store order',
-        description: 'Places an idempotent cash-on-delivery order from the customer or guest cart. A guest access token is returned only to a guest checkout.',
+        summary: 'Place a store order',
+        description: 'Places an idempotent COD or Stripe order from the customer or guest cart. Stripe orders return a hosted Checkout URL.',
         tags: ['Store Checkout'],
         security: [],
       },

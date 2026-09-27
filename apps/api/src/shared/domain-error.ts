@@ -32,6 +32,8 @@ export type DomainErrorCode =
   | 'QUOTE_STALE'
   | 'CHECKOUT_TOTAL_OUT_OF_RANGE'
   | 'INVALID_PAYMENT_AMOUNT'
+  | 'STRIPE_NOT_CONFIGURED'
+  | 'STRIPE_CHECKOUT_UNAVAILABLE'
   | 'INVALID_ORDER_COMMAND'
   | 'INVALID_ORDER_INPUT'
   | 'ORDER_OPERATION_CONFLICT'
@@ -77,6 +79,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   QUOTE_STALE: { status: 409, message: 'Checkout quote is expired or no longer current' },
   CHECKOUT_TOTAL_OUT_OF_RANGE: { status: 422, message: 'Checkout total is outside the supported range' },
   INVALID_PAYMENT_AMOUNT: { status: 422, message: 'Payment amount is invalid' },
+  STRIPE_NOT_CONFIGURED: { status: 503, message: 'Online payment is unavailable' },
+  STRIPE_CHECKOUT_UNAVAILABLE: { status: 503, message: 'Online payment is temporarily unavailable' },
   INVALID_ORDER_COMMAND: { status: 422, message: 'Order command is invalid' },
   INVALID_ORDER_INPUT: { status: 422, message: 'Order request is invalid' },
   ORDER_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },

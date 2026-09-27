@@ -39,6 +39,8 @@ import { CommerceSettingsRepository } from './modules/commerce-settings/reposito
 import { CommerceSettingsService } from './modules/commerce-settings/service'
 import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
+import { StripeCheckoutService } from './modules/checkout/stripe-service'
+import { createStripeGateway } from './modules/payments/stripe/gateway'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
 
@@ -76,6 +78,11 @@ const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
 const checkout = new CheckoutService(database.db, config.commerceSecret)
+const stripeCheckout = new StripeCheckoutService(
+  database.db,
+  config.commerceSecret,
+  config.stripe ? createStripeGateway(config.stripe) : null,
+)
 const orders = new OrderService(database.db, config.commerceSecret)
 const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
@@ -125,6 +132,7 @@ const app = await createApp(config, {
   cart,
   quote,
   checkout,
+  stripeCheckout,
   orders,
   commerceSettings,
   staffMfaRequired,

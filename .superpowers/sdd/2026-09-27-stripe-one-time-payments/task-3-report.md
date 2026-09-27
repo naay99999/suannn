@@ -1,45 +1,52 @@
-# Task 3 report: partial, blocked
+# Task 3 report: pending Stripe order and hosted Checkout route
 
 ## Status
 
-**BLOCKED.** The shared transaction-local placement extraction is implemented and verified. Hosted Checkout orchestration, route selection, and successful Stripe response behavior are not implemented because automatic review rejected adding the live Stripe call and then rejected wiring the route to that service. The reviewer said this would transmit customer email, line details, shipping, amount, and currency to Stripe, and that hosted Checkout approval did not explicitly authorize that payload and destination. It also instructed not to bypass the rejection through another tool or an indirect path. The parent agent is seeking explicit user approval.
+**Complete.** User approval covers sending customer email, purchased item names and quantities, shipping charge, THB total, and internal order ID to Stripe for hosted Checkout. The shipping address remains local. The Stripe gateway receives only those approved order fields; the integration test asserts the exact gateway input.
 
-## Implemented in this partial commit
+## Implementation
 
-- Moved checkout normalization and order creation into `placement.ts`, exposed as a secret-bound factory returning `placeOrderInTransaction(tx, input, principal, requestHash, paymentMethod)`.
-- Added `NormalizedCheckoutInput` and `PlacedOrderRecord`, including the order snapshot, payment ID, optional Stripe attempt ID, and replay-safe guest-token metadata.
-- Preserved the `checkout.place-cod` command, COD order number, payment, event, audit, outbox, response shape, cart behavior, and guest token replay. Legacy COD operation payloads without the new payment and attempt fields remain replayable.
-- Added the transaction-local pending Stripe order state: server-validated quote and stock, confirmed allocation, Stripe payment, durable creating attempt, cart clear, pending-payment event/audit, and no order-confirmation outbox entry. This does not create a Checkout Session.
-- Added an integration test for that transaction-local pending Stripe placement.
+- Extracted shared checkout normalization and transaction placement to `apps/api/src/modules/checkout/placement.ts`. COD retains the `checkout.place-cod` command and its established response and fulfillment behavior. COD replay still requires a `placed` order; a regression test rejects a tampered `pending_payment` snapshot.
+- Added `StripeCheckoutService.place`. It commits a pending order, payment, confirmed stock allocation, cleared cart, and durable Checkout attempt before calling Stripe. It then stores the returned Session ID, URL, and expiry in a separate transaction before responding.
+- Stripe retries replay the stored order and attempt. The Stripe SDK idempotency key is derived from the durable attempt and reused when the first create call has an ambiguous failure. Changed input on the same API idempotency key returns the existing conflict.
+- Added `/api/v1/store/checkout/orders` payment-method selection. COD preserves its response shape; Stripe returns the pending order and `{ checkout: { url, expiresAt } }`. Stripe requests fail with `STRIPE_NOT_CONFIGURED` before order placement when configuration is absent.
+- Session construction uses only the server-validated item snapshot, shipping amount, total, customer email, and internal order ID. It does not send address or phone fields.
 
 ## RED / GREEN evidence
 
-- **RED:** Before implementation, the checkout route contract test submitted `paymentMethod: 'stripe'` and received 422 instead of the expected 201; 12 other route tests passed. That route test was removed after route wiring was rejected, so it is not part of the partial commit.
-- An initial full integration run while the Checkout service test was staged reported one failure and one error because `stripe-service.ts` did not yet exist; this was a module-resolution error, not a valid behavior-level red test.
-- **GREEN:** The revised transaction-local pending-placement integration test passed after using a valid 64-character request hash. It verifies pending status, Stripe payment/attempt records, confirmed stock allocation, cart clearing, and no confirmation outbox record.
-- COD checkout route tests pass unchanged.
+- **RED:** New route assertions initially received 422 for Stripe checkout instead of 201, and received 422 for unconfigured Stripe instead of 503. After implementation, both pass.
+- **RED:** The COD replay regression failed because a corrupted `pending_payment` result payload resolved. The COD replay guard now requires `status === 'placed'`; the regression passes.
+- **GREEN:** Integration tests verify pending order/payment/attempt state, stock allocation, cleared cart, no confirmation outbox item, exact approved Stripe gateway fields, replay after quote expiry, changed-payload conflict, same-key recovery after an ambiguous SDK failure, and stale-quote rejection before Stripe is called.
+- Stripe gateway unit tests verify separate shipping line construction and 30-minute Session expiry.
 
 ## Verification
 
-- `bun test apps/api/test/unit/checkout-routes.test.ts` — 12 passed.
-- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun test apps/api/test/integration/checkout.test.ts` — 11 passed.
-- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun --filter api test:integration` — 218 passed, 0 failed, 32 files.
+- `bun test apps/api/test/unit/checkout-routes.test.ts apps/api/test/unit/stripe-gateway.test.ts` — 18 passed.
+- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun test apps/api/test/integration/checkout.test.ts` — 15 passed.
+- `TEST_DATABASE_URL=postgresql://naay@127.0.0.1:55437/suannn_stripe_test bun --filter api test:integration` — 222 passed, 0 failed, 32 files.
 - `bun --filter api typecheck` — passed.
 - `bun --filter api lint` — passed.
-- `git diff --check` — passed.
+- `git diff --check` — passed before commit.
 
-## Files in this partial commit
+## Files changed
 
+- `apps/api/src/app.ts`
+- `apps/api/src/index.ts`
+- `apps/api/src/modules/audit/model.ts`
+- `apps/api/src/modules/checkout/index.ts`
+- `apps/api/src/modules/checkout/model.ts`
 - `apps/api/src/modules/checkout/placement.ts`
 - `apps/api/src/modules/checkout/service.ts`
+- `apps/api/src/modules/checkout/stripe-service.ts`
+- `apps/api/src/modules/orders/model.ts`
 - `apps/api/src/modules/orders/types.ts`
-- `apps/api/src/modules/audit/model.ts`
+- `apps/api/src/shared/domain-error.ts`
 - `apps/api/test/integration/checkout.test.ts`
+- `apps/api/test/unit/checkout-routes.test.ts`
+- `.superpowers/sdd/2026-09-27-stripe-one-time-payments/task-3-report.md`
 
-## Self-review and remaining work
+## Self-review and limitations
 
-COD route behavior and replay passed the existing route and integration suites. The placement transaction keeps external Stripe work outside its database transaction by returning a durable attempt record to its future caller. No code in this commit calls Stripe or sends customer data to an external destination.
+The database transaction commits before the gateway call. If the call fails, the order and creating attempt remain retryable; the error response does not expose the Stripe URL or provider exception. COD replay preserves the prior status invariant and legacy operation payload compatibility. No shipping address or phone data is included in the Checkout gateway input.
 
-Follow-up review found that the shared snapshot reader must accept `pending_payment` for Stripe, while COD operation replay must retain its original `placed` invariant. Added an integration regression that changes a saved COD operation snapshot to `pending_payment`; it failed before the guard was restored and now returns `INVALID_ORDER_COMMAND` as expected. After the correction, all 12 checkout integration tests, API typecheck, and API lint pass.
-
-Task 3 remains incomplete: `stripe-service.ts`, Checkout Session creation/persistence/retry, route selection and response schema, missing-configuration rejection, route tests for Stripe, quote-expiry replay, changed-payload conflict, ambiguous SDK failure recovery, and 30-minute Session validation are still required after the blocked external payload is explicitly authorized. The current checkout HTTP schema continues to accept COD only.
+Verification used an injected Stripe gateway stub and the Stripe adapter unit tests; no live Stripe sandbox checkout was run.

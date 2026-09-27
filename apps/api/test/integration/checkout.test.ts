@@ -27,7 +27,9 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
 import { createPlaceOrderInTransaction, normalizeCheckoutInput } from '../../src/modules/checkout/placement'
+import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { StripePaymentRepository } from '../../src/modules/payments/stripe/repository'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
@@ -172,6 +174,16 @@ async function prepareCheckout(
 
 function stripeInput(prepared: Awaited<ReturnType<typeof prepareCheckout>>) {
   return { ...prepared.input, paymentMethod: 'stripe' as const }
+}
+
+function makeStripeGateway(createCheckout: StripeGateway['createCheckout']): StripeGateway {
+  return {
+    createCheckout,
+    retrieveCheckout: async () => { throw new Error('not used') },
+    createFullRefund: async () => { throw new Error('not used') },
+    retrieveRefund: async () => { throw new Error('not used') },
+    constructEvent: () => { throw new Error('not used') },
+  }
 }
 
 async function countRows(tableName: 'commerce_order' | 'order_item' | 'order_item_allocation' | 'order_operation' | 'order_outbox' | 'inventory_operation' | 'inventory_reservation' | 'inventory_reservation_allocation' | 'payment' | 'stock_movement' | 'order_event' | 'audit_log' | 'stripe_checkout_attempt') {
@@ -557,5 +569,94 @@ describe('pending Stripe order placement', () => {
     expect(lot?.onHandQuantity).toBe(4)
     expect(lot?.reversibleQuantity).toBe(1)
     expect((await prepared.cartService.get(prepared.principal)).lines).toHaveLength(0)
+  })
+
+  it('creates Checkout from only the approved order fields and replays the stored session after quote expiry', async () => {
+    const principal = guestPrincipal('stripe-service-replay-owner')
+    const prepared = await prepareCheckout(principal, { quantity: 1 })
+    let now = new Date()
+    let received: Parameters<StripeGateway['createCheckout']>[0] | undefined
+    const gateway = makeStripeGateway(async (input) => {
+      received = input
+      return {
+        sessionId: 'cs_test_service_replay',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_service_replay',
+        expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
+      }
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway, () => now)
+
+    const first = await service.place(stripeInput(prepared), principal, 'stripe-service-replay-1')
+    expect(first.order.status).toBe('pending_payment')
+    expect(first.checkout).toEqual({
+      url: 'https://checkout.stripe.com/c/pay/cs_test_service_replay',
+      expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+    })
+    expect(received).toEqual({
+      orderId: first.order.id,
+      lines: [{ name: 'Checkout Fruit Box · Small box', quantity: 1, unitAmountSatang: 1200 }],
+      shippingSatang: 725,
+      email: 'buyer@example.test',
+      amountSatang: 1925,
+      currency: 'thb',
+      idempotencyKey: expect.stringMatching(/^checkout-/),
+    })
+    now = new Date(now.getTime() + 16 * 60 * 1000)
+
+    const replay = await service.place(stripeInput(prepared), principal, 'stripe-service-replay-1')
+
+    expect(replay).toEqual(first)
+    await expect(service.place({
+      ...stripeInput(prepared),
+      contact: { ...prepared.input.contact, email: 'changed@example.test' },
+    }, principal, 'stripe-service-replay-1')).rejects.toMatchObject({
+      code: 'ORDER_OPERATION_CONFLICT', status: 409,
+    })
+    expect(await countRows('commerce_order')).toBe(1)
+    expect(await countRows('stripe_checkout_attempt')).toBe(1)
+  })
+
+  it('resumes an ambiguous session-create failure using the same Stripe idempotency key', async () => {
+    const prepared = await prepareCheckout(undefined, { quantity: 1 })
+    const idempotencyKeys: string[] = []
+    let calls = 0
+    const gateway = makeStripeGateway(async ({ idempotencyKey }) => {
+      calls += 1
+      idempotencyKeys.push(idempotencyKey)
+      if (calls === 1) throw new Error('ambiguous network failure')
+      return {
+        sessionId: 'cs_test_service_recovered',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_service_recovered',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      }
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway)
+
+    await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1'))
+      .rejects.toMatchObject({ code: 'STRIPE_CHECKOUT_UNAVAILABLE', status: 503 })
+    const recovered = await service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1')
+
+    expect(recovered.checkout.url).toBe('https://checkout.stripe.com/c/pay/cs_test_service_recovered')
+    expect(calls).toBe(2)
+    expect(idempotencyKeys[0]).toBe(idempotencyKeys[1])
+    expect(await countRows('commerce_order')).toBe(1)
+    expect(await countRows('stripe_checkout_attempt')).toBe(1)
+  })
+
+  it('rejects a stale server quote before creating a Stripe order or Session', async () => {
+    const prepared = await prepareCheckout(undefined, { quantity: 1 })
+    let calls = 0
+    const gateway = makeStripeGateway(async () => {
+      calls += 1
+      throw new Error('Stripe must not be called for stale quotes')
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway)
+    await database.db.update(productVariant).set({ priceSatang: 1300 })
+      .where(eq(productVariant.id, prepared.variantId))
+
+    await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-stale-quote-1'))
+      .rejects.toMatchObject({ code: 'QUOTE_STALE', status: 409 })
+    expect(calls).toBe(0)
+    expect(await countRows('commerce_order')).toBe(0)
   })
 })
