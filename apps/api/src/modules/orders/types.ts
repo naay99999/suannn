@@ -39,6 +39,12 @@ export interface PlaceCodInput {
   address: CheckoutAddress
 }
 
+export interface PlaceStripeInput extends Omit<PlaceCodInput, 'paymentMethod'> {
+  paymentMethod: 'stripe'
+}
+
+export type PlaceCheckoutInput = PlaceCodInput | PlaceStripeInput
+
 export interface OrderItemSnapshot {
   id: string
   productId: string

@@ -17,6 +17,7 @@ export const auditMetadataKeys = {
   'settings.staff-mfa-policy-changed': ['previousRequired', 'required'],
   'settings.commerce-updated': ['fields'],
   'order.placed': ['actorType', 'principalId', 'reservationId', 'paymentId', 'totalSatang', 'lineCount'],
+  'order.pending_payment': ['actorType', 'principalId', 'reservationId', 'paymentId', 'totalSatang', 'lineCount'],
   'order.cancelled': ['actorType', 'principalId', 'operationId', 'restoredQuantity', 'totalSatang'],
   'order.fulfillment-advanced': ['actorId', 'fromStatus', 'toStatus', 'operationId'],
   'order.cod-collected': ['actorId', 'paymentId', 'amountSatang', 'operationId'],

@@ -15,6 +15,7 @@ import {
   orderOperation,
   orderOutbox,
   payment,
+  stripeCheckoutAttempt,
   product,
   productVariant,
   stockMovement,
@@ -26,6 +27,8 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { createPlaceOrderInTransaction, normalizeCheckoutInput } from '../../src/modules/checkout/placement'
+import { StripePaymentRepository } from '../../src/modules/payments/stripe/repository'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -167,7 +170,11 @@ async function prepareCheckout(
   return { ...seeded, principal, input, displayQuote, cartService, checkout }
 }
 
-async function countRows(tableName: 'commerce_order' | 'order_item' | 'order_item_allocation' | 'order_operation' | 'order_outbox' | 'inventory_operation' | 'inventory_reservation' | 'inventory_reservation_allocation' | 'payment' | 'stock_movement' | 'order_event' | 'audit_log') {
+function stripeInput(prepared: Awaited<ReturnType<typeof prepareCheckout>>) {
+  return { ...prepared.input, paymentMethod: 'stripe' as const }
+}
+
+async function countRows(tableName: 'commerce_order' | 'order_item' | 'order_item_allocation' | 'order_operation' | 'order_outbox' | 'inventory_operation' | 'inventory_reservation' | 'inventory_reservation_allocation' | 'payment' | 'stock_movement' | 'order_event' | 'audit_log' | 'stripe_checkout_attempt') {
   const [row] = await database.db.execute<{ count: number }>(sql`select count(*)::int as count from ${sql.identifier(tableName)}`)
   return Number(row?.count ?? 0)
 }
@@ -501,5 +508,38 @@ describe('atomic COD checkout', () => {
       .where(eq(inventoryLot.variantId, seeded.variantId))
     expect(lot).toMatchObject({ onHandQuantity: 0, reversibleQuantity: 1 })
     expect(await database.db.select().from(stockMovement).where(eq(stockMovement.type, 'reservation_confirm'))).toHaveLength(1)
+  })
+})
+
+describe('pending Stripe order placement', () => {
+  it('stores a pending order and confirmed allocation without queuing confirmation before payment', async () => {
+    const prepared = await prepareCheckout(undefined, { quantity: 1 })
+    const stripePayments = new StripePaymentRepository(database.db)
+    const placeOrderInTransaction = createPlaceOrderInTransaction(commerceSecret, stripePayments)
+    const normalized = normalizeCheckoutInput(stripeInput(prepared))
+
+    const record = await database.db.transaction((tx) =>
+      placeOrderInTransaction(tx, normalized, prepared.principal, 'a'.repeat(64), 'stripe'))
+    const [savedOrder] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, record.order.id))
+    const savedPayment = await database.db.select().from(payment).where(eq(payment.orderId, record.order.id))
+    const attempts = await database.db.select().from(stripeCheckoutAttempt).where(eq(stripeCheckoutAttempt.orderId, record.order.id))
+    const allocations = await database.db.select().from(orderItemAllocation).where(eq(orderItemAllocation.orderId, record.order.id))
+    const outbox = await database.db.select().from(orderOutbox).where(eq(orderOutbox.orderId, record.order.id))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.variantId, prepared.variantId))
+
+    expect(record.order.status).toBe('pending_payment')
+    expect(record.order.paymentMethod).toBe('stripe')
+    expect(record.paymentId).toBe(savedPayment[0]?.id)
+    expect(record.attemptId).toBe(attempts[0]?.id)
+    expect(savedOrder?.status).toBe('pending_payment')
+    expect(savedPayment).toHaveLength(1)
+    expect(savedPayment[0]).toMatchObject({ method: 'stripe', provider: 'stripe', status: 'awaiting_collection', amountSatang: 1925 })
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0]).toMatchObject({ stripeSessionId: null, checkoutUrl: null, status: 'creating' })
+    expect(allocations).toHaveLength(1)
+    expect(outbox).toHaveLength(0)
+    expect(lot?.onHandQuantity).toBe(4)
+    expect(lot?.reversibleQuantity).toBe(1)
+    expect((await prepared.cartService.get(prepared.principal)).lines).toHaveLength(0)
   })
 })
