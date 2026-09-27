@@ -164,6 +164,13 @@ function parseStripeConfig(env: Environment, storefrontUrl: string, isProduction
   }
 
   const [apiKey, webhookSecret, successUrl, cancelUrl] = values as [string, string, string, string]
+  const requiredKeyPrefix = isProduction ? 'rk_live_' : 'rk_test_'
+  if (!apiKey.startsWith(requiredKeyPrefix)) {
+    throw new Error(isProduction
+      ? 'STRIPE_API_KEY must be a restricted rk_live_ key in production'
+      : 'STRIPE_API_KEY must be a restricted rk_test_ key outside production')
+  }
+
   const returnUrls = [
     ['STRIPE_SUCCESS_URL', successUrl],
     ['STRIPE_CANCEL_URL', cancelUrl],

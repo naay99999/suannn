@@ -27,14 +27,71 @@ describe('API configuration', () => {
     expect(loadConfig(testEnv).stripe).toBeNull()
     expect(() => loadConfig({
       ...testEnv,
-      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_API_KEY: 'rk_test_key',
     })).toThrow('Stripe configuration must be provided together')
+  })
+
+  it('accepts restricted Stripe keys for the matching environment', () => {
+    const testStripeConfig = {
+      STRIPE_API_KEY: 'rk_test_restricted',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'http://localhost:5183/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
+    }
+
+    expect(loadConfig({ ...testEnv, ...testStripeConfig }).stripe?.apiKey).toBe('rk_test_restricted')
+
+    const productionEnv = {
+      ...testEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      BETTER_AUTH_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
+      STRIPE_API_KEY: 'rk_live_restricted',
+      STRIPE_WEBHOOK_SECRET: 'whsec_live',
+      STRIPE_SUCCESS_URL: 'https://store.example.com/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      STRIPE_CANCEL_URL: 'https://store.example.com/checkout/cancel',
+    }
+
+    expect(loadConfig(productionEnv).stripe?.apiKey).toBe('rk_live_restricted')
+  })
+
+  it('rejects standard Stripe secret keys and keys for the wrong environment', () => {
+    const stripeConfig = {
+      STRIPE_API_KEY: 'sk_test_secret',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'http://localhost:5183/checkout/success',
+      STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
+    }
+
+    expect(() => loadConfig({ ...testEnv, ...stripeConfig }))
+      .toThrow('STRIPE_API_KEY must be a restricted rk_test_ key outside production')
+    expect(() => loadConfig({
+      ...testEnv,
+      ...stripeConfig,
+      STRIPE_API_KEY: 'rk_live_restricted',
+    })).toThrow('STRIPE_API_KEY must be a restricted rk_test_ key outside production')
+    expect(() => loadConfig({
+      ...testEnv,
+      ...stripeConfig,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      BETTER_AUTH_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
+      STRIPE_API_KEY: 'rk_test_restricted',
+      STRIPE_SUCCESS_URL: 'https://store.example.com/checkout/success',
+      STRIPE_CANCEL_URL: 'https://store.example.com/checkout/cancel',
+    })).toThrow('STRIPE_API_KEY must be a restricted rk_live_ key in production')
   })
 
   it('restricts Stripe return URLs to the configured storefront origin', () => {
     expect(() => loadConfig({
       ...testEnv,
-      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_API_KEY: 'rk_test_key',
       STRIPE_WEBHOOK_SECRET: 'whsec_test',
       STRIPE_SUCCESS_URL: 'https://other.example/checkout/success',
       STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
@@ -44,7 +101,7 @@ describe('API configuration', () => {
   it('rejects guest order tokens in Stripe return URL queries', () => {
     expect(() => loadConfig({
       ...testEnv,
-      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_API_KEY: 'rk_test_key',
       STRIPE_WEBHOOK_SECRET: 'whsec_test',
       STRIPE_SUCCESS_URL: 'http://localhost:5183/checkout/success?guestAccessToken=secret',
       STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
@@ -60,7 +117,7 @@ describe('API configuration', () => {
       STOREFRONT_URL: 'https://store.example.com',
       ADMIN_URL: 'https://admin.example.com',
       TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
-      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_API_KEY: 'rk_live_key',
       STRIPE_WEBHOOK_SECRET: 'whsec_test',
       STRIPE_SUCCESS_URL: 'http://store.example.com/checkout/success',
       STRIPE_CANCEL_URL: 'https://store.example.com/checkout/cancel',
