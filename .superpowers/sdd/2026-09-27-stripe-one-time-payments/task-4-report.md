@@ -25,3 +25,10 @@
 - `git diff --check` — passed.
 
 All Stripe behavior in tests uses a stub gateway. No live Stripe calls were made.
+
+## Task review fix — early paid Session with no Checkout URL
+
+- Added an integration regression for a paid `checkout.session.completed` event delivered before Session persistence with `url: null`. It failed before the fix because settlement left `stripe_session_id` unset.
+- Early verified Sessions now persist their Session ID regardless of URL availability; URL and expiry are stored whenever Stripe provides them. The attempt shape constraint and generated migration `0017_thin_namora.sql` allow a bound Session ID with a null URL. The checkout retry can still fill in the URL if the original API call later returns it.
+- Updated the populated migration upgrade test for migration `0017` and its count of 18 journal entries.
+- Focused lifecycle integration — 15 passed; full API unit suite — 225 passed; full API integration suite — 238 passed; API typecheck and lint passed.

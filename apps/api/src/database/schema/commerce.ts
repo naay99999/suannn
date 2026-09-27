@@ -263,8 +263,8 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   index('stripe_checkout_attempt_unresolved_idx').on(table.lastCreateCallAt, table.createdAt)
     .where(sql`${table.status} in ('creating', 'open')`),
   check('stripe_checkout_attempt_session_shape_check', sql`
-    (${table.stripeSessionId} is null and ${table.checkoutUrl} is null)
-    or (${table.stripeSessionId} is not null and ${table.checkoutUrl} is not null and ${table.expiresAt} is not null)
+    (${table.stripeSessionId} is null and ${table.checkoutUrl} is null and ${table.expiresAt} is null)
+    or ${table.stripeSessionId} is not null
   `),
   check('stripe_checkout_attempt_url_check', sql`${table.checkoutUrl} is null or ${table.checkoutUrl} ~ '^https://[^[:space:]]+$'`),
   check('stripe_checkout_attempt_idempotency_key_check', sql`length(btrim(${table.stripeIdempotencyKey})) between 1 and 255`),

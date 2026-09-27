@@ -94,8 +94,8 @@ export class StripePaymentRepository {
 
   async recordAttemptSession(tx: DatabaseTransaction, attemptId: string, input: {
     sessionId: string
-    url: string
-    expiresAt: Date
+    url: string | null
+    expiresAt: Date | null
   }) {
     const [current] = await tx.select({ status: stripeCheckoutAttempt.status })
       .from(stripeCheckoutAttempt)

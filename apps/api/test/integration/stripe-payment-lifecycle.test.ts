@@ -258,6 +258,31 @@ describe('Stripe payment lifecycle', () => {
     expect(attempt).toMatchObject({ stripeSessionId: fixture.sessionId, status: 'completed' })
   })
 
+  it('binds an early paid Session even when Stripe omits its Checkout URL', async () => {
+    const fixture = await preparePendingOrder()
+    await database.db.update(stripeCheckoutAttempt).set({
+      stripeSessionId: null,
+      checkoutUrl: null,
+      expiresAt: null,
+      status: 'creating',
+    }).where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+
+    await sendEvent(makeGateway(), 'evt_earlypaidnourl', 'checkout.session.completed', sessionFor(fixture, {
+      url: null,
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+    }))
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+    expect(order?.status).toBe('placed')
+    expect(attempt).toMatchObject({
+      stripeSessionId: fixture.sessionId,
+      checkoutUrl: null,
+      status: 'completed',
+    })
+  })
+
   it.each([
     ['checkout.session.async_payment_failed', 'complete', 'unpaid'],
     ['checkout.session.expired', 'expired', 'unpaid'],

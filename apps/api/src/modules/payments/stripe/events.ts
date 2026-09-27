@@ -169,7 +169,7 @@ export class StripeEventService {
         && savedPayment.currency === 'THB'
       if (!validIdentity) return
 
-      if (!attempt.stripeSessionId && eventSession.url && eventSession.expiresAt) {
+      if (!attempt.stripeSessionId) {
         const bound = await this.repository.recordAttemptSession(tx, attempt.id, {
           sessionId: eventSession.sessionId,
           url: eventSession.url,
