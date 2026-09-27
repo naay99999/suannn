@@ -23,7 +23,8 @@
     "drizzle-orm": "^0.45.3",
     "elysia": "1.4.30",
     "postgres": "^3.4.9",
-    "resend": "^6.28.1"
+    "resend": "^6.28.1",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@workspace/config": "workspace:*",

@@ -19,7 +19,54 @@ describe('API configuration', () => {
       authEmailFrom: testEnv.AUTH_EMAIL_FROM,
       trustedProxyHeaders: [],
       requireTrustedClientIp: false,
+      stripe: null,
     })
+  })
+
+  it('requires Stripe configuration as a complete group', () => {
+    expect(loadConfig(testEnv).stripe).toBeNull()
+    expect(() => loadConfig({
+      ...testEnv,
+      STRIPE_API_KEY: 'sk_test_key',
+    })).toThrow('Stripe configuration must be provided together')
+  })
+
+  it('restricts Stripe return URLs to the configured storefront origin', () => {
+    expect(() => loadConfig({
+      ...testEnv,
+      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'https://other.example/checkout/success',
+      STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
+    })).toThrow('STRIPE_SUCCESS_URL must use the STOREFRONT_URL origin')
+  })
+
+  it('rejects guest order tokens in Stripe return URL queries', () => {
+    expect(() => loadConfig({
+      ...testEnv,
+      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'http://localhost:5183/checkout/success?guestAccessToken=secret',
+      STRIPE_CANCEL_URL: 'http://localhost:5183/checkout/cancel',
+    })).toThrow('STRIPE_SUCCESS_URL must not contain a guest order token')
+  })
+
+  it('requires HTTPS Stripe return URLs in production', () => {
+    const productionEnv = {
+      ...testEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      BETTER_AUTH_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-forwarded-for',
+      STRIPE_API_KEY: 'sk_test_key',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'http://store.example.com/checkout/success',
+      STRIPE_CANCEL_URL: 'https://store.example.com/checkout/cancel',
+    }
+
+    expect(() => loadConfig(productionEnv)).toThrow('STRIPE_SUCCESS_URL must use HTTPS in production')
   })
 
   it('requires explicit CORS origins in production', () => {
@@ -56,6 +103,7 @@ describe('API configuration', () => {
       authEmailFrom: 'Suannn <auth@example.com>',
       trustedProxyHeaders: ['x-forwarded-for', 'x-real-ip'],
       requireTrustedClientIp: true,
+      stripe: null,
     })
   })
 

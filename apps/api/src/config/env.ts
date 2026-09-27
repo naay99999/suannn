@@ -28,6 +28,14 @@ export interface AppConfig {
   authEmailFrom: string
   trustedProxyHeaders: string[]
   requireTrustedClientIp: boolean
+  stripe: StripeConfig | null
+}
+
+export interface StripeConfig {
+  apiKey: string
+  webhookSecret: string
+  successUrl: string
+  cancelUrl: string
 }
 
 type Environment = Record<string, string | undefined>
@@ -137,6 +145,50 @@ function parseOrigin(name: string, value: string) {
   return url.origin
 }
 
+function parseStripeConfig(env: Environment, storefrontUrl: string, isProduction: boolean): StripeConfig | null {
+  const names = [
+    'STRIPE_API_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_SUCCESS_URL',
+    'STRIPE_CANCEL_URL',
+  ] as const
+  const values = names.map((name) => env[name]?.trim() || undefined)
+  const present = values.filter(Boolean).length
+
+  if (present === 0) {
+    return null
+  }
+
+  if (present !== names.length) {
+    throw new Error('Stripe configuration must be provided together')
+  }
+
+  const [apiKey, webhookSecret, successUrl, cancelUrl] = values as [string, string, string, string]
+  const returnUrls = [
+    ['STRIPE_SUCCESS_URL', successUrl],
+    ['STRIPE_CANCEL_URL', cancelUrl],
+  ] as const
+
+  for (const [name, value] of returnUrls) {
+    const parsed = parseUrl(name, value, ['http:', 'https:'])
+    const url = new URL(parsed)
+
+    if (isProduction && url.protocol !== 'https:') {
+      throw new Error(`${name} must use HTTPS in production`)
+    }
+
+    if (url.username || url.password || url.origin !== storefrontUrl) {
+      throw new Error(`${name} must use the STOREFRONT_URL origin`)
+    }
+
+    if ([...url.searchParams.keys()].some((key) => key.toLowerCase().replaceAll(/[-_]/g, '').endsWith('token'))) {
+      throw new Error(`${name} must not contain a guest order token`)
+    }
+  }
+
+  return { apiKey, webhookSecret, successUrl, cancelUrl }
+}
+
 export function loadConfig(env: Environment = process.env): AppConfig {
   const corsOrigins = parseOrigins(env.CORS_ORIGINS)
   const isProduction = env.NODE_ENV === 'production'
@@ -178,6 +230,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     'ADMIN_URL',
     requiredValue('ADMIN_URL', env.ADMIN_URL),
   )
+  const stripe = parseStripeConfig(env, storefrontUrl, isProduction)
 
   if (isProduction && !corsOrigins.includes(storefrontUrl)) {
     throw new Error('STOREFRONT_URL must be included in CORS_ORIGINS')
@@ -202,5 +255,6 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     authEmailFrom: requiredValue('AUTH_EMAIL_FROM', env.AUTH_EMAIL_FROM),
     trustedProxyHeaders,
     requireTrustedClientIp: isProduction,
+    stripe,
   }
 }
