@@ -1,0 +1,59 @@
+# Stripe one-time payments for store orders
+
+## Purpose and scope
+
+Add one-time online payment to the existing store order API. A shopper can choose cash on delivery (`cod`) or Stripe (`stripe`) when placing an order. Stripe uses hosted Checkout; the API returns a Checkout URL for the client to open. The storefront checkout page and admin UI are outside this change. Keep the current COD behavior and contracts working.
+
+Only an admin staff member may request a Stripe refund through the API. The first release supports a full refund, and only after the paid order has been cancelled before shipment. Cancelling does not request a refund. Partial refunds, subscriptions, Connect, Stripe Tax, and frontend work are outside scope.
+
+Success means an order is placed and confirmed exactly once after Stripe reports payment, stock is restored exactly once after an unsuccessful payment, and a staff refund is traceable from request through its final Stripe outcome. API consumers can distinguish a pending payment, a paid order, and refund progress without interpreting a browser redirect.
+
+## Existing system and design choice
+
+The API already validates signed short-lived quotes, uses idempotent order commands, allocates inventory, creates COD payment and order records, sends order confirmation through an outbox, and exposes typed Elysia contracts. The storefront has cart UI but no checkout page. The current inventory reservation hold is 15 minutes; a Stripe Checkout Session must last at least 30 minutes. Therefore a Stripe order allocates stock and confirms the reservation in the order transaction, then retains that allocation while payment is pending. Stock is released only after a verified terminal unsuccessful payment outcome.
+
+Use Stripe Checkout Sessions in `payment` mode with hosted Checkout. The server creates line items from the validated order snapshot in integer THB satang, including shipping as a separate line item when its amount is positive, and never accepts prices or Stripe object IDs from the shopper. Omit `payment_method_types` so Stripe offers eligible methods configured for the account. Some methods settle later; a completed Checkout Session with `payment_status: unpaid` remains pending until Stripe reports success or failure. Do not enable automatic tax without an active Stripe Tax registration and a separate tax design.
+
+## API contracts
+
+`POST /api/v1/store/checkout/orders` retains its required `Idempotency-Key`, browser mutation guard, guest rate limit, quote token, contact, and address validation. Its `paymentMethod` becomes `cod | stripe`.
+
+- For `cod`, preserve the current `201` response: `{ order, guestAccessToken? }`, with status `placed`.
+- For `stripe`, return `201` with `{ order, checkout: { url, expiresAt }, guestAccessToken? }`, with status `pending_payment`. The `checkout` field is present only for Stripe. Retries with the same key and same input return the same order and Checkout Session; changed input with the same key returns the existing conflict response.
+- The order read endpoints expose payment method, payment status, and an optional refund summary. Never expose a Stripe API key, webhook secret, raw webhook body, or guest access token in an order read.
+
+The API config accepts `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SUCCESS_URL`, and `STRIPE_CANCEL_URL` as an all-or-none group. COD remains available when they are absent, while Stripe placement fails before an order is created. Return URLs are absolute HTTPS URLs in production, restricted to the configured storefront origin, and contain no guest order token. The success URL may include Stripe's Checkout Session placeholder. A return URL conveys navigation only; it cannot change order or payment state. The Checkout URL is treated as a short-lived payment link and excluded from request logs.
+
+`POST /api/v1/admin/orders/{orderId}/refund` accepts an empty JSON body and `Idempotency-Key`. It requires an active staff session, `order:refund`, and the admin browser mutation guard. It requests the full amount recorded on a `collected` Stripe payment only when the order is `cancelled`, no successful or in-progress full refund exists, and the order was cancelled before shipment through the existing order transition. It returns the order detail with refund state. COD, unpaid, non-cancelled, and already refunded orders receive domain errors. A failed refund can be retried as a new admin command after its status is reconciled.
+
+`POST /api/v1/webhooks/stripe` receives Stripe events. It has no browser cookie authentication or browser mutation guard. It verifies the `Stripe-Signature` header against the raw request body before parsing or acting. Invalid signatures return 400. Successfully accepted and already processed events return 2xx; transient processing failures return a retryable error.
+
+## Order and payment lifecycle
+
+The common checkout logic validates the quote against the locked cart, commerce settings, catalog prices, and available stock. COD retains its current transaction and response. Stripe creates an order with `pending_payment`, a Stripe payment row with `awaiting_collection`, item and allocation snapshots, and a durable Checkout attempt. It confirms the inventory reservation in the same transaction. It does not queue the order-confirmation email yet. The cart is cleared as part of placement, as with COD; an unsuccessful payment does not silently restore or reprice the cart.
+
+After committing the order, a Stripe adapter creates the Checkout Session with a stable Stripe idempotency key derived from the order/attempt ID. The session uses a 30-minute expiry, server-calculated line items, configured return URLs, `client_reference_id` and metadata linking only the internal order ID, and an integration identifier ending in eight random letters. The API stores the Session ID, URL, and expiry against the attempt before returning. A repeat request resumes an incomplete attempt and uses the same Stripe idempotency key. If Stripe creation fails, the attempt remains durable and retryable; a reconciliation worker either completes session creation or, once the possible session has definitively expired, cancels the order and restores inventory. It must not create a second order or assume an ambiguous Stripe network failure means no session exists.
+
+The webhook handles `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`. On an apparent success, it verifies the stored Session ID, order ID, currency, amount, and Stripe `payment_status` before marking the payment `collected` and order `placed`, writing the order event and audit record, and queueing the existing confirmation outbox item in one database transaction. `checkout.session.completed` with unpaid status stays pending. A terminal unsuccessful outcome cancels a pending order and restores its original allocations once. The order and payment locks, unique event IDs, and state conditions make duplicate or out-of-order delivery harmless. When event ordering is ambiguous, retrieve the current Checkout Session from Stripe before changing the order; a stale failure event cannot reverse an already paid order. An open or asynchronously processing payment must not release its stock merely because 30 minutes have passed.
+
+The existing customer/guest cancel endpoint continues to govern placed orders before shipment. For a pending Stripe order, returning from Checkout through its cancel URL does not cancel the order: the session remains payable until Stripe expires it. The normal cancel endpoint rejects a pending Stripe order; expiry or failure resolves it. A paid Stripe order may be cancelled before shipment, restoring stock, while its payment remains `collected` until the separate staff refund succeeds. The current no-cancellation-after-shipment rule remains.
+
+## Refund lifecycle
+
+Add a separate refund record linked to payment and order. It stores the request actor, idempotency identity, Stripe Refund ID, full amount, status (`pending`, `requires_action`, `succeeded`, `failed`, or `canceled`), and timestamps. Keep payment `collected` as a record of the original successful charge; expose refund state separately rather than overloading payment status.
+
+The admin command first claims a durable refund operation under a database lock, then calls Stripe's Refunds API with the stored PaymentIntent ID and a stable Stripe idempotency key. The amount comes from the order and is not accepted from the client. The response updates the refund record; `refund.created`, `refund.updated`, and `refund.failed` webhooks reconcile later changes. A worker retrieves unresolved refunds if a webhook is missed. The same admin key replays the same request, and simultaneous or repeated keys cannot issue two active full refunds. Stripe errors remain visible as a failed or retryable operation; they never imply a successful refund. A new refund attempt is allowed only after the previous attempt is definitively failed or cancelled and Stripe confirms there is no successful refund for the payment.
+
+## Persistence and boundaries
+
+Add Drizzle tables or columns for the Stripe Checkout attempt, refund, and processed Stripe event IDs, plus provider references on payment as needed. Generate and commit the migration; do not edit an applied migration. Preserve the existing payment/order amount equality and THB constraints. Unique constraints cover Checkout Session IDs, Stripe event IDs, Stripe Refund IDs, and the one active Checkout attempt and full refund per relevant payment. Route modules own HTTP validation and authorization; services own lifecycle decisions; repositories own persistence; a small Stripe adapter owns SDK calls and signature verification. `src/app.ts` only composes dependencies and exports the updated `App` type.
+
+## Security and operations
+
+Instantiate a Stripe SDK client at startup and pin the API version to `2026-08-26.dahlia` for this integration. Use a restricted server-side Stripe key with the minimum Checkout Session, PaymentIntent read, and Refund permissions needed; store it and the webhook signing secret in a deployment secrets vault, with separate credentials for local development, CI, and production. Use separate Stripe sandboxes for development and CI. Do not log keys, Checkout URLs, raw webhook payloads, or payment-sensitive data. Webhook processing validates event type and object identity as well as signature. Admin refunds use existing request context for audit metadata.
+
+Apply the migration and provide Stripe credentials and webhook configuration before accepting Stripe orders. Register the webhook endpoint for the specified Checkout and refund events. COD continues to work independently. If Stripe is not configured, Stripe placement fails before order creation. If a transient Stripe error occurs after the pending order transaction, the API returns a safe retryable error and the durable attempt is resumed or cancelled by reconciliation. The reconciliation worker starts and stops with the existing commerce workers and processes bounded batches.
+
+## Verification
+
+Unit tests cover quote and amount construction, Stripe adapter failures, idempotency, webhook signature rejection, event classification, delayed payment, duplicate and out-of-order events, and refund eligibility. Database integration tests cover atomic state transitions, stock restoration exactly once, event deduplication, simultaneous refund commands, and operation replay. Run API typecheck, lint, unit tests, and integration tests against a dedicated database ending in `_test`. In a Stripe development sandbox, run a hosted payment, expiration, delayed payment where available, successful refund, and refund failure/reconciliation scenario before enabling the integration in production.
