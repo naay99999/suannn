@@ -292,6 +292,22 @@ describe('atomic COD checkout', () => {
     expect(await countRows('order_outbox')).toBe(1)
   })
 
+  checkoutBehavior('rejects a COD replay payload corrupted to pending payment', async () => {
+    const prepared = await prepareCheckout()
+    const key = 'checkout-corrupt-cod-replay'
+    await prepared.checkout.placeCod(prepared.input, prepared.principal, key)
+    const [operation] = await database.db.select().from(orderOperation)
+      .where(eq(orderOperation.idempotencyKey, key))
+    const savedPayload = operation!.resultPayload
+    const savedOrder = savedPayload.order as Record<string, unknown>
+    await database.db.update(orderOperation).set({
+      resultPayload: { ...savedPayload, order: { ...savedOrder, status: 'pending_payment' } },
+    }).where(eq(orderOperation.id, operation!.id))
+
+    await expect(prepared.checkout.placeCod(prepared.input, prepared.principal, key))
+      .rejects.toMatchObject({ code: 'INVALID_ORDER_COMMAND', status: 422 })
+  })
+
   checkoutBehavior('rejects a changed payload on an idempotency-key replay without creating another order', async () => {
     const prepared = await prepareCheckout()
     await prepared.checkout.placeCod(prepared.input, prepared.principal, 'checkout-changed-1')

@@ -40,4 +40,6 @@
 
 COD route behavior and replay passed the existing route and integration suites. The placement transaction keeps external Stripe work outside its database transaction by returning a durable attempt record to its future caller. No code in this commit calls Stripe or sends customer data to an external destination.
 
+Follow-up review found that the shared snapshot reader must accept `pending_payment` for Stripe, while COD operation replay must retain its original `placed` invariant. Added an integration regression that changes a saved COD operation snapshot to `pending_payment`; it failed before the guard was restored and now returns `INVALID_ORDER_COMMAND` as expected. After the correction, all 12 checkout integration tests, API typecheck, and API lint pass.
+
 Task 3 remains incomplete: `stripe-service.ts`, Checkout Session creation/persistence/retry, route selection and response schema, missing-configuration rejection, route tests for Stripe, quote-expiry replay, changed-payload conflict, ambiguous SDK failure recovery, and 30-minute Session validation are still required after the blocked external payload is explicitly authorized. The current checkout HTTP schema continues to accept COD only.

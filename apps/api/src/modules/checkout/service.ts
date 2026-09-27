@@ -43,7 +43,7 @@ export class CheckoutService {
       payload,
     }, async (_tx, operation) => {
       const record = replayPlacedOrderRecord(operation, principal, this.secret)
-      if (record.order.paymentMethod !== 'cod' || record.attemptId !== null) {
+      if (record.order.status !== 'placed' || record.order.paymentMethod !== 'cod' || record.attemptId !== null) {
         throw new DomainError('INVALID_ORDER_COMMAND')
       }
       return record.guestAccessToken
