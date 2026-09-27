@@ -11,6 +11,7 @@ import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
 import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus } from './types'
 import type { OrderService } from './service'
+import type { StripeRefundService } from '../payments/stripe/refunds'
 import { ordersModels } from './model'
 
 const guestOrderAccessLimit = { limit: 30, windowSeconds: 60 }
@@ -107,6 +108,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
       amountSatang: order.payment.amountSatang,
       currency: order.payment.currency,
       status: order.payment.status,
+      ...(order.payment.refund ? { refund: order.payment.refund } : {}),
     },
   }
 }
@@ -233,7 +235,12 @@ export function createStoreOrdersModule(
     })
 }
 
-export function createAdminOrdersModule(config: AppConfig, auth: Auth, service: OrderService) {
+export function createAdminOrdersModule(
+  config: AppConfig,
+  auth: Auth,
+  service: OrderService,
+  stripeRefunds?: Pick<StripeRefundService, 'requestFullRefund'>,
+) {
   const staffSecurity = [{ sessionCookie: [] }]
   const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error' } as const
   const actorFrom = (userId: string, requestContext: { requestId: string; clientIp: string; userAgent: string | null }) =>
@@ -307,6 +314,27 @@ export function createAdminOrdersModule(config: AppConfig, auth: Auth, service: 
       detail: {
         summary: 'Cancel a staff order',
         description: 'Cancels an eligible order before shipment and restores its original inventory allocations once. Requires order:cancel permission, an idempotency key, and an admin-origin browser request.',
+        tags: ['Admin Orders'], security: staffSecurity,
+      },
+    })
+    .post('/:orderId/refund', async ({ params, user, requestContext, headers }) => {
+      if (!stripeRefunds) throw new DomainError('STRIPE_NOT_CONFIGURED')
+      return staffOrderProjection(await stripeRefunds.requestFullRefund(
+        params.orderId,
+        actorFrom(user.id, requestContext),
+        headers['idempotency-key'],
+      ))
+    }, {
+      parse: [parseEmptyBody, 'json'],
+      browserMutation: 'admin',
+      permission: { order: ['refund'] },
+      params: 'orders.idParams',
+      headers: 'orders.idempotencyHeaders',
+      body: 'orders.emptyBody',
+      response: { 200: 'orders.detail', ...errors, 503: 'http.error' },
+      detail: {
+        summary: 'Request a full Stripe refund',
+        description: 'Requests a full refund for an eligible cancelled Stripe order using the order payment amount. The command is idempotent. Requires order:refund permission and an admin-origin browser request.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

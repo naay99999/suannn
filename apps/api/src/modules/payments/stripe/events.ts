@@ -4,6 +4,8 @@ import { DomainError } from '../../../shared/domain-error'
 import { cancelStripeOrderInTransaction, settleStripeOrderInTransaction } from '../../orders/service'
 import { lockOrder } from '../../orders/repository'
 import type { CheckoutSessionState, StripeGateway } from './gateway'
+import type { StripeRefundState } from './gateway'
+import { StripeRefundService } from './refunds'
 import { StripePaymentRepository } from './repository'
 
 const supportedEvents = new Set([
@@ -11,6 +13,9 @@ const supportedEvents = new Set([
   'checkout.session.async_payment_succeeded',
   'checkout.session.async_payment_failed',
   'checkout.session.expired',
+  'refund.created',
+  'refund.updated',
+  'refund.failed',
 ])
 
 export class StripeSignatureError extends Error {
@@ -82,11 +87,37 @@ function asRetrievedSession(value: CheckoutSessionState): SessionEvidence {
   }
 }
 
+function asEventRefund(value: unknown): StripeRefundState | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.amount !== 'number'
+    || typeof value.currency !== 'string') return null
+  const metadata = isRecord(value.metadata) ? value.metadata : null
+  const paymentIntent = value.payment_intent
+  const paymentIntentId = typeof paymentIntent === 'string'
+    ? paymentIntent
+    : isRecord(paymentIntent) && typeof paymentIntent.id === 'string' ? paymentIntent.id : null
+  const status = value.status === 'requires_action' || value.status === 'succeeded'
+    || value.status === 'failed' || value.status === 'canceled' || value.status === 'pending'
+    ? value.status
+    : null
+  if (!status) return null
+  return {
+    refundId: value.id,
+    orderId: metadata && typeof metadata.orderId === 'string' ? metadata.orderId : null,
+    refundClaimId: metadata && typeof metadata.refundClaimId === 'string' ? metadata.refundClaimId : null,
+    paymentIntentId,
+    amountSatang: value.amount,
+    currency: value.currency,
+    status,
+  }
+}
+
 export class StripeEventService {
   private readonly repository: StripePaymentRepository
+  private readonly refunds: StripeRefundService
 
   constructor(private readonly db: Database, private readonly gateway: StripeGateway | null) {
     this.repository = new StripePaymentRepository(db)
+    this.refunds = new StripeRefundService(db, gateway)
   }
 
   async handle(rawBody: string, signature: string): Promise<void> {
@@ -99,6 +130,12 @@ export class StripeEventService {
       throw new StripeSignatureError()
     }
     if (!supportedEvents.has(event.type)) return
+
+    if (event.type.startsWith('refund.')) {
+      const refund = asEventRefund(event.data.object)
+      if (refund) await this.refunds.applyRefundState(refund, { id: event.id, type: event.type })
+      return
+    }
 
     const session = asEventSession(event.data.object)
     if (!session) return

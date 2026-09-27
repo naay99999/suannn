@@ -34,6 +34,7 @@ import type { QuoteService } from './modules/checkout/quote'
 import type { CheckoutService } from './modules/checkout/service'
 import type { StripeCheckoutService } from './modules/checkout/stripe-service'
 import type { StripeEventService } from './modules/payments/stripe/events'
+import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { RateLimiter } from './modules/rate-limit/service'
@@ -64,6 +65,7 @@ export interface AppDependencies {
   checkout: CheckoutService
   stripeCheckout?: StripeCheckoutService
   stripeEvents?: StripeEventService
+  stripeRefunds?: StripeRefundService
   orders: OrderService
   commerceSettings: CommerceSettingsService
   staffMfaRequired(): Promise<boolean>
@@ -122,7 +124,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
-    .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders))
+    .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))
     .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))

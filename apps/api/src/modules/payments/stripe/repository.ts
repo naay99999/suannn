@@ -78,6 +78,19 @@ export class StripePaymentRepository {
     return refund ?? null
   }
 
+  async lockRefundById(tx: DatabaseTransaction, refundId: string) {
+    const [refund] = await tx.select().from(stripeRefund)
+      .where(eq(stripeRefund.id, refundId)).for('update').limit(1)
+    return refund ?? null
+  }
+
+  async lockRefundsByPayment(tx: DatabaseTransaction, paymentId: string) {
+    return tx.select().from(stripeRefund)
+      .where(eq(stripeRefund.paymentId, paymentId))
+      .orderBy(asc(stripeRefund.createdAt), asc(stripeRefund.id))
+      .for('update')
+  }
+
   async listUnresolvedAttempts(limit: number) {
     return this.db.select().from(stripeCheckoutAttempt)
       .where(inArray(stripeCheckoutAttempt.status, ['creating', 'open']))

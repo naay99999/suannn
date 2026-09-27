@@ -72,6 +72,27 @@ function createHarness(role = 'owner') {
     },
     revokeGuestAccess: async (...args: unknown[]) => { calls.push({ method: 'orders.revokeGuestAccess', args }); return detail },
   }
+  const stripeRefunds = {
+    requestFullRefund: async (...args: unknown[]) => {
+      calls.push({ method: 'stripeRefunds.requestFullRefund', args })
+      return {
+        ...detail,
+        payment: {
+          ...detail.payment,
+          method: 'stripe',
+          provider: 'stripe',
+          status: 'collected',
+          refund: {
+            id: '00000000-0000-4000-8000-000000000031',
+            amountSatang: 3000,
+            status: 'pending',
+            createdAt: '2026-09-27T00:00:00.000Z',
+            updatedAt: '2026-09-27T00:00:00.000Z',
+          },
+        },
+      }
+    },
+  }
   const settings = {
     get: async (...args: unknown[]) => { calls.push({ method: 'settings.get', args }); return commerceSettings },
     update: async (...args: unknown[]) => { calls.push({ method: 'settings.update', args }); return commerceSettings },
@@ -115,6 +136,7 @@ function createHarness(role = 'owner') {
     quote: empty,
     checkout: empty,
     orders,
+    stripeRefunds,
     commerceSettings: settings,
     staffMfaRequired: async () => true,
     identityReservations: { findState: async () => null },
@@ -218,8 +240,8 @@ describe('admin order and commerce settings HTTP contracts', () => {
 
   it('applies exact per-route permissions to each staff role', async () => {
     const cases = [
-      { role: 'owner', allowed: ['read', 'fulfill', 'cancel', 'collect', 'manage-access', 'settings-read', 'settings-update'] },
-      { role: 'admin', allowed: ['read', 'fulfill', 'cancel', 'collect', 'manage-access', 'settings-read', 'settings-update'] },
+      { role: 'owner', allowed: ['read', 'fulfill', 'cancel', 'collect', 'refund', 'manage-access', 'settings-read', 'settings-update'] },
+      { role: 'admin', allowed: ['read', 'fulfill', 'cancel', 'collect', 'refund', 'manage-access', 'settings-read', 'settings-update'] },
       { role: 'fulfillment', allowed: ['read', 'fulfill', 'collect'] },
       { role: 'support', allowed: ['read', 'cancel', 'manage-access'] },
       { role: 'catalog_manager', allowed: ['read'] },
@@ -231,6 +253,7 @@ describe('admin order and commerce settings HTTP contracts', () => {
         ['fulfill', command(`/api/v1/admin/orders/${orderId}/fulfillment`, { status: 'processing' })],
         ['cancel', command(`/api/v1/admin/orders/${orderId}/cancel`, {})],
         ['collect', command(`/api/v1/admin/orders/${orderId}/collect-cod`, { amountSatang: 3000 })],
+        ['refund', command(`/api/v1/admin/orders/${orderId}/refund`, {})],
         ['manage-access', command(`/api/v1/admin/orders/${orderId}/guest-access/reissue`, { reasonCode: 'customer_request' })],
         ['settings-read', request('/api/v1/admin/commerce-settings', {}, 'staff')],
         ['settings-update', request('/api/v1/admin/commerce-settings', {
@@ -251,9 +274,13 @@ describe('admin order and commerce settings HTTP contracts', () => {
     expect((await app.handle(request('/api/v1/admin/orders?unknown=yes'))).status).toBe(422)
     expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/collect-cod`, { amountSatang: 3000 }, 'staff', ''))).status).toBe(422)
     expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/collect-cod`, { amountSatang: 3000, actorId: 'attacker' }))).status).toBe(422)
+    expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/refund`, { amountSatang: 3000 }))).status).toBe(422)
     expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/fulfillment`, { status: 'cancelled' }))).status).toBe(422)
     expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/guest-access/reissue`, { reasonCode: 'freeform' }))).status).toBe(422)
     expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/cancel`, {}, 'staff', 'key', 'https://attacker.example'))).status).toBe(403)
+    expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/refund`, {}, 'staff', 'key', 'https://attacker.example'))).status).toBe(403)
+    expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/refund`, {}, '', 'key'))).status).toBe(401)
+    expect((await app.handle(command(`/api/v1/admin/orders/${orderId}/refund`, {}, 'staff', ''))).status).toBe(422)
     expect((await app.handle(request('/api/v1/admin/commerce-settings', {
       method: 'PUT', body: JSON.stringify({ shippingFeeSatang: 500, checkoutEnabled: false }),
     }, 'staff', 'https://attacker.example'))).status).toBe(403)
@@ -264,6 +291,18 @@ describe('admin order and commerce settings HTTP contracts', () => {
       method: 'PUT', body: JSON.stringify({ shippingFeeSatang: 500, checkoutEnabled: false, actorId: 'attacker' }),
     }))).status).toBe(422)
     expect(calls).toEqual([])
+  })
+
+  it('requests an empty-body full refund with the session actor and idempotency key', async () => {
+    const { app, calls } = await createHarness()
+    const response = await app.handle(command(`/api/v1/admin/orders/${orderId}/refund`, {}))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ payment: { status: 'collected', refund: { status: 'pending' } } })
+    expect(calls.find(({ method }) => method === 'stripeRefunds.requestFullRefund')?.args).toMatchObject([
+      orderId,
+      { kind: 'staff', userId: 'staff-1', auditContext: { requestId: expect.any(String) } },
+      'command-1',
+    ])
   })
 
   it('documents every staff route with cookie security and omits guest tokens from recovery responses', async () => {
@@ -278,6 +317,7 @@ describe('admin order and commerce settings HTTP contracts', () => {
       ['/api/v1/admin/orders/{orderId}/fulfillment', 'post'],
       ['/api/v1/admin/orders/{orderId}/cancel', 'post'],
       ['/api/v1/admin/orders/{orderId}/collect-cod', 'post'],
+      ['/api/v1/admin/orders/{orderId}/refund', 'post'],
       ['/api/v1/admin/orders/{orderId}/guest-access/reissue', 'post'],
       ['/api/v1/admin/orders/{orderId}/guest-access/revoke', 'post'],
       ['/api/v1/admin/commerce-settings', 'get'],

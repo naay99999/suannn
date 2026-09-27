@@ -41,6 +41,7 @@ import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
 import { StripeCheckoutService } from './modules/checkout/stripe-service'
 import { createStripeGateway } from './modules/payments/stripe/gateway'
+import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
@@ -86,6 +87,7 @@ const stripeCheckout = new StripeCheckoutService(
   stripeGateway,
 )
 const stripeEvents = new StripeEventService(database.db, stripeGateway)
+const stripeRefunds = new StripeRefundService(database.db, stripeGateway)
 const orders = new OrderService(database.db, config.commerceSecret)
 const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
@@ -137,6 +139,7 @@ const app = await createApp(config, {
   checkout,
   stripeCheckout,
   stripeEvents,
+  stripeRefunds,
   orders,
   commerceSettings,
   staffMfaRequired,

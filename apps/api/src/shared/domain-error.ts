@@ -34,6 +34,7 @@ export type DomainErrorCode =
   | 'INVALID_PAYMENT_AMOUNT'
   | 'STRIPE_NOT_CONFIGURED'
   | 'STRIPE_CHECKOUT_UNAVAILABLE'
+  | 'STRIPE_REFUND_UNAVAILABLE'
   | 'INVALID_ORDER_COMMAND'
   | 'INVALID_ORDER_INPUT'
   | 'ORDER_OPERATION_CONFLICT'
@@ -42,6 +43,7 @@ export type DomainErrorCode =
   | 'ORDER_ACCESS_DENIED'
   | 'INVALID_ORDER_TRANSITION'
   | 'ORDER_PAYMENT_CONFLICT'
+  | 'ORDER_REFUND_CONFLICT'
   | 'COD_AMOUNT_MISMATCH'
   | 'INVALID_ORDER_QUERY'
 
@@ -81,6 +83,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_PAYMENT_AMOUNT: { status: 422, message: 'Payment amount is invalid' },
   STRIPE_NOT_CONFIGURED: { status: 503, message: 'Online payment is unavailable' },
   STRIPE_CHECKOUT_UNAVAILABLE: { status: 503, message: 'Online payment is temporarily unavailable' },
+  STRIPE_REFUND_UNAVAILABLE: { status: 503, message: 'Online refund is temporarily unavailable' },
   INVALID_ORDER_COMMAND: { status: 422, message: 'Order command is invalid' },
   INVALID_ORDER_INPUT: { status: 422, message: 'Order request is invalid' },
   ORDER_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
@@ -89,6 +92,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   ORDER_ACCESS_DENIED: { status: 403, message: 'Order access denied' },
   INVALID_ORDER_TRANSITION: { status: 409, message: 'Order state does not allow this action' },
   ORDER_PAYMENT_CONFLICT: { status: 409, message: 'Order payment state does not allow this action' },
+  ORDER_REFUND_CONFLICT: { status: 409, message: 'Order refund state does not allow this action' },
   COD_AMOUNT_MISMATCH: { status: 422, message: 'Collected amount must match the order total' },
   INVALID_ORDER_QUERY: { status: 422, message: 'Order query is invalid' },
 }
