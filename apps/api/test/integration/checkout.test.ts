@@ -29,7 +29,7 @@ import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
 import { createPlaceOrderInTransaction, normalizeCheckoutInput } from '../../src/modules/checkout/placement'
-import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
+import { STRIPE_CREATE_REQUEST_WINDOW_MS, type StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { StripePaymentRepository } from '../../src/modules/payments/stripe/repository'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
@@ -178,6 +178,10 @@ function stripeInput(prepared: Awaited<ReturnType<typeof prepareCheckout>>) {
 
 function makeStripeGateway(createCheckout: StripeGateway['createCheckout']): StripeGateway {
   return {
+    checkoutReturnUrls: () => ({
+      successUrl: 'https://shop.example.test/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/cancel',
+    }),
     createCheckout,
     retrieveCheckout: async () => { throw new Error('not used') },
     createFullRefund: async () => { throw new Error('not used') },
@@ -575,13 +579,14 @@ describe('pending Stripe order placement', () => {
     const principal = guestPrincipal('stripe-service-replay-owner')
     const prepared = await prepareCheckout(principal, { quantity: 1 })
     let now = new Date()
+    const plannedExpiry = new Date(Math.floor(now.getTime() / 1000) * 1000 + 30 * 60 * 1000 + STRIPE_CREATE_REQUEST_WINDOW_MS)
     let received: Parameters<StripeGateway['createCheckout']>[0] | undefined
     const gateway = makeStripeGateway(async (input) => {
       received = input
       return {
         sessionId: 'cs_test_service_replay',
         url: 'https://checkout.stripe.com/c/pay/cs_test_service_replay',
-        expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
+        expiresAt: input.expiresAt,
       }
     })
     const service = new StripeCheckoutService(database.db, commerceSecret, gateway, () => now)
@@ -590,7 +595,7 @@ describe('pending Stripe order placement', () => {
     expect(first.order.status).toBe('pending_payment')
     expect(first.checkout).toEqual({
       url: 'https://checkout.stripe.com/c/pay/cs_test_service_replay',
-      expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+      expiresAt: plannedExpiry.toISOString(),
     })
     expect(received).toEqual({
       orderId: first.order.id,
@@ -599,6 +604,9 @@ describe('pending Stripe order placement', () => {
       email: 'buyer@example.test',
       amountSatang: 1925,
       currency: 'thb',
+      expiresAt: plannedExpiry,
+      successUrl: 'https://shop.example.test/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/cancel',
       idempotencyKey: expect.stringMatching(/^checkout-/),
     })
     now = new Date(now.getTime() + 16 * 60 * 1000)
@@ -619,28 +627,57 @@ describe('pending Stripe order placement', () => {
   it('resumes an ambiguous session-create failure using the same Stripe idempotency key', async () => {
     const prepared = await prepareCheckout(undefined, { quantity: 1 })
     const idempotencyKeys: string[] = []
+    const plannedExpiries: string[] = []
+    let now = new Date()
     let calls = 0
-    const gateway = makeStripeGateway(async ({ idempotencyKey }) => {
+    const gateway = makeStripeGateway(async ({ orderId, idempotencyKey, expiresAt }) => {
       calls += 1
       idempotencyKeys.push(idempotencyKey)
+      plannedExpiries.push(expiresAt?.toISOString() ?? '')
+      const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+        .where(eq(stripeCheckoutAttempt.orderId, orderId))
+      expect(attempt?.plannedExpiresAt?.toISOString()).toBe(expiresAt?.toISOString())
       if (calls === 1) throw new Error('ambiguous network failure')
       return {
         sessionId: 'cs_test_service_recovered',
         url: 'https://checkout.stripe.com/c/pay/cs_test_service_recovered',
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        expiresAt,
       }
     })
-    const service = new StripeCheckoutService(database.db, commerceSecret, gateway)
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway, () => now)
 
     await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1'))
       .rejects.toMatchObject({ code: 'STRIPE_CHECKOUT_UNAVAILABLE', status: 503 })
+    now = new Date(now.getTime() + STRIPE_CREATE_REQUEST_WINDOW_MS - 1_000)
     const recovered = await service.place(stripeInput(prepared), prepared.principal, 'stripe-service-recovery-1')
 
     expect(recovered.checkout.url).toBe('https://checkout.stripe.com/c/pay/cs_test_service_recovered')
     expect(calls).toBe(2)
     expect(idempotencyKeys[0]).toBe(idempotencyKeys[1])
+    expect(plannedExpiries[0]).toBeTruthy()
+    expect(plannedExpiries[0]).toBe(plannedExpiries[1])
+    expect(new Date(plannedExpiries[0]!).getTime() - now.getTime()).toBeGreaterThanOrEqual(30 * 60 * 1000)
     expect(await countRows('commerce_order')).toBe(1)
     expect(await countRows('stripe_checkout_attempt')).toBe(1)
+  })
+
+  it('does not resubmit an ambiguous create after the fixed expiry falls inside Stripe’s 30-minute minimum', async () => {
+    const prepared = await prepareCheckout(undefined, { quantity: 1 })
+    let now = new Date()
+    let calls = 0
+    const gateway = makeStripeGateway(async () => {
+      calls += 1
+      throw new Error('ambiguous network failure')
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway, () => now)
+
+    await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-service-late-retry'))
+      .rejects.toMatchObject({ code: 'STRIPE_CHECKOUT_UNAVAILABLE', status: 503 })
+    now = new Date(now.getTime() + 3 * 60 * 1000)
+
+    await expect(service.place(stripeInput(prepared), prepared.principal, 'stripe-service-late-retry'))
+      .rejects.toMatchObject({ code: 'STRIPE_CHECKOUT_UNAVAILABLE', status: 503 })
+    expect(calls).toBe(1)
   })
 
   it('preserves a terminal attempt status when a webhook wins the Session persistence race', async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE "stripe_checkout_attempt" ADD COLUMN "planned_expires_at" timestamp with time zone;

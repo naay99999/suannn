@@ -78,15 +78,19 @@ const address = {
 function makeGateway(options: {
   session?: CheckoutSessionState
   onRetrieve?: (sessionId: string) => void
+  retrieve?: (sessionId: string) => Promise<CheckoutSessionState>
+  onCreate?: (input: Parameters<StripeGateway['createCheckout']>[0]) => Promise<Awaited<ReturnType<StripeGateway['createCheckout']>>>
 } = {}): StripeGateway {
   return {
-    createCheckout: async ({ orderId }) => ({
-      sessionId: `cs_test_${orderId.replaceAll('-', '')}`,
-      url: `https://checkout.stripe.com/c/pay/cs_test_${orderId.replaceAll('-', '')}`,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    }),
+    checkoutReturnUrls: () => ({ successUrl: 'https://shop.example.test/success?session_id={CHECKOUT_SESSION_ID}', cancelUrl: 'https://shop.example.test/cancel' }),
+    createCheckout: async (input) => options.onCreate?.(input) ?? {
+      sessionId: `cs_test_${input.orderId.replaceAll('-', '')}`,
+      url: `https://checkout.stripe.com/c/pay/cs_test_${input.orderId.replaceAll('-', '')}`,
+      expiresAt: input.expiresAt,
+    },
     retrieveCheckout: async (sessionId) => {
       options.onRetrieve?.(sessionId)
+      if (options.retrieve) return options.retrieve(sessionId)
       if (!options.session) throw new Error('Unexpected Checkout retrieval')
       return { ...options.session, sessionId }
     },
@@ -377,6 +381,182 @@ describe('Stripe payment lifecycle', () => {
       .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
     expect(attempt?.status).toBe('open')
     expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
+  })
+
+  it('keeps an unbound attempt allocated through its planned expiry and bounded create-call window', async () => {
+    const fixture = await preparePendingOrder()
+    const lastCreateCallAt = new Date(Date.now() - 33 * 60 * 1000)
+    const plannedExpiry = new Date(lastCreateCallAt.getTime() + 32 * 60 * 1000)
+    await database.db.update(stripeCheckoutAttempt).set({
+      stripeSessionId: null,
+      checkoutUrl: null,
+      expiresAt: null,
+      status: 'creating',
+      lastCreateCallAt,
+      plannedExpiresAt: plannedExpiry,
+    }).where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+
+    const service = new StripeEventService(database.db, makeGateway())
+    await service.reconcileAttempts(10)
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, fixture.lotId))
+    expect(order?.status).toBe('pending_payment')
+    expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
+  })
+
+  it('continues reconciling the batch when retrieving an earlier Session fails', async () => {
+    const failing = await preparePendingOrder()
+    const healthy = await preparePendingOrder()
+    const gateway = makeGateway({
+      retrieve: async (sessionId) => {
+        if (sessionId === failing.sessionId) throw new Error('Stripe read unavailable')
+        return {
+          sessionId,
+          orderId: healthy.orderId,
+          amountSatang: healthy.amount,
+          currency: 'thb',
+          status: 'complete',
+          paymentStatus: 'paid',
+          paymentIntentId: 'pi_healthy_batch',
+          expiresAt: null,
+        }
+      },
+    })
+
+    expect(await new StripeEventService(database.db, gateway).reconcileAttempts(2)).toBe(1)
+
+    const [failingOrder] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, failing.orderId))
+    const [healthyOrder] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, healthy.orderId))
+    expect(failingOrder?.status).toBe('pending_payment')
+    expect(healthyOrder?.status).toBe('placed')
+  })
+
+  it('recovers an expired unpaid Session with the original fixed create request before releasing stock', async () => {
+    const fixture = await preparePendingOrder()
+    const lastCreateCallAt = new Date(Date.now() - 35 * 60 * 1000)
+    const plannedExpiry = new Date(lastCreateCallAt.getTime() + 32 * 60 * 1000)
+    await database.db.update(stripeCheckoutAttempt).set({
+      stripeSessionId: null,
+      checkoutUrl: null,
+      expiresAt: null,
+      status: 'creating',
+      lastCreateCallAt,
+      plannedExpiresAt: plannedExpiry,
+    }).where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+
+    let recoveredInput: Parameters<StripeGateway['createCheckout']>[0] | undefined
+    const service = new StripeEventService(database.db, makeGateway({
+      onCreate: async (input) => {
+        recoveredInput = input
+        return {
+          sessionId: fixture.sessionId,
+          url: `https://checkout.stripe.com/c/pay/${fixture.sessionId}`,
+          expiresAt: plannedExpiry,
+        }
+      },
+      session: {
+        sessionId: fixture.sessionId,
+        orderId: fixture.orderId,
+        amountSatang: fixture.amount,
+        currency: 'thb',
+        status: 'expired',
+        paymentStatus: 'unpaid',
+        paymentIntentId: null,
+        expiresAt: plannedExpiry,
+      },
+    }))
+    await service.reconcileAttempts(10)
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [savedPayment] = await database.db.select().from(payment).where(eq(payment.orderId, fixture.orderId))
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, fixture.lotId))
+    expect(recoveredInput).toMatchObject({
+      orderId: fixture.orderId,
+      expiresAt: plannedExpiry,
+      successUrl: 'https://shop.example.test/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/cancel',
+      idempotencyKey: attempt?.stripeIdempotencyKey,
+    })
+    expect(order?.status).toBe('cancelled')
+    expect(savedPayment?.status).toBe('void')
+    expect(attempt?.status).toBe('expired')
+    expect(lot).toMatchObject({ onHandQuantity: 5, reversibleQuantity: 0 })
+  })
+
+  it('settles a paid Session recovered from the original idempotent create request', async () => {
+    const fixture = await preparePendingOrder()
+    const lastCreateCallAt = new Date(Date.now() - 35 * 60 * 1000)
+    const plannedExpiry = new Date(lastCreateCallAt.getTime() + 32 * 60 * 1000)
+    await database.db.update(stripeCheckoutAttempt).set({
+      stripeSessionId: null,
+      checkoutUrl: null,
+      expiresAt: null,
+      status: 'creating',
+      lastCreateCallAt,
+      plannedExpiresAt: plannedExpiry,
+    }).where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+
+    const service = new StripeEventService(database.db, makeGateway({
+      onCreate: async () => ({
+        sessionId: fixture.sessionId,
+        url: `https://checkout.stripe.com/c/pay/${fixture.sessionId}`,
+        expiresAt: plannedExpiry,
+      }),
+      session: {
+        sessionId: fixture.sessionId,
+        orderId: fixture.orderId,
+        amountSatang: fixture.amount,
+        currency: 'thb',
+        status: 'complete',
+        paymentStatus: 'paid',
+        paymentIntentId: 'pi_recovered_paid',
+        expiresAt: plannedExpiry,
+      },
+    }))
+    await service.reconcileAttempts(10)
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [savedPayment] = await database.db.select().from(payment).where(eq(payment.orderId, fixture.orderId))
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, fixture.lotId))
+    expect(order?.status).toBe('placed')
+    expect(savedPayment?.status).toBe('collected')
+    expect(attempt?.status).toBe('completed')
+    expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
+  })
+
+  it('keeps stock allocated and marks manual review when unbound create recovery is ambiguous', async () => {
+    const fixture = await preparePendingOrder()
+    const lastCreateCallAt = new Date(Date.now() - 35 * 60 * 1000)
+    const plannedExpiry = new Date(lastCreateCallAt.getTime() + 32 * 60 * 1000)
+    await database.db.update(stripeCheckoutAttempt).set({
+      stripeSessionId: null,
+      checkoutUrl: null,
+      expiresAt: null,
+      status: 'creating',
+      lastCreateCallAt,
+      plannedExpiresAt: plannedExpiry,
+    }).where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+
+    const service = new StripeEventService(database.db, makeGateway({
+      onCreate: async () => { throw new Error('ambiguous Stripe response') },
+    }))
+    await service.reconcileAttempts(10)
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [savedPayment] = await database.db.select().from(payment).where(eq(payment.orderId, fixture.orderId))
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, fixture.lotId))
+    expect(order?.status).toBe('pending_payment')
+    expect(savedPayment?.status).toBe('awaiting_collection')
+    expect(attempt?.status).toBe('manual_review')
+    expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
+    expect(await service.reconcileAttempts(10)).toBe(0)
   })
 
   it('cancels an expired confirmed Session during reconciliation', async () => {

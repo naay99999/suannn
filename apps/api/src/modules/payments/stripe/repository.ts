@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../../database/types'
 import { payment, stripeCheckoutAttempt, stripeEvent, stripeRefund } from '../../../database/schema'
 
@@ -97,9 +97,21 @@ export class StripePaymentRepository {
       .for('update')
   }
 
-  async listUnresolvedAttempts(limit: number) {
+  async listUnresolvedAttempts(limit: number, staleExpiryBefore: Date, legacyCallBefore: Date) {
     return this.db.select().from(stripeCheckoutAttempt)
-      .where(inArray(stripeCheckoutAttempt.status, ['creating', 'open']))
+      .where(or(
+        eq(stripeCheckoutAttempt.status, 'open'),
+        and(
+          eq(stripeCheckoutAttempt.status, 'creating'),
+          or(
+            lte(stripeCheckoutAttempt.plannedExpiresAt, staleExpiryBefore),
+            and(
+              isNull(stripeCheckoutAttempt.plannedExpiresAt),
+              lte(stripeCheckoutAttempt.lastCreateCallAt, legacyCallBefore),
+            ),
+          ),
+        ),
+      ))
       .orderBy(asc(stripeCheckoutAttempt.lastCreateCallAt), asc(stripeCheckoutAttempt.createdAt))
       .limit(Math.max(0, Math.floor(limit)))
   }
@@ -136,18 +148,34 @@ export class StripePaymentRepository {
     return attempt ?? null
   }
 
-  async markAttemptStatus(tx: DatabaseTransaction, attemptId: string, status: 'completed' | 'expired' | 'failed') {
+  async markAttemptStatus(tx: DatabaseTransaction, attemptId: string, status: 'completed' | 'expired' | 'failed' | 'manual_review') {
     const [attempt] = await tx.update(stripeCheckoutAttempt)
       .set({ status, updatedAt: new Date() })
       .where(eq(stripeCheckoutAttempt.id, attemptId)).returning()
     return attempt ?? null
   }
 
-  async touchAttemptCreateCall(tx: DatabaseTransaction, attemptId: string, calledAt = new Date()) {
+  async prepareAttemptCreateCall(
+    tx: DatabaseTransaction,
+    attemptId: string,
+    calledAt: Date,
+    plannedExpiresAt: Date,
+    returnUrls: { successUrl: string; cancelUrl: string },
+  ) {
     const [attempt] = await tx.update(stripeCheckoutAttempt)
-      .set({ lastCreateCallAt: calledAt, updatedAt: calledAt })
+      .set({
+        lastCreateCallAt: calledAt,
+        plannedExpiresAt,
+        successUrl: sql`coalesce(${stripeCheckoutAttempt.successUrl}, ${returnUrls.successUrl})`,
+        cancelUrl: sql`coalesce(${stripeCheckoutAttempt.cancelUrl}, ${returnUrls.cancelUrl})`,
+        updatedAt: calledAt,
+      })
       .where(eq(stripeCheckoutAttempt.id, attemptId)).returning()
     return attempt ?? null
+  }
+
+  async markAttemptManualReview(tx: DatabaseTransaction, attemptId: string) {
+    return this.markAttemptStatus(tx, attemptId, 'manual_review')
   }
 
   async recordRefundState(tx: DatabaseTransaction, id: string, state: {

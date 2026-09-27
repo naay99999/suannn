@@ -42,6 +42,36 @@ Apply `0009_pale_typhoid_mary.sql` before deploying the inventory API. It create
 
 Apply the commerce migrations before deploying cart, checkout, order, or commerce-settings API code: `0010_glamorous_thor.sql` creates carts and the disabled commerce-settings row; `0011_brown_thunderbolt.sql` creates order, item, payment, event, operation, allocation, and outbox tables; `0012_tan_thunderbolt.sql` adds order/allocation consistency constraints; and `0013_guest_order_access_rotation.sql` supports guest-access rotation. Run `bun --filter api db:migrate` and verify it completes before starting the new API version. Keep `COMMERCE_SECRET` stable across deployments: it derives guest order access tokens used by checkout replay and the confirmation outbox.
 
+### Stripe one-time payments
+
+Stripe checkout is API-only in this release. There is no storefront checkout page or admin refund UI; API clients call the existing checkout and admin order endpoints. Apply all Stripe migrations (`0014_bright_human_fly.sql` through `0019_marvelous_peter_parker.sql`) before deploying an API version that accepts Stripe orders, then verify `bun --filter api db:migrate` completed successfully. Do not start the Stripe-enabled API before those tables and constraints exist.
+
+Set all four Stripe values together to enable Checkout:
+
+- `STRIPE_API_KEY`: a restricted server-side key, `rk_test_...` for development/CI and `rk_live_...` for production.
+- `STRIPE_WEBHOOK_SECRET`: the signing secret for this API's Stripe webhook endpoint.
+- `STRIPE_SUCCESS_URL`: a URL on the exact `STOREFRONT_URL` origin. Include `session_id={CHECKOUT_SESSION_ID}` if the return page needs to look up the Checkout Session.
+- `STRIPE_CANCEL_URL`: a URL on the exact `STOREFRONT_URL` origin.
+
+Store `STRIPE_API_KEY` and `STRIPE_WEBHOOK_SECRET` in a deployment secrets vault. Grant the restricted key only Checkout Sessions create/read, PaymentIntents read, and Refunds create/read permissions. Configure separate Stripe sandboxes, restricted keys, and webhook secrets for local development and CI; do not share sandbox state or credentials between them. Keep production credentials separate as well. The webhook endpoint is `POST /api/v1/webhooks/stripe`. Register these event types: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `refund.created`, `refund.updated`, and `refund.failed`.
+
+The success and cancel URLs only return the browser to the storefront. They do not settle payment or cancel an order. The API confirms payment from a verified webhook or reconciliation result. A Checkout cancel redirect leaves the pending order and its stock allocation in place until Stripe reports payment or expires the Session; async payment methods can remain pending after Checkout completes. The Session expiry and both return URLs are captured once per attempt. Expiry is planned at about 32 minutes from the first create call so a delayed first request still meets Stripe's 30-minute minimum and every idempotent retry sends identical parameters.
+
+If a create call has no saved Session ID after the Session expiry and bounded network window, reconciliation first repeats the original create parameters and idempotency key to recover the Session, then retrieves its current Stripe status. It releases stock only after an authoritative expired, unpaid state. If Stripe does not return a recoverable Session or retrieval is ambiguous, the attempt becomes `manual_review`; its order and stock allocation stay pending. This state is excluded from automatic retries and cleanup. Operators should use the safe error log code `STRIPE_CHECKOUT_ATTEMPT_MANUAL_REVIEW_REQUIRED` and its attempt/order IDs to investigate the Stripe Dashboard and reconcile the payment before taking action. Do not cancel the order or release stock based on age alone.
+
+Staff with `order:refund` can request a full refund after cancelling an eligible, collected Stripe order before shipment. Send an empty JSON object and an idempotency key:
+
+```bash
+curl --request POST "$API_URL/api/v1/admin/orders/$ORDER_ID/refund" \
+  --header "Cookie: $ADMIN_SESSION_COOKIE" \
+  --header "Origin: $ADMIN_URL" \
+  --header 'Content-Type: application/json' \
+  --header 'Idempotency-Key: refund-order-123' \
+  --data '{}'
+```
+
+The API uses the recorded payment amount; clients cannot choose a refund amount. A successful HTTP response records the refund state returned by Stripe, which may still be pending. Check the order's payment refund summary for later webhook or reconciliation updates. Cancellation alone never requests a refund.
+
 Cross-origin browser clients must use `credentials: 'include'` so the browser accepts and sends the `HttpOnly` guest-cart cookie. The cookie is scoped to `/api/v1/store` to reach cart and checkout routes. Guest order reads use `X-Order-Access-Token`; browser preflights allow it and `Idempotency-Key`. Frontend client configuration is a separate integration task.
 
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.

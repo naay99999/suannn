@@ -2,6 +2,11 @@ import { randomInt } from 'node:crypto'
 import Stripe from 'stripe'
 import type { StripeConfig } from '../../../config/env'
 
+export const STRIPE_REQUEST_TIMEOUT_MS = 20_000
+export const STRIPE_MAX_NETWORK_RETRIES = 2
+// Covers three 20-second requests plus retry backoff with a conservative margin.
+export const STRIPE_CREATE_REQUEST_WINDOW_MS = 2 * 60 * 1000
+
 export interface CheckoutOrderLine {
   name: string
   quantity: number
@@ -15,6 +20,9 @@ export interface CheckoutSessionInput {
   email: string
   amountSatang: number
   currency: 'thb'
+  expiresAt: Date
+  successUrl: string
+  cancelUrl: string
   idempotencyKey: string
 }
 
@@ -51,6 +59,7 @@ export interface StripeRefundState {
 }
 
 export interface StripeGateway {
+  checkoutReturnUrls(): { successUrl: string; cancelUrl: string }
   createCheckout(input: CheckoutSessionInput): Promise<CheckoutSessionResult>
   retrieveCheckout(sessionId: string): Promise<CheckoutSessionState>
   createFullRefund(input: {
@@ -121,12 +130,12 @@ function assertSatang(value: number, label: string, allowZero = false) {
 }
 
 export function createStripeGateway(config: StripeConfig, client?: Stripe): StripeGateway {
-  const stripe = client ?? new Stripe(config.apiKey, {
-    apiVersion: '2026-08-26.dahlia',
-    appInfo: { name: `Suannn-${randomIntegrationIdentifier()}` },
-  })
+  const stripe = client ?? createStripeClient(config)
 
   return {
+    checkoutReturnUrls() {
+      return { successUrl: config.successUrl, cancelUrl: config.cancelUrl }
+    },
     async createCheckout(input) {
       if (input.lines.length === 0) {
         throw new Error('Checkout requires at least one order line')
@@ -169,14 +178,14 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
-        success_url: config.successUrl,
-        cancel_url: config.cancelUrl,
+        success_url: input.successUrl,
+        cancel_url: input.cancelUrl,
         client_reference_id: input.orderId,
         customer_email: input.email,
         metadata: { orderId: input.orderId },
         payment_intent_data: { metadata: { orderId: input.orderId } },
         line_items: lineItems,
-        expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+        expires_at: Math.floor(input.expiresAt.getTime() / 1000),
       }, { idempotencyKey: input.idempotencyKey })
 
       if (!session.url) {
@@ -214,4 +223,13 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
       return stripe.webhooks.constructEvent(rawBody, signature, config.webhookSecret)
     },
   }
+}
+
+export function createStripeClient(config: StripeConfig): Stripe {
+  return new Stripe(config.apiKey, {
+    apiVersion: '2026-08-26.dahlia',
+    appInfo: { name: `Suannn-${randomIntegrationIdentifier()}` },
+    timeout: STRIPE_REQUEST_TIMEOUT_MS,
+    maxNetworkRetries: STRIPE_MAX_NETWORK_RETRIES,
+  })
 }

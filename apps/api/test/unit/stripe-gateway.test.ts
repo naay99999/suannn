@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import Stripe from 'stripe'
-import { createStripeGateway } from '../../src/modules/payments/stripe/gateway'
+import { createStripeClient, createStripeGateway } from '../../src/modules/payments/stripe/gateway'
 
 const config = {
   apiKey: 'sk_test_gateway',
@@ -36,13 +36,24 @@ const checkoutInput = {
   email: 'shopper@example.com',
   amountSatang: 2_500,
   currency: 'thb' as const,
+  expiresAt: new Date('2026-09-27T12:30:00.000Z'),
+  successUrl: config.successUrl,
+  cancelUrl: config.cancelUrl,
   idempotencyKey: 'checkout-attempt_order_123',
 }
 
 describe('Stripe gateway', () => {
+  it('bounds Stripe network calls so stale attempt cleanup has a finite last-call window', () => {
+    const client = createStripeClient(config)
+
+    expect(client.getApiField('timeout')).toBe(20_000)
+    expect(client.getApiField('maxNetworkRetries')).toBe(2)
+  })
+
   it('creates one THB line item for a 2,500 satang item with no shipping', async () => {
     const { client, requests } = createClientStub()
     const gateway = createStripeGateway(config, client)
+    expect(gateway.checkoutReturnUrls()).toEqual({ successUrl: config.successUrl, cancelUrl: config.cancelUrl })
 
     await gateway.createCheckout(checkoutInput)
 
@@ -53,6 +64,8 @@ describe('Stripe gateway', () => {
       price_data: { currency: 'thb', unit_amount: 2_500 },
     })
     expect(params.mode).toBe('payment')
+    expect(params.success_url).toBe(config.successUrl)
+    expect(params.cancel_url).toBe(config.cancelUrl)
     expect(params.payment_method_types).toBeUndefined()
     expect(params.automatic_tax).toBeUndefined()
   })
@@ -74,16 +87,13 @@ describe('Stripe gateway', () => {
     expect(lineItems.every((item) => Number.isInteger(item.price_data?.unit_amount))).toBe(true)
   })
 
-  it('sets Checkout expiry 30 minutes from creation', async () => {
+  it('uses the fixed expiry stored on the Checkout attempt', async () => {
     const { client, requests } = createClientStub()
     const gateway = createStripeGateway(config, client)
-    const before = Math.floor(Date.now() / 1000)
-
     await gateway.createCheckout(checkoutInput)
 
     const expiresAt = requests[0]!.params.expires_at!
-    expect(expiresAt).toBeGreaterThanOrEqual(before + 1_798)
-    expect(expiresAt).toBeLessThanOrEqual(before + 1_802)
+    expect(expiresAt).toBe(Math.floor(checkoutInput.expiresAt.getTime() / 1000))
   })
 
   it('rejects invalid raw body webhook signatures', () => {

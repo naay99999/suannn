@@ -32,7 +32,7 @@ afterAll(async () => {
   if (oldMigrations) await rm(oldMigrations, { recursive: true, force: true })
 })
 
-it('upgrades populated 0009 user, product, and lot data through 0017', async () => {
+it('upgrades populated 0009 user, product, and lot data through 0019', async () => {
   await migrate(database.db, { migrationsFolder: oldMigrations })
   const userId = 'upgrade-customer'
   const productId = crypto.randomUUID()
@@ -74,5 +74,5 @@ it('upgrades populated 0009 user, product, and lot data through 0017', async () 
   const migrations = await database.client.unsafe<Array<{ count: number }>>(
     'select count(*)::int as count from drizzle.__drizzle_migrations',
   )
-  expect(migrations[0]?.count).toBe(18)
+  expect(migrations[0]?.count).toBe(20)
 })

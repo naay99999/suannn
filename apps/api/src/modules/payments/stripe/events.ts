@@ -1,12 +1,15 @@
 import type Stripe from 'stripe'
+import { eq } from 'drizzle-orm'
 import type { Database } from '../../../database/types'
+import { stripeCheckoutAttempt } from '../../../database/schema'
 import { DomainError } from '../../../shared/domain-error'
 import { cancelStripeOrderInTransaction, settleStripeOrderInTransaction } from '../../orders/service'
-import { lockOrder } from '../../orders/repository'
-import type { CheckoutSessionState, StripeGateway } from './gateway'
-import type { StripeRefundState } from './gateway'
+import { lockOrder, readOrderSnapshot } from '../../orders/repository'
+import { STRIPE_CREATE_REQUEST_WINDOW_MS, type CheckoutSessionState, type StripeGateway, type StripeRefundState } from './gateway'
 import { StripeRefundService } from './refunds'
 import { StripePaymentRepository } from './repository'
+
+export const STRIPE_ATTEMPT_CREATE_STALE_MS = 30 * 60 * 1000
 
 const supportedEvents = new Set([
   'checkout.session.completed',
@@ -153,15 +156,144 @@ export class StripeEventService {
 
   async reconcileAttempts(limit: number): Promise<number> {
     if (!this.gateway || !Number.isFinite(limit) || limit <= 0) return 0
-    const attempts = await this.repository.listUnresolvedAttempts(Math.min(1000, Math.floor(limit)))
+    const now = Date.now()
+    const staleExpiryBefore = new Date(now - STRIPE_CREATE_REQUEST_WINDOW_MS)
+    const legacyCallBefore = new Date(now - STRIPE_ATTEMPT_CREATE_STALE_MS - STRIPE_CREATE_REQUEST_WINDOW_MS)
+    const attempts = await this.repository.listUnresolvedAttempts(
+      Math.min(1000, Math.floor(limit)),
+      staleExpiryBefore,
+      legacyCallBefore,
+    )
     let reconciled = 0
     for (const attempt of attempts) {
-      if (!attempt.stripeSessionId) continue
-      const current = asRetrievedSession(await this.gateway.retrieveCheckout(attempt.stripeSessionId))
-      await this.applyEvent(`reconcile:${attempt.id}`, 'reconciliation', current, current)
-      reconciled += 1
+      try {
+        if (!attempt.stripeSessionId) {
+          await this.recoverUnboundAttempt(attempt.id, staleExpiryBefore, legacyCallBefore)
+          reconciled += 1
+          continue
+        }
+        const current = asRetrievedSession(await this.gateway.retrieveCheckout(attempt.stripeSessionId))
+        await this.applyEvent(`reconcile:${attempt.id}`, 'reconciliation', current, current)
+        reconciled += 1
+      } catch (error) {
+        console.error(JSON.stringify({
+          level: 'error',
+          code: 'STRIPE_CHECKOUT_RECONCILIATION_FAILED',
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+          attemptId: attempt.id,
+          orderId: attempt.orderId,
+        }))
+      }
     }
     return reconciled
+  }
+
+  private async recoverUnboundAttempt(
+    attemptId: string,
+    staleExpiryBefore: Date,
+    legacyCallBefore: Date,
+  ): Promise<void> {
+    if (!this.gateway) return
+    const recovery = await this.db.transaction(async (tx) => {
+      const [candidate] = await tx.select({ orderId: stripeCheckoutAttempt.orderId })
+        .from(stripeCheckoutAttempt)
+        .where(eq(stripeCheckoutAttempt.id, attemptId))
+        .limit(1)
+      if (!candidate) return
+      const attempt = await this.repository.lockAttemptByOrder(tx, candidate.orderId)
+      if (!attempt || attempt.id !== attemptId || attempt.status !== 'creating'
+        || attempt.stripeSessionId) return
+      const stale = attempt.plannedExpiresAt
+        ? attempt.plannedExpiresAt <= staleExpiryBefore
+        : attempt.lastCreateCallAt <= legacyCallBefore
+      if (!stale) return null
+
+      const order = await lockOrder(tx, attempt.orderId)
+      const savedPayment = await this.repository.lockPaymentByOrder(tx, attempt.orderId)
+      if (!savedPayment || order.paymentMethod !== 'stripe'
+        || order.status !== 'pending_payment' || savedPayment.status !== 'awaiting_collection') return null
+      const snapshot = await readOrderSnapshot(tx, order.id)
+      if (!attempt.plannedExpiresAt || !attempt.successUrl || !attempt.cancelUrl) {
+        await this.repository.markAttemptManualReview(tx, attempt.id)
+        return { manualReview: true as const, attemptId: attempt.id, orderId: order.id }
+      }
+      return {
+        manualReview: false as const,
+        attemptId: attempt.id,
+        orderId: order.id,
+        input: {
+          orderId: order.id,
+          lines: snapshot.items.map((item) => ({
+            name: `${item.productName} · ${item.variantName}`,
+            quantity: item.quantity,
+            unitAmountSatang: item.unitPriceSatang,
+          })),
+          shippingSatang: snapshot.shippingSatang,
+          email: snapshot.contactEmail,
+          amountSatang: snapshot.totalSatang,
+          currency: 'thb' as const,
+          expiresAt: attempt.plannedExpiresAt,
+          successUrl: attempt.successUrl,
+          cancelUrl: attempt.cancelUrl,
+          idempotencyKey: attempt.stripeIdempotencyKey,
+        },
+      }
+    })
+    if (!recovery) return
+    if (recovery.manualReview) {
+      this.logManualReview(recovery.attemptId, recovery.orderId)
+      return
+    }
+
+    let session: Awaited<ReturnType<StripeGateway['createCheckout']>>
+    try {
+      session = await this.gateway.createCheckout(recovery.input)
+    } catch {
+      await this.markManualReview(recovery.attemptId, recovery.orderId)
+      return
+    }
+
+    const saved = await this.db.transaction((tx) => this.repository.recordAttemptSession(tx, recovery.attemptId, {
+      sessionId: session.sessionId,
+      url: session.url,
+      expiresAt: session.expiresAt,
+    }))
+    if (!saved) {
+      await this.markManualReview(recovery.attemptId, recovery.orderId)
+      return
+    }
+
+    let current: SessionEvidence
+    try {
+      current = asRetrievedSession(await this.gateway.retrieveCheckout(session.sessionId))
+    } catch {
+      return
+    }
+    const matchesRequest = current.sessionId === session.sessionId
+      && current.orderId === recovery.orderId
+      && current.amountSatang === recovery.input.amountSatang
+      && current.currency?.toLowerCase() === 'thb'
+      && current.status !== null
+      && current.paymentStatus !== null
+    if (!matchesRequest) {
+      await this.markManualReview(recovery.attemptId, recovery.orderId)
+      return
+    }
+    await this.applyEvent(`reconcile:${recovery.attemptId}`, 'reconciliation', current, current)
+  }
+
+  private async markManualReview(attemptId: string, orderId: string) {
+    await this.db.transaction((tx) => this.repository.markAttemptManualReview(tx, attemptId))
+    this.logManualReview(attemptId, orderId)
+  }
+
+  private logManualReview(attemptId: string, orderId: string) {
+    console.error(JSON.stringify({
+      level: 'error',
+      code: 'STRIPE_CHECKOUT_ATTEMPT_MANUAL_REVIEW_REQUIRED',
+      attemptId,
+      orderId,
+    }))
   }
 
   private async applyEvent(

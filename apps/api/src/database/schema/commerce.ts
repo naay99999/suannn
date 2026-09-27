@@ -251,8 +251,11 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   stripeSessionId: text('stripe_session_id'),
   checkoutUrl: text('checkout_url'),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  plannedExpiresAt: timestamp('planned_expires_at', { withTimezone: true }),
+  successUrl: text('success_url'),
+  cancelUrl: text('cancel_url'),
   stripeIdempotencyKey: text('stripe_idempotency_key').notNull(),
-  status: text('status', { enum: ['creating', 'open', 'completed', 'expired', 'failed'] }).notNull().default('creating'),
+  status: text('status', { enum: ['creating', 'open', 'completed', 'expired', 'failed', 'manual_review'] }).notNull().default('creating'),
   lastCreateCallAt: timestamp('last_create_call_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
@@ -268,7 +271,7 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   `),
   check('stripe_checkout_attempt_url_check', sql`${table.checkoutUrl} is null or ${table.checkoutUrl} ~ '^https://[^[:space:]]+$'`),
   check('stripe_checkout_attempt_idempotency_key_check', sql`length(btrim(${table.stripeIdempotencyKey})) between 1 and 255`),
-  check('stripe_checkout_attempt_status_check', sql`${table.status} in ('creating', 'open', 'completed', 'expired', 'failed')`),
+  check('stripe_checkout_attempt_status_check', sql`${table.status} in ('creating', 'open', 'completed', 'expired', 'failed', 'manual_review')`),
 ])
 
 export const stripeEvent = pgTable('stripe_event', {

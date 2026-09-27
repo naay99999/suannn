@@ -127,6 +127,20 @@
       "when": 1790515868954,
       "tag": "0017_thin_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790519772681,
+      "tag": "0018_wide_boom_boom",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790520957798,
+      "tag": "0019_marvelous_peter_parker",
+      "breakpoints": true
     }
   ]
 }

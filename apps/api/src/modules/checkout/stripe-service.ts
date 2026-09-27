@@ -3,7 +3,7 @@ import { DomainError } from '../../shared/domain-error'
 import type { CartPrincipal } from '../cart/types'
 import type { PlaceStripeInput, OrderSnapshot } from '../orders/types'
 import { runOrderCommand } from '../orders/operation'
-import type { StripeGateway } from '../payments/stripe/gateway'
+import { STRIPE_CREATE_REQUEST_WINDOW_MS, type StripeGateway } from '../payments/stripe/gateway'
 import { StripePaymentRepository } from '../payments/stripe/repository'
 import {
   createPlaceOrderInTransaction,
@@ -23,6 +23,7 @@ export interface StripeCheckoutResult {
 export class StripeCheckoutService {
   private readonly stripePayments: StripePaymentRepository
   private readonly placeOrderInTransaction
+  private readonly now: () => Date
 
   constructor(
     private readonly db: Database,
@@ -30,8 +31,9 @@ export class StripeCheckoutService {
     private readonly gateway: StripeGateway | null,
     nowOverride?: () => Date,
   ) {
+    this.now = nowOverride ?? (() => new Date())
     this.stripePayments = new StripePaymentRepository(db)
-    this.placeOrderInTransaction = createPlaceOrderInTransaction(secret, this.stripePayments, nowOverride)
+    this.placeOrderInTransaction = createPlaceOrderInTransaction(secret, this.stripePayments, this.now)
   }
 
   async place(input: PlaceStripeInput, principal: CartPrincipal, idempotencyKey: string): Promise<StripeCheckoutResult> {
@@ -74,7 +76,23 @@ export class StripeCheckoutService {
       const current = await this.stripePayments.lockAttemptByOrder(tx, record.order.id)
       if (!current || current.id !== record.attemptId) throw new DomainError('INVALID_ORDER_COMMAND')
       if (current.stripeSessionId && current.checkoutUrl && current.expiresAt) return current
-      const touched = await this.stripePayments.touchAttemptCreateCall(tx, current.id)
+      const calledAt = this.now()
+      const plannedExpiry = current.plannedExpiresAt ?? current.expiresAt ?? new Date(
+        Math.floor(calledAt.getTime() / 1000) * 1000 + 30 * 60 * 1000 + STRIPE_CREATE_REQUEST_WINDOW_MS,
+      )
+      const latestSafeRetryAt = plannedExpiry.getTime() - 30 * 60 * 1000
+      if (calledAt.getTime() > latestSafeRetryAt) {
+        throw new DomainError('STRIPE_CHECKOUT_UNAVAILABLE')
+      }
+      const touched = await this.stripePayments.prepareAttemptCreateCall(
+        tx,
+        current.id,
+        calledAt,
+        plannedExpiry,
+        current.successUrl && current.cancelUrl
+          ? { successUrl: current.successUrl, cancelUrl: current.cancelUrl }
+          : this.gateway!.checkoutReturnUrls(),
+      )
       if (!touched) throw new DomainError('INVALID_ORDER_COMMAND')
       return touched
     })
@@ -95,6 +113,9 @@ export class StripeCheckoutService {
           email: record.order.contactEmail,
           amountSatang: record.order.totalSatang,
           currency: 'thb',
+          expiresAt: attempt.plannedExpiresAt!,
+          successUrl: attempt.successUrl!,
+          cancelUrl: attempt.cancelUrl!,
           idempotencyKey: attempt.stripeIdempotencyKey,
         })
         const saved = await this.db.transaction((tx) => this.stripePayments.recordAttemptSession(tx, attempt.id, {

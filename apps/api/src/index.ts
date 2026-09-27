@@ -188,6 +188,22 @@ const stopGuestCartCleanup = startCommerceMaintenanceLoop(
   })),
 )
 
+const stopStripeAttemptReconciliation = startCommerceMaintenanceLoop(
+  (limit) => stripeEvents.reconcileAttempts(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'STRIPE_ATTEMPT_RECONCILIATION_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
+const stopStripeRefundReconciliation = startCommerceMaintenanceLoop(
+  (limit) => stripeRefunds.reconcileRefunds(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'STRIPE_REFUND_RECONCILIATION_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
 console.log(
   `API running at http://localhost:${app.server?.port}`,
 )
@@ -206,6 +222,8 @@ async function shutdown(signal: string) {
   const commerceMaintenanceDrained = Promise.all([
     stopOrderOutboxMaintenance(),
     stopGuestCartCleanup(),
+    stopStripeAttemptReconciliation(),
+    stopStripeRefundReconciliation(),
   ])
   await app.stop()
   await inventoryMaintenanceDrained

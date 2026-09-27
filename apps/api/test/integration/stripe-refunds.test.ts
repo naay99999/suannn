@@ -83,6 +83,7 @@ function makeGateway(options: {
   onRetrieveRefund?: (refundId: string) => Promise<StripeRefundState>
 } = {}): StripeGateway {
   return {
+    checkoutReturnUrls: () => ({ successUrl: 'https://shop.example.test/success', cancelUrl: 'https://shop.example.test/cancel' }),
     createCheckout: async ({ orderId }) => ({
       sessionId: `cs_test_${orderId.replaceAll('-', '')}`,
       url: `https://checkout.stripe.com/c/pay/cs_test_${orderId.replaceAll('-', '')}`,
@@ -450,6 +451,44 @@ describe('Stripe admin refund lifecycle', () => {
 
     expect(await service.reconcileRefunds(1)).toBe(1)
     expect(retrieved).toEqual(['re_batchknown'])
+  })
+
+  it('continues refund reconciliation after an earlier provider read fails', async () => {
+    const failing = await preparePaidCancelledStripeOrder()
+    const healthy = await preparePaidCancelledStripeOrder()
+    const gateway = makeGateway({
+      onCreateRefund: async (input) => ({
+        refundId: `re_${input.orderId.replaceAll('-', '')}`,
+        orderId: input.orderId,
+        refundClaimId: input.refundClaimId,
+        paymentIntentId: input.paymentIntentId,
+        amountSatang: 1925,
+        currency: 'thb',
+        status: 'pending',
+      }),
+      onRetrieveRefund: async (refundId) => {
+        if (refundId === `re_${failing.orderId.replaceAll('-', '')}`) {
+          throw new Error('Stripe read unavailable')
+        }
+        return {
+          refundId,
+          orderId: healthy.orderId,
+          refundClaimId: null,
+          paymentIntentId: healthy.paymentIntentId,
+          amountSatang: 1925,
+          currency: 'thb',
+          status: 'succeeded',
+        }
+      },
+    })
+    const service = createRefundService(gateway)
+    await service.requestFullRefund(failing.orderId, failing.actor, 'refund-read-failure')
+    await service.requestFullRefund(healthy.orderId, healthy.actor, 'refund-read-healthy')
+
+    expect(await service.reconcileRefunds(2)).toBe(1)
+
+    const claims = await database.db.select().from(stripeRefund).orderBy(stripeRefund.createdAt)
+    expect(claims.map(({ status }) => status)).toEqual(['pending', 'succeeded'])
   })
 
   it('does not regress webhook success when reconciliation returns a stale pending read', async () => {

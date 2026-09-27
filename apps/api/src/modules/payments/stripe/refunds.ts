@@ -235,9 +235,19 @@ export class StripeRefundService {
     let reconciled = 0
     for (const claim of refunds) {
       if (!claim.stripeRefundId) continue
-      const current = await this.gateway.retrieveRefund(claim.stripeRefundId)
-      await this.applyRefundState(current)
-      reconciled += 1
+      try {
+        const current = await this.gateway.retrieveRefund(claim.stripeRefundId)
+        await this.applyRefundState(current)
+        reconciled += 1
+      } catch (error) {
+        console.error(JSON.stringify({
+          level: 'error',
+          code: 'STRIPE_REFUND_RECONCILIATION_FAILED',
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+          refundClaimId: claim.id,
+          orderId: claim.orderId,
+        }))
+      }
     }
     return reconciled
   }
