@@ -43,7 +43,7 @@ const snapshot = t.Object({
   shippingSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   totalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   currency: t.Literal('THB'),
-  paymentMethod: t.Literal('cod'),
+  paymentMethod: t.Union([t.Literal('cod'), t.Literal('stripe')]),
   createdAt: t.String({ format: 'date-time' }),
   items: t.Array(item),
 }, { additionalProperties: false })
@@ -59,6 +59,19 @@ const payment = t.Object({
     t.Literal('collected'),
     t.Literal('void'),
   ]),
+  refund: t.Optional(t.Object({
+    id: uuid,
+    amountSatang: t.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+    status: t.Union([
+      t.Literal('pending'),
+      t.Literal('requires_action'),
+      t.Literal('succeeded'),
+      t.Literal('failed'),
+      t.Literal('canceled'),
+    ]),
+    createdAt: t.String({ format: 'date-time' }),
+    updatedAt: t.String({ format: 'date-time' }),
+  }, { additionalProperties: false })),
 }, { additionalProperties: false })
 
 const detail = t.Composite([snapshot, t.Object({ payment })], { additionalProperties: false })

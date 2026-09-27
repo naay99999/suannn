@@ -244,6 +244,75 @@ export const payment = pgTable('payment', {
   check('payment_provider_reference_check', sql`${table.providerReference} is null or length(btrim(${table.providerReference})) between 1 and 200`),
 ])
 
+export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: uuid('order_id').notNull().references(() => commerceOrder.id, { onDelete: 'restrict' }),
+  stripeSessionId: text('stripe_session_id'),
+  checkoutUrl: text('checkout_url'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  stripeIdempotencyKey: text('stripe_idempotency_key').notNull(),
+  status: text('status', { enum: ['creating', 'open', 'completed', 'expired', 'failed'] }).notNull().default('creating'),
+  lastCreateCallAt: timestamp('last_create_call_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex('stripe_checkout_attempt_order_unique').on(table.orderId),
+  uniqueIndex('stripe_checkout_attempt_session_unique').on(table.stripeSessionId).where(sql`${table.stripeSessionId} is not null`),
+  uniqueIndex('stripe_checkout_attempt_idempotency_unique').on(table.stripeIdempotencyKey),
+  index('stripe_checkout_attempt_unresolved_idx').on(table.lastCreateCallAt, table.createdAt)
+    .where(sql`${table.status} in ('creating', 'open')`),
+  check('stripe_checkout_attempt_session_shape_check', sql`
+    (${table.stripeSessionId} is null and ${table.checkoutUrl} is null)
+    or (${table.stripeSessionId} is not null and ${table.checkoutUrl} is not null and ${table.expiresAt} is not null)
+  `),
+  check('stripe_checkout_attempt_url_check', sql`${table.checkoutUrl} is null or ${table.checkoutUrl} ~ '^https://[^[:space:]]+$'`),
+  check('stripe_checkout_attempt_idempotency_key_check', sql`length(btrim(${table.stripeIdempotencyKey})) between 1 and 255`),
+  check('stripe_checkout_attempt_status_check', sql`${table.status} in ('creating', 'open', 'completed', 'expired', 'failed')`),
+])
+
+export const stripeEvent = pgTable('stripe_event', {
+  stripeEventId: text('stripe_event_id').primaryKey(),
+  eventType: text('event_type').notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('stripe_event_created_idx').on(table.createdAt),
+  check('stripe_event_id_check', sql`${table.stripeEventId} ~ '^evt_[A-Za-z0-9]+$'`),
+  check('stripe_event_type_check', sql`length(btrim(${table.eventType})) between 1 and 200`),
+])
+
+export const stripeRefund = pgTable('stripe_refund', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  paymentId: uuid('payment_id').notNull().references(() => payment.id, { onDelete: 'restrict' }),
+  orderId: uuid('order_id').notNull().references(() => commerceOrder.id, { onDelete: 'restrict' }),
+  requestActorType: text('request_actor_type', { enum: ['staff', 'system'] }).notNull().default('staff'),
+  requestActorId: text('request_actor_id'),
+  idempotencyKey: text('idempotency_key').notNull(),
+  stripeIdempotencyKey: text('stripe_idempotency_key').notNull(),
+  stripeRefundId: text('stripe_refund_id'),
+  amountSatang: bigint('amount_satang', { mode: 'number' }).notNull(),
+  status: text('status', { enum: ['pending', 'requires_action', 'succeeded', 'failed', 'canceled'] }).notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex('stripe_refund_payment_idempotency_unique').on(table.paymentId, table.idempotencyKey),
+  uniqueIndex('stripe_refund_stripe_idempotency_unique').on(table.stripeIdempotencyKey),
+  uniqueIndex('stripe_refund_stripe_id_unique').on(table.stripeRefundId).where(sql`${table.stripeRefundId} is not null`),
+  uniqueIndex('stripe_refund_one_live_full_per_payment_unique').on(table.paymentId)
+    .where(sql`${table.status} in ('pending', 'requires_action', 'succeeded')`),
+  index('stripe_refund_unresolved_idx').on(table.updatedAt, table.createdAt)
+    .where(sql`${table.status} in ('pending', 'requires_action')`),
+  check('stripe_refund_amount_safe_range_check', sql`${table.amountSatang} between 1 and ${maxSafeSatangSql}`),
+  check('stripe_refund_actor_shape_check', sql`
+    (${table.requestActorType} = 'staff' and ${table.requestActorId} is not null and length(btrim(${table.requestActorId})) between 1 and 200)
+    or (${table.requestActorType} = 'system' and ${table.requestActorId} is null)
+  `),
+  check('stripe_refund_idempotency_key_check', sql`length(btrim(${table.idempotencyKey})) between 1 and 128`),
+  check('stripe_refund_stripe_idempotency_key_check', sql`length(btrim(${table.stripeIdempotencyKey})) between 1 and 255`),
+  check('stripe_refund_stripe_id_check', sql`${table.stripeRefundId} is null or ${table.stripeRefundId} ~ '^re_[A-Za-z0-9]+$'`),
+  check('stripe_refund_status_check', sql`${table.status} in ('pending', 'requires_action', 'succeeded', 'failed', 'canceled')`),
+])
+
 export const orderOperation = pgTable('order_operation', {
   id: uuid('id').defaultRandom().primaryKey(),
   orderId: uuid('order_id').notNull().references(() => commerceOrder.id, { onDelete: 'restrict' }),

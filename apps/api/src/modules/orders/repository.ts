@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, lt, or } from 'drizzle-orm'
 import type { DatabaseTransaction } from '../../database/types'
-import { commerceOrder, orderItem, payment } from '../../database/schema'
+import { commerceOrder, orderItem, payment, stripeRefund } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
 import { encodeCursor, decodeCursor } from '../../shared/cursor'
 import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderSnapshot } from './types'
@@ -41,7 +41,7 @@ export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string
     shippingSatang: order.shippingSatang,
     totalSatang: order.totalSatang,
     currency: 'THB',
-    paymentMethod: 'cod',
+    paymentMethod: order.paymentMethod as OrderSnapshot['paymentMethod'],
     createdAt: order.createdAt.toISOString(),
     items,
   }
@@ -75,9 +75,27 @@ export async function readOrderDetail(tx: DatabaseTransaction, orderId: string):
     status: payment.status,
   }).from(payment).where(eq(payment.orderId, orderId)).limit(1)
   if (!savedPayment) throw new DomainError('ORDER_PAYMENT_CONFLICT')
+  const [refund] = await tx.select({
+    id: stripeRefund.id,
+    amountSatang: stripeRefund.amountSatang,
+    status: stripeRefund.status,
+    createdAt: stripeRefund.createdAt,
+    updatedAt: stripeRefund.updatedAt,
+  }).from(stripeRefund).where(eq(stripeRefund.paymentId, savedPayment.id))
+    .orderBy(desc(stripeRefund.createdAt), desc(stripeRefund.id)).limit(1)
   return {
     ...order,
-    payment: { ...savedPayment, currency: 'THB' },
+    payment: {
+      ...savedPayment,
+      currency: 'THB',
+      ...(refund ? {
+        refund: {
+          ...refund,
+          createdAt: refund.createdAt.toISOString(),
+          updatedAt: refund.updatedAt.toISOString(),
+        },
+      } : {}),
+    },
   }
 }
 
