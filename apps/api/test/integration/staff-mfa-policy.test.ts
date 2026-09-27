@@ -45,7 +45,7 @@ describe('staff MFA enforcement switch', () => {
       const staff = identity.accountType === 'staff'
       await database.db.update(user).set({
         accountType: identity.accountType,
-        role: staff ? 'support' : null,
+        role: staff ? 'support' : 'customer',
         staffActivatedAt: staff ? new Date() : null,
         twoFactorEnabled: true,
       }).where(eq(user.id, created.id))

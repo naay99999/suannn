@@ -35,7 +35,7 @@ describe('staff MFA audit transactions', () => {
     const audit = { record: async () => { throw new Error('AUDIT_INSERT_FAILED') } } as unknown as AuditService
     const store = new DatabaseStaffMfaStore(database.db, audit)
 
-    await expect(store.activate('mfa-audit-staff', 'mfa-audit-token', new Date(), new Date(Date.now() + 3_600_000), {
+    await expect(store.activate('mfa-audit-staff', 'mfa-audit-session', new Date(), new Date(Date.now() + 3_600_000), {
       requestId: 'request-mfa-audit', ipAddress: '127.0.0.1', userAgent: 'test',
     })).rejects.toThrow('AUDIT_INSERT_FAILED')
 
