@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { QueryClient } from '@tanstack/react-query'
-import { parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from '../src/pages/account/customer-security'
+import { expireSecuritySession, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from '../src/pages/account/customer-security'
+import { AuthRequestError } from '../src/lib/auth-client'
 
 test('sign-out removes account and session cache after the server accepts it', async () => {
   const client = new QueryClient()
@@ -32,4 +33,15 @@ test('parses only usable session rows from Better Auth', () => {
     { id: 'one', token: 'token-1', userAgent: 'Browser', createdAt: '2026-09-01T00:00:00Z' },
     { id: 'bad', userAgent: 'Missing token' },
   ])).toEqual([{ id: 'one', token: 'token-1', userAgent: 'Browser', createdAt: '2026-09-01T00:00:00Z' }])
+})
+
+test('security 401 clears session and protected cache; server errors remain retryable', () => {
+  const client = new QueryClient()
+  client.setQueryData(['auth', 'session'], { user: { id: 'customer-1' } })
+  client.setQueryData(['customer-account', 'customer-1', 'sessions'], ['secret'])
+  expect(expireSecuritySession(client, new AuthRequestError(500, 'SERVER_ERROR', 'oops'))).toBe(false)
+  expect(client.getQueryData(['customer-account', 'customer-1', 'sessions'])).toEqual(['secret'])
+  expect(expireSecuritySession(client, new AuthRequestError(401, 'UNAUTHORIZED', 'no'))).toBe(true)
+  expect(client.getQueryData(['auth', 'session'])).toBeNull()
+  expect(client.getQueryData(['customer-account', 'customer-1', 'sessions'])).toBeUndefined()
 })

@@ -7,7 +7,7 @@ import { Button } from '@workspace/ui/components/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { AuthRequestError, signIn } from '@/lib/auth-client'
-import { safeAccountReturnPath } from '@/lib/auth-navigation'
+import { safeAccountReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
 import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
 import { AuthPageFrame } from './auth-layout'
 import { signInSchema, type SignInValues } from './auth-schemas'
@@ -19,6 +19,7 @@ export function Component() {
   const queryClient = useQueryClient()
   const session = useQuery(authSessionQuery)
   const [requestError, setRequestError] = useState('')
+  const [staffFlow, setStaffFlow] = useState(false)
   const [pending, setPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -30,15 +31,18 @@ export function Component() {
   async function submit(values: SignInValues) {
     setPending(true)
     setRequestError('')
+    setStaffFlow(false)
     try {
       const result = await signIn(values.email, values.password)
       if (result === 'challenge') {
         setRequestError('บัญชีนี้ต้องยืนยันตัวตนสำหรับผู้ดูแลระบบ กรุณาเข้าสู่ระบบผ่านหน้าผู้ดูแล')
+        setStaffFlow(true)
         return
       }
       const next = await refreshAuthSession(queryClient)
       if (next?.user.accountType !== 'customer') {
         setRequestError('บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบผ่านหน้าผู้ดูแล')
+        setStaffFlow(true)
         return
       }
       navigate(returnTo, { replace: true })
@@ -66,6 +70,7 @@ export function Component() {
           </Field>
           <div className="flex justify-end"><Link className="text-sm font-medium text-primary-ink underline underline-offset-4" to="/forgot-password">ลืมรหัสผ่าน?</Link></div>
           {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
+          {staffFlow && <a className="text-sm font-semibold text-primary-ink underline underline-offset-4" href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')}>ไปหน้าเข้าสู่ระบบผู้ดูแล</a>}
           <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Button>
         </FieldGroup>
       </form>

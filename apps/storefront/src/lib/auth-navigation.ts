@@ -1,5 +1,5 @@
 export function safeAccountReturnPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')
+  if (!value || !value.startsWith('/') || value.includes('//')
     || value.includes('\\') || /%2f|%5c/i.test(value)) return '/account'
 
   const path = value.split(/[?#]/, 1)[0]
@@ -16,4 +16,8 @@ export function safeAccountReturnPath(value: string | null): string {
   } catch {
     return '/account'
   }
+}
+
+export function staffSignInUrl(adminUrl: string): string {
+  return new URL('/login', adminUrl).toString()
 }

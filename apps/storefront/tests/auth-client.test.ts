@@ -57,6 +57,21 @@ describe('storefront auth client', () => {
     expect(client.getSession()).rejects.toMatchObject({ code: 'INVALID_SESSION_RESPONSE' })
   })
 
+  test('does not treat invalid JSON as an anonymous session', async () => {
+    const client = createAuthClient('http://localhost:6767', async () => new Response('<html>bad gateway</html>', { status: 200 }))
+    expect(client.getSession()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+
+  test('supplies a storefront callback for verification email', async () => {
+    let body: unknown
+    const client = createAuthClient('http://localhost:6767', async (_input, init) => {
+      body = JSON.parse(String(init?.body))
+      return Response.json({ status: true })
+    })
+    await client.sendVerificationEmail('mali@example.com', 'http://localhost:5183/account/security')
+    expect(body).toEqual({ email: 'mali@example.com', callbackURL: 'http://localhost:5183/account/security' })
+  })
+
   test('signs in at the email route with cookies and returns challenge state', async () => {
     const { calls, fetcher } = jsonFetch({ twoFactorRedirect: true })
     const client = createAuthClient('http://localhost:6767', fetcher)

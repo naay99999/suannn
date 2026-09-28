@@ -16,6 +16,13 @@ export function clearCustomerQueries(queryClient: QueryClient) {
   queryClient.removeQueries({ predicate: query => query.queryKey[0] === 'customer-account' })
 }
 
+export function reconcileCustomerQueries(queryClient: QueryClient, session: CustomerSession | StaffSession | null) {
+  const userId = session?.user.accountType === 'customer' ? session.user.id : null
+  queryClient.removeQueries({
+    predicate: query => query.queryKey[0] === 'customer-account' && query.queryKey[1] !== userId,
+  })
+}
+
 export const authSessionQuery = queryOptions({
   queryKey: ['auth', 'session'] as const,
   queryFn: getSession,

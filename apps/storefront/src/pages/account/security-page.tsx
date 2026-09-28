@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { z } from 'zod'
 import { Button } from '@workspace/ui/components/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/card'
@@ -11,7 +11,7 @@ import { Input } from '@workspace/ui/components/input'
 import { changePassword, listSessions, revokeOtherSessions, revokeSession, sendVerificationEmail, signOut } from '@/lib/auth-client'
 import { authSessionQuery, accountQueryPrefix } from '@/lib/auth-session'
 import { AccountPageHeading } from './account-ui'
-import { parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from './customer-security'
+import { expireSecuritySession, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from './customer-security'
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'กรุณากรอกรหัสผ่านปัจจุบัน'),
@@ -26,6 +26,7 @@ export function Component() {
   const session = useQuery(authSessionQuery).data
   const userId = session?.user.id ?? ''
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
@@ -35,24 +36,30 @@ export function Component() {
     queryFn: async () => parseCustomerSessions(await listSessions()),
     enabled: Boolean(userId), retry: false,
   })
+  useEffect(() => {
+    if (sessions.isError) expireSecuritySession(queryClient, sessions.error)
+  }, [queryClient, sessions.error, sessions.isError])
+  const handleSecurityError = (err: unknown) => {
+    if (!expireSecuritySession(queryClient, err)) setError(securityFailureMessage(err))
+  }
   const form = useForm<PasswordValues>({
     resolver: zodResolver(passwordSchema),
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   })
   const verifyMutation = useMutation({
-    mutationFn: () => sendVerificationEmail(session!.user.email),
+    mutationFn: () => sendVerificationEmail(session!.user.email, new URL('/account/security', window.location.origin).toString()),
     onSuccess: () => setNotice(verificationSentMessage),
-    onError: err => setError(securityFailureMessage(err)),
+    onError: handleSecurityError,
   })
   const passwordMutation = useMutation({
     mutationFn: (values: PasswordValues) => changePassword(values.currentPassword, values.newPassword),
     onSuccess: () => { form.reset(); setNotice('เปลี่ยนรหัสผ่านแล้ว') },
-    onError: err => setError(securityFailureMessage(err)),
+    onError: handleSecurityError,
   })
   const signOutMutation = useMutation({
     mutationFn: () => performSignOut(queryClient, signOut),
     onSuccess: () => navigate('/sign-in', { replace: true }),
-    onError: err => setError(securityFailureMessage(err)),
+    onError: handleSecurityError,
   })
   const revokeMutation = useMutation({
     mutationFn: async (row: { token: string; id: string }) => performRevokeSession(queryClient, row.token, row.id === session?.session.id, revokeSession),
@@ -60,18 +67,19 @@ export function Component() {
       if (current) navigate('/sign-in', { replace: true })
       else { await queryClient.invalidateQueries({ queryKey: sessionsKey }); setNotice('ออกจากอุปกรณ์ที่เลือกแล้ว') }
     },
-    onError: err => setError(securityFailureMessage(err)),
+    onError: handleSecurityError,
   })
   const revokeOthersMutation = useMutation({
     mutationFn: revokeOtherSessions,
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: sessionsKey }); setNotice('ออกจากอุปกรณ์อื่นทั้งหมดแล้ว') },
-    onError: err => setError(securityFailureMessage(err)),
+    onError: handleSecurityError,
   })
 
   return (
     <>
       <title>ความปลอดภัยบัญชี | suannn</title>
       <AccountPageHeading title="ความปลอดภัย" description="จัดการอีเมล รหัสผ่าน และอุปกรณ์ที่เข้าสู่ระบบ" />
+      {searchParams.has('error') && <p role="alert" className="mb-6 rounded-xl border border-destructive/30 p-4 text-sm text-destructive">ลิงก์ยืนยันอีเมลหมดอายุหรือไม่ถูกต้อง กรุณาส่งลิงก์ใหม่</p>}
       {notice && <p role="status" className="mb-6 rounded-xl bg-accent p-4 text-sm text-primary-ink">{notice}</p>}
       {error && <p role="alert" className="mb-6 text-sm text-destructive">{error}</p>}
       <div className="flex flex-col gap-5">

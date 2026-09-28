@@ -81,7 +81,13 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
     } catch {
       throw new AuthRequestError(0, 'NETWORK_ERROR', 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่')
     }
-    const value: unknown = await response.json().catch(() => null)
+    let value: unknown
+    try {
+      value = response.status === 204 ? undefined : await response.json()
+    } catch {
+      if (response.ok) throw new AuthRequestError(502, 'INVALID_RESPONSE', 'ไม่สามารถอ่านคำตอบจากเซิร์ฟเวอร์ได้')
+      value = null
+    }
     if (!response.ok) throw responseError(response.status, value)
     return value
   }
@@ -106,8 +112,8 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
     async resetPassword(token: string, newPassword: string) {
       await request('reset-password', { token, newPassword })
     },
-    async sendVerificationEmail(email: string) {
-      await request('send-verification-email', { email })
+    async sendVerificationEmail(email: string, callbackURL: string) {
+      await request('send-verification-email', { email, callbackURL })
     },
     async changePassword(currentPassword: string, newPassword: string) {
       await request('change-password', { currentPassword, newPassword })
