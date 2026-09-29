@@ -11,6 +11,13 @@
 @theme inline {
   --font-heading: var(--font-family-brand);
   --font-sans: var(--font-family-brand);
+  --text-display: var(--type-display-size);
+  --text-display--line-height: var(--type-display-leading);
+  --text-headline: var(--type-headline-size);
+  --text-headline--line-height: var(--type-headline-leading);
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-leading);
+  --text-label: var(--type-label-size);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -45,6 +52,9 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-glass-surface: var(--glass-surface);
   --color-glass-border: var(--glass-border);
+  --color-story-surface: var(--story-surface);
+  --color-story-foreground: var(--story-foreground);
+  --color-story-muted-foreground: var(--story-muted-foreground);
   --color-photo-foreground: var(--photo-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -53,6 +63,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-pill: 9999px;
   --animate-marquee: marquee var(--duration) infinite linear;
   --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
   @keyframes marquee {
@@ -74,69 +85,99 @@
 }
 
 :root {
+  color-scheme: light;
   --font-family-brand: 'Satoshi', 'Noto Sans Thai Variable', sans-serif;
-  --background: #ffffff;
-  --foreground: #182c21;
-  --card: #ffffff;
-  --card-foreground: #182c21;
-  --popover: #ffffff;
-  --popover-foreground: #182c21;
-  --primary: #16a34a;
-  --primary-ink: #137a39;
-  --primary-foreground: #082410;
-  --secondary: #f0f8f1;
-  --secondary-foreground: #183c24;
-  --muted: #f4f6f3;
-  --muted-foreground: #657166;
-  --accent: #eff8ef;
-  --accent-foreground: #183c24;
-  --destructive: #c93838;
-  --border: #e2e9e1;
-  --input: #dce5dc;
-  --ring: #16a34a;
-  --chart-1: #16a34a;
+  --type-display-size: clamp(2.5rem, 5.7vw, 5.5rem);
+  --type-display-leading: 1.32;
+  --type-headline-size: clamp(1.7rem, 3.1vw, 2.65rem);
+  --type-headline-leading: 1.45;
+  --type-body-size: 0.875rem;
+  --type-body-leading: 1.75;
+  --type-label-size: 0.75rem;
+  /* Primitive values mirror the DESIGN.md frontmatter. Components use roles below. */
+  --garden-green: #16a34a;
+  --garden-green-ink: #137a39;
+  --green-on-accent: #082410;
+  --canvas: #ffffff;
+  --deep-leaf-ink: #182c21;
+  --soft-leaf-surface: #f0f8f1;
+  --soft-leaf-ink: #183c24;
+  --quiet-surface: #f4f6f3;
+  --quiet-ink: #657166;
+  --fresh-wash: #eff8ef;
+  --fine-border: #e2e9e1;
+  --field-border: #dce5dc;
+  --error: #c93838;
+  --sidebar-surface: #f8fbf7;
+  --night-canvas: #0d1911;
+  --night-card: #14251a;
+  --night-ink: #eef7ef;
+  --night-quiet-ink: #adc3b0;
+  --night-border: #314737;
+  --night-green-ink: #75e39c;
+
+  /* Semantic roles keep storefront and admin on the same palette. */
+  --background: var(--canvas);
+  --foreground: var(--deep-leaf-ink);
+  --card: var(--canvas);
+  --card-foreground: var(--deep-leaf-ink);
+  --popover: var(--canvas);
+  --popover-foreground: var(--deep-leaf-ink);
+  --primary: var(--garden-green);
+  --primary-ink: var(--garden-green-ink);
+  --primary-foreground: var(--green-on-accent);
+  --secondary: var(--soft-leaf-surface);
+  --secondary-foreground: var(--soft-leaf-ink);
+  --muted: var(--quiet-surface);
+  --muted-foreground: var(--quiet-ink);
+  --accent: var(--fresh-wash);
+  --accent-foreground: var(--soft-leaf-ink);
+  --destructive: var(--error);
+  --border: var(--fine-border);
+  --input: var(--field-border);
+  --ring: var(--garden-green);
+  --chart-1: var(--garden-green);
   --chart-2: #69bd66;
   --chart-3: #a6d48c;
   --chart-4: #d0e9ad;
   --chart-5: #356f4a;
   --radius: 0.75rem;
-  --sidebar: #f8fbf7;
-  --sidebar-foreground: #182c21;
-  --sidebar-primary: #16a34a;
-  --sidebar-primary-foreground: #082410;
+  --sidebar: var(--sidebar-surface);
+  --sidebar-foreground: var(--deep-leaf-ink);
+  --sidebar-primary: var(--garden-green);
+  --sidebar-primary-foreground: var(--green-on-accent);
   --sidebar-accent: #eaf5eb;
-  --sidebar-accent-foreground: #183c24;
-  --sidebar-border: #e2e9e1;
-  --sidebar-ring: #16a34a;
+  --sidebar-accent-foreground: var(--soft-leaf-ink);
+  --sidebar-border: var(--fine-border);
+  --sidebar-ring: var(--garden-green);
   --glass-surface: rgb(255 255 255 / 78%);
   --glass-border: rgb(255 255 255 / 70%);
-  --glass-shadow: rgb(33 78 30 / 6%);
+  --story-surface: var(--night-canvas);
+  --story-foreground: var(--night-ink);
+  --story-muted-foreground: var(--night-quiet-ink);
   --photo-foreground: #ffffff;
   --photo-shade: #102817;
-  --ambient-lime: #d3f4a8;
-  --ambient-mint: #d7f7e5;
-  --farm-ambient: #e4f2cf;
-  --cta-ambient: #cfeeb8;
 }
 
 .dark {
-  --background: #0d1911;
-  --foreground: #eef7ef;
-  --card: #14251a;
-  --card-foreground: #eef7ef;
-  --popover: #14251a;
-  --popover-foreground: #eef7ef;
-  --primary: #16a34a;
-  --primary-ink: #75e39c;
+  color-scheme: dark;
+  --background: var(--night-canvas);
+  --foreground: var(--night-ink);
+  --card: var(--night-card);
+  --card-foreground: var(--night-ink);
+  --popover: var(--night-card);
+  --popover-foreground: var(--night-ink);
+  --primary: var(--garden-green);
+  --primary-ink: var(--night-green-ink);
   --primary-foreground: #071b0d;
   --secondary: #1b3222;
   --secondary-foreground: #e5f5e8;
   --muted: #1b2c20;
-  --muted-foreground: #adc3b0;
+  --muted-foreground: var(--night-quiet-ink);
   --accent: #203b28;
   --accent-foreground: #ebf8ed;
   --destructive: #f37373;
-  --border: #314737;
+  --border: var(--night-border);
   --input: #3b5541;
   --ring: #56c979;
   --chart-1: #56c979;
@@ -145,22 +186,17 @@
   --chart-4: #4eaa70;
   --chart-5: #2d8050;
   --sidebar: #122117;
-  --sidebar-foreground: #eef7ef;
-  --sidebar-primary: #16a34a;
+  --sidebar-foreground: var(--night-ink);
+  --sidebar-primary: var(--garden-green);
   --sidebar-primary-foreground: #071b0d;
   --sidebar-accent: #203b28;
   --sidebar-accent-foreground: #ebf8ed;
-  --sidebar-border: #314737;
+  --sidebar-border: var(--night-border);
   --sidebar-ring: #56c979;
   --glass-surface: rgb(20 40 26 / 80%);
   --glass-border: rgb(206 236 209 / 20%);
-  --glass-shadow: rgb(0 0 0 / 20%);
   --photo-foreground: #ffffff;
   --photo-shade: #102817;
-  --ambient-lime: #314b24;
-  --ambient-mint: #193e29;
-  --farm-ambient: #2c4828;
-  --cta-ambient: #27542c;
 }
 
 @layer base {
@@ -170,6 +206,12 @@
 
   body {
     @apply bg-background font-sans text-foreground;
+    caret-color: var(--primary-ink);
+  }
+
+  ::selection {
+    background: var(--secondary);
+    color: var(--foreground);
   }
 
   button:not(:disabled), [role='button']:not(:disabled) {
@@ -226,7 +268,7 @@ html[data-theme-transition='active']::view-transition-group(root) {
 }
 
 .suannn-store .page-width { width: min(100% - 96px, 1280px); margin-inline: auto; }
-.suannn-store .section-heading { font-size: clamp(1.7rem, 3.1vw, 2.65rem); font-weight: 600; line-height: 1.45; letter-spacing: -0.035em; }
+.suannn-store .section-heading { font-size: var(--type-headline-size); font-weight: 600; line-height: var(--type-headline-leading); letter-spacing: -0.035em; }
 .suannn-store .suannn-logo { font-family: var(--font-family-brand); font-size: 2.55rem; font-weight: 900; letter-spacing: -0.075em; line-height: 1; color: var(--primary); }
 .suannn-store .suannn-logo span { color: var(--foreground); }
 .suannn-store .suannn-header { position: sticky; top: 0; z-index: 30; background: var(--glass-surface); border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(22px) saturate(1.5); }
@@ -235,13 +277,11 @@ html[data-theme-transition='active']::view-transition-group(root) {
 .suannn-store a:focus-visible, .suannn-store button:focus-visible { outline: 2px solid var(--foreground); outline-offset: 5px; }
 .suannn-store .skip-link { position: fixed; top: 8px; left: 16px; z-index: 60; transform: translateY(-180%); padding: 12px 20px; border-radius: 12px; background: var(--foreground); color: var(--background); }
 .suannn-store .skip-link:focus { transform: translateY(0); }
-.suannn-store .suannn-hero { background: radial-gradient(ellipse at 50% 85%, var(--accent), transparent 65%); }
-.suannn-store .hero-orb { position: absolute; z-index: -1; width: 24vw; aspect-ratio: 1; border-radius: 50%; filter: blur(75px); opacity: 0.45; pointer-events: none; }
-.suannn-store .hero-orb-left { left: -12%; top: 25%; background: var(--ambient-lime); }
-.suannn-store .hero-orb-right { right: -12%; top: 5%; background: var(--ambient-mint); }
+.suannn-store .suannn-hero { background: var(--background); }
+.suannn-store .hero-orb { display: none; }
 .suannn-store .hero-still-life { height: clamp(420px, 46vw, 720px); margin-top: -8px; }
 .suannn-store .hero-still-life > img { object-position: center 72%; mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 93%, transparent 100%); mix-blend-mode: multiply; }
-.suannn-store .hero-glass-note { display: flex; align-items: center; gap: 12px; position: absolute; bottom: 56px; left: max(24px, calc((100vw - 1280px) / 2)); padding: 16px 22px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--glass-surface); box-shadow: 0 8px 35px var(--glass-shadow), inset 0 1px 0 var(--glass-border); backdrop-filter: blur(20px) saturate(1.4); }
+.suannn-store .hero-glass-note { display: flex; align-items: center; gap: 12px; position: absolute; bottom: 56px; left: max(24px, calc((100vw - 1280px) / 2)); padding: 16px 22px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--glass-surface); backdrop-filter: blur(20px) saturate(1.4); }
 .suannn-store .hero-side-note { position: absolute; right: max(24px, calc((100vw - 1280px) / 2)); top: 42%; writing-mode: vertical-rl; font-size: 10px; letter-spacing: 0.18em; color: var(--muted-foreground); }
 .suannn-store .glass-label { padding: 8px 13px; border-radius: 999px; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); color: var(--foreground); font-size: 11px; }
 .suannn-store .glass-icon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); }
@@ -256,10 +296,10 @@ html[data-theme-transition='active']::view-transition-group(root) {
 .suannn-store .collection-heading { position: absolute; left: 0; bottom: 36px; width: 100%; padding: 0 28px; text-align: left; transition: bottom 300ms ease; }
 .suannn-store .collection-panel.is-active .collection-heading { bottom: 154px; }
 .suannn-store .collection-detail { position: absolute; bottom: 32px; left: 28px; right: 28px; }
-.suannn-store .farm-section { background: radial-gradient(ellipse at 85% 25%, var(--farm-ambient), transparent 55%), var(--accent); }
+.suannn-store .farm-section { background: var(--accent); }
 .suannn-store .farm-card { position: relative; }
-.suannn-store .farm-card-inner { position: relative; min-height: 390px; padding: 36px; border: 1px solid var(--glass-border); border-radius: 28px; background: var(--glass-surface); box-shadow: 0 5px 24px var(--glass-shadow), inset 0 1px 0 var(--glass-border); backdrop-filter: blur(24px); transform-origin: top center; }
-.suannn-store .suannn-cta { background: radial-gradient(ellipse at 50% 110%, var(--cta-ambient), transparent 70%), var(--accent); }
+.suannn-store .farm-card-inner { position: relative; min-height: 390px; padding: 36px; border: 1px solid var(--glass-border); border-radius: 28px; background: var(--glass-surface); backdrop-filter: blur(24px); transform-origin: top center; }
+.suannn-store .suannn-cta { background: var(--accent); }
 .suannn-store .cta-wordmark { position: absolute; z-index: -1; bottom: -0.33em; left: 50%; transform: translateX(-50%); font-family: var(--font-family-brand); font-size: clamp(120px, 26vw, 350px); font-weight: 900; letter-spacing: -0.08em; color: var(--primary); opacity: 0.08; }
 
 @media (max-width: 767px) {

@@ -1,0 +1,512 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T15:43:19.491919+00:00",
+  "title": "Design System: Suannn",
+  "extensions": {
+    "colorMeta": {
+      "garden-green": {
+        "role": "primary",
+        "displayName": "เขียวสวนสด",
+        "canonical": "#16a34a",
+        "tonalRamp": [
+          "oklch(15% 0.127 149.2)",
+          "oklch(25% 0.127 149.2)",
+          "oklch(36% 0.170 149.2)",
+          "oklch(48% 0.170 149.2)",
+          "oklch(60% 0.170 149.2)",
+          "oklch(72% 0.170 149.2)",
+          "oklch(84% 0.170 149.2)",
+          "oklch(95% 0.127 149.2)"
+        ]
+      },
+      "garden-green-ink": {
+        "role": "primary",
+        "displayName": "เขียวใบไม้เข้ม",
+        "canonical": "#137a39",
+        "tonalRamp": [
+          "oklch(15% 0.100 149.8)",
+          "oklch(25% 0.100 149.8)",
+          "oklch(36% 0.133 149.8)",
+          "oklch(48% 0.133 149.8)",
+          "oklch(60% 0.133 149.8)",
+          "oklch(72% 0.133 149.8)",
+          "oklch(84% 0.133 149.8)",
+          "oklch(95% 0.100 149.8)"
+        ]
+      },
+      "green-on-accent": {
+        "role": "primary",
+        "displayName": "หมึกบนสีเขียว",
+        "canonical": "#082410",
+        "tonalRamp": [
+          "oklch(15% 0.038 150.1)",
+          "oklch(25% 0.038 150.1)",
+          "oklch(36% 0.051 150.1)",
+          "oklch(48% 0.051 150.1)",
+          "oklch(60% 0.051 150.1)",
+          "oklch(72% 0.051 150.1)",
+          "oklch(84% 0.051 150.1)",
+          "oklch(95% 0.038 150.1)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "กระดาษขาว",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(25% 0.000 89.9)",
+          "oklch(36% 0.000 89.9)",
+          "oklch(48% 0.000 89.9)",
+          "oklch(60% 0.000 89.9)",
+          "oklch(72% 0.000 89.9)",
+          "oklch(84% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "deep-leaf-ink": {
+        "role": "neutral",
+        "displayName": "หมึกใบไม้",
+        "canonical": "#182c21",
+        "tonalRamp": [
+          "oklch(15% 0.025 159.1)",
+          "oklch(25% 0.025 159.1)",
+          "oklch(36% 0.033 159.1)",
+          "oklch(48% 0.033 159.1)",
+          "oklch(60% 0.033 159.1)",
+          "oklch(72% 0.033 159.1)",
+          "oklch(84% 0.033 159.1)",
+          "oklch(95% 0.025 159.1)"
+        ]
+      },
+      "soft-leaf-surface": {
+        "role": "secondary",
+        "displayName": "ผิวใบไม้อ่อน",
+        "canonical": "#f0f8f1",
+        "tonalRamp": [
+          "oklch(15% 0.009 149.3)",
+          "oklch(25% 0.009 149.3)",
+          "oklch(36% 0.013 149.3)",
+          "oklch(48% 0.013 149.3)",
+          "oklch(60% 0.013 149.3)",
+          "oklch(72% 0.013 149.3)",
+          "oklch(84% 0.013 149.3)",
+          "oklch(95% 0.009 149.3)"
+        ]
+      },
+      "soft-leaf-ink": {
+        "role": "secondary",
+        "displayName": "หมึกบนผิวอ่อน",
+        "canonical": "#183c24",
+        "tonalRamp": [
+          "oklch(15% 0.045 152.5)",
+          "oklch(25% 0.045 152.5)",
+          "oklch(36% 0.060 152.5)",
+          "oklch(48% 0.060 152.5)",
+          "oklch(60% 0.060 152.5)",
+          "oklch(72% 0.060 152.5)",
+          "oklch(84% 0.060 152.5)",
+          "oklch(95% 0.045 152.5)"
+        ]
+      },
+      "quiet-surface": {
+        "role": "neutral",
+        "displayName": "ผิวสงบ",
+        "canonical": "#f4f6f3",
+        "tonalRamp": [
+          "oklch(15% 0.003 134.8)",
+          "oklch(25% 0.003 134.8)",
+          "oklch(36% 0.004 134.8)",
+          "oklch(48% 0.004 134.8)",
+          "oklch(60% 0.004 134.8)",
+          "oklch(72% 0.004 134.8)",
+          "oklch(84% 0.004 134.8)",
+          "oklch(95% 0.003 134.8)"
+        ]
+      },
+      "quiet-ink": {
+        "role": "neutral",
+        "displayName": "หมึกเบา",
+        "canonical": "#657166",
+        "tonalRamp": [
+          "oklch(15% 0.017 147.6)",
+          "oklch(25% 0.017 147.6)",
+          "oklch(36% 0.022 147.6)",
+          "oklch(48% 0.022 147.6)",
+          "oklch(60% 0.022 147.6)",
+          "oklch(72% 0.022 147.6)",
+          "oklch(84% 0.022 147.6)",
+          "oklch(95% 0.017 147.6)"
+        ]
+      },
+      "fresh-wash": {
+        "role": "secondary",
+        "displayName": "แสงเขียวอ่อน",
+        "canonical": "#eff8ef",
+        "tonalRamp": [
+          "oklch(15% 0.011 145.5)",
+          "oklch(25% 0.011 145.5)",
+          "oklch(36% 0.015 145.5)",
+          "oklch(48% 0.015 145.5)",
+          "oklch(60% 0.015 145.5)",
+          "oklch(72% 0.015 145.5)",
+          "oklch(84% 0.015 145.5)",
+          "oklch(95% 0.011 145.5)"
+        ]
+      },
+      "fine-border": {
+        "role": "neutral",
+        "displayName": "เส้นบาง",
+        "canonical": "#e2e9e1",
+        "tonalRamp": [
+          "oklch(15% 0.010 141.8)",
+          "oklch(25% 0.010 141.8)",
+          "oklch(36% 0.013 141.8)",
+          "oklch(48% 0.013 141.8)",
+          "oklch(60% 0.013 141.8)",
+          "oklch(72% 0.013 141.8)",
+          "oklch(84% 0.013 141.8)",
+          "oklch(95% 0.010 141.8)"
+        ]
+      },
+      "field-border": {
+        "role": "neutral",
+        "displayName": "เส้นช่องกรอก",
+        "canonical": "#dce5dc",
+        "tonalRamp": [
+          "oklch(15% 0.012 145.4)",
+          "oklch(25% 0.012 145.4)",
+          "oklch(36% 0.015 145.4)",
+          "oklch(48% 0.015 145.4)",
+          "oklch(60% 0.015 145.4)",
+          "oklch(72% 0.015 145.4)",
+          "oklch(84% 0.015 145.4)",
+          "oklch(95% 0.012 145.4)"
+        ]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "แดงแจ้งข้อผิดพลาด",
+        "canonical": "#c93838",
+        "tonalRamp": [
+          "oklch(15% 0.135 25.3)",
+          "oklch(25% 0.135 25.3)",
+          "oklch(36% 0.180 25.3)",
+          "oklch(48% 0.180 25.3)",
+          "oklch(60% 0.180 25.3)",
+          "oklch(72% 0.180 25.3)",
+          "oklch(84% 0.180 25.3)",
+          "oklch(95% 0.135 25.3)"
+        ]
+      },
+      "sidebar-surface": {
+        "role": "neutral",
+        "displayName": "พื้น sidebar",
+        "canonical": "#f8fbf7",
+        "tonalRamp": [
+          "oklch(15% 0.005 137.8)",
+          "oklch(25% 0.005 137.8)",
+          "oklch(36% 0.006 137.8)",
+          "oklch(48% 0.006 137.8)",
+          "oklch(60% 0.006 137.8)",
+          "oklch(72% 0.006 137.8)",
+          "oklch(84% 0.006 137.8)",
+          "oklch(95% 0.005 137.8)"
+        ]
+      },
+      "night-canvas": {
+        "role": "neutral",
+        "displayName": "พื้นกลางคืน",
+        "canonical": "#0d1911",
+        "tonalRamp": [
+          "oklch(15% 0.018 154.5)",
+          "oklch(25% 0.018 154.5)",
+          "oklch(36% 0.024 154.5)",
+          "oklch(48% 0.024 154.5)",
+          "oklch(60% 0.024 154.5)",
+          "oklch(72% 0.024 154.5)",
+          "oklch(84% 0.024 154.5)",
+          "oklch(95% 0.018 154.5)"
+        ]
+      },
+      "night-card": {
+        "role": "neutral",
+        "displayName": "การ์ดกลางคืน",
+        "canonical": "#14251a",
+        "tonalRamp": [
+          "oklch(15% 0.023 155.0)",
+          "oklch(25% 0.023 155.0)",
+          "oklch(36% 0.031 155.0)",
+          "oklch(48% 0.031 155.0)",
+          "oklch(60% 0.031 155.0)",
+          "oklch(72% 0.031 155.0)",
+          "oklch(84% 0.031 155.0)",
+          "oklch(95% 0.023 155.0)"
+        ]
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "หมึกกลางคืน",
+        "canonical": "#eef7ef",
+        "tonalRamp": [
+          "oklch(15% 0.011 148.8)",
+          "oklch(25% 0.011 148.8)",
+          "oklch(36% 0.014 148.8)",
+          "oklch(48% 0.014 148.8)",
+          "oklch(60% 0.014 148.8)",
+          "oklch(72% 0.014 148.8)",
+          "oklch(84% 0.014 148.8)",
+          "oklch(95% 0.011 148.8)"
+        ]
+      },
+      "night-quiet-ink": {
+        "role": "neutral",
+        "displayName": "หมึกเบากลางคืน",
+        "canonical": "#adc3b0",
+        "tonalRamp": [
+          "oklch(15% 0.027 149.2)",
+          "oklch(25% 0.027 149.2)",
+          "oklch(36% 0.036 149.2)",
+          "oklch(48% 0.036 149.2)",
+          "oklch(60% 0.036 149.2)",
+          "oklch(72% 0.036 149.2)",
+          "oklch(84% 0.036 149.2)",
+          "oklch(95% 0.027 149.2)"
+        ]
+      },
+      "night-border": {
+        "role": "neutral",
+        "displayName": "เส้นกลางคืน",
+        "canonical": "#314737",
+        "tonalRamp": [
+          "oklch(15% 0.029 152.7)",
+          "oklch(25% 0.029 152.7)",
+          "oklch(36% 0.039 152.7)",
+          "oklch(48% 0.039 152.7)",
+          "oklch(60% 0.039 152.7)",
+          "oklch(72% 0.039 152.7)",
+          "oklch(84% 0.039 152.7)",
+          "oklch(95% 0.029 152.7)"
+        ]
+      },
+      "night-green-ink": {
+        "role": "primary",
+        "displayName": "เขียวบนพื้นมืด",
+        "canonical": "#75e39c",
+        "tonalRamp": [
+          "oklch(15% 0.108 153.7)",
+          "oklch(25% 0.108 153.7)",
+          "oklch(36% 0.143 153.7)",
+          "oklch(48% 0.143 153.7)",
+          "oklch(60% 0.143 153.7)",
+          "oklch(72% 0.143 153.7)",
+          "oklch(84% 0.143 153.7)",
+          "oklch(95% 0.108 153.7)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "หัวข้อหลักหน้าแรก storefront"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "หัวข้อ section ของ storefront"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "หัวข้อการ์ดและเนื้อหารอง"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "เนื้อหาและคำอธิบาย"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "คำกำกับสั้นและ metadata"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "nav-hover",
+        "value": "180ms ease",
+        "purpose": "การเปลี่ยนสีลิงก์ storefront"
+      },
+      {
+        "name": "collection-expand",
+        "value": "550ms cubic-bezier(0.2, 0.65, 0.3, 1)",
+        "purpose": "การขยายแผง collection"
+      },
+      {
+        "name": "product-image-hover",
+        "value": "700ms ease-out",
+        "purpose": "ภาพสินค้าขยายเล็กน้อยเมื่อ hover"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "ปุ่มหลักของ shared UI สำหรับการกระทำสำคัญ",
+      "html": "<button class=\"ds-btn-primary\">เลือกความอร่อย</button>",
+      "css": ".ds-btn-primary{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:36px;padding:0 10px;border:1px solid transparent;border-radius:var(--radius-md,9.6px);background:var(--primary,#16a34a);color:var(--primary-foreground,#082410);font-size:14px;font-weight:500;cursor:pointer;transition:background 180ms ease,transform 180ms ease}.ds-btn-primary:hover{background:color-mix(in srgb,var(--primary,#16a34a) 80%,transparent)}.ds-btn-primary:focus-visible{outline:2px solid var(--ring, #16a34a);outline-offset:3px;}.ds-btn-primary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Storefront CTA",
+      "kind": "button",
+      "refersTo": "button-storefront-cta",
+      "description": "ปุ่มหลักทรงแคปซูลของหน้าร้าน สูง 48px และใช้เขียวสวนสด",
+      "html": "<button class=\"ds-store-cta\">เลือกความอร่อย</button>",
+      "css": ".ds-store-cta{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:48px;padding:0 28px;border:1px solid transparent;border-radius:9999px;background:var(--primary,#16a34a);color:var(--primary-foreground,#082410);font-size:14px;font-weight:500;cursor:pointer;transition:background 180ms ease,transform 180ms ease}.ds-store-cta:hover{background:color-mix(in srgb,var(--primary,#16a34a) 80%,transparent)}.ds-store-cta:focus-visible{outline:2px solid var(--ring,#16a34a);outline-offset:3px;}.ds-store-cta:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "การกระทำรองบนพื้นหลัก",
+      "html": "<button class=\"ds-btn-outline\">ดูรายละเอียด</button>",
+      "css": ".ds-btn-outline{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:36px;padding:0 10px;border:1px solid var(--border,#e2e9e1);border-radius:var(--radius-md,9.6px);background:var(--background,#fff);color:var(--foreground,#182c21);font-size:14px;font-weight:500;cursor:pointer;transition:background 180ms ease}.ds-btn-outline:hover{background:var(--muted,#f4f6f3)}.ds-btn-outline:focus-visible{outline:2px solid var(--ring, #16a34a);outline-offset:3px;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "ปุ่มรองบนผิวเขียวอ่อน",
+      "html": "<button class=\"ds-btn-secondary\">เข้าไปดู</button>",
+      "css": ".ds-btn-secondary{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:36px;padding:0 10px;border:1px solid transparent;border-radius:var(--radius-md,9.6px);background:var(--secondary,#f0f8f1);color:var(--secondary-foreground,#183c24);font-size:14px;font-weight:500;cursor:pointer;transition:background 180ms ease}.ds-btn-secondary:hover{background:color-mix(in oklch,var(--secondary,#f0f8f1),var(--foreground,#182c21) 5%)}.ds-btn-secondary:focus-visible{outline:2px solid var(--ring, #16a34a);outline-offset:3px;}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "description": "ปุ่มเครื่องมือที่ให้พื้นปรากฏเมื่อ hover",
+      "html": "<button class=\"ds-btn-ghost\">ตัวเลือก</button>",
+      "css": ".ds-btn-ghost{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:36px;padding:0 10px;border:0;border-radius:var(--radius-md,9.6px);background:transparent;color:var(--foreground,#182c21);font-size:14px;font-weight:500;cursor:pointer;transition:background 180ms ease}.ds-btn-ghost:hover{background:var(--muted,#f4f6f3)}.ds-btn-ghost:focus-visible{outline:2px solid var(--ring, #16a34a);outline-offset:3px;}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "ช่องกรอก shared UI พร้อมสถานะ focus และ invalid",
+      "html": "<input class=\"ds-input\" aria-label=\"ชื่อสินค้า\" placeholder=\"ชื่อสินค้า\">",
+      "css": ".ds-input{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);height:36px;width:240px;padding:4px 10px;border:1px solid var(--input,#dce5dc);border-radius:var(--radius-md,9.6px);background:transparent;color:var(--foreground,#182c21);font-size:14px;transition:border-color 180ms ease}.ds-input::placeholder{color:var(--muted-foreground,#657166)}.ds-input:hover{border-color:var(--ring,#16a34a)}.ds-input:focus-visible{border-color:var(--ring,#16a34a);outline:2px solid var(--ring, #16a34a);outline-offset:3px;}.ds-input[aria-invalid=\"true\"]{border-color:var(--destructive,#c93838)}"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge-primary",
+      "description": "ป้ายสถานะขนาดเล็กทรงแคปซูล",
+      "html": "<span class=\"ds-badge\">ผลไม้สด</span>",
+      "css": ".ds-badge{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);display:inline-flex;align-items:center;height:20px;padding:2px 8px;border-radius:9999px;background:var(--primary,#16a34a);color:var(--primary-foreground,#082410);font-size:12px;font-weight:500}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "การ์ดข้อมูลพื้นขาวพร้อมเส้นขอบบางตามทิศทางไร้เงา",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">จากสวนถึงคุณ</h3><p class=\"ds-card-body\">คัดด้วยใจ ส่งต่อจากสวน</p></article>",
+      "css": ".ds-card{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);padding:24px;border:1px solid var(--border,#e2e9e1);border-radius:var(--radius-xl,16.8px);background:var(--card,#fff);color:var(--card-foreground,#182c21)}.ds-card-title{margin:0 0 8px;font-size:16px;font-weight:500}.ds-card-body{margin:0;color:var(--muted-foreground,#657166);font-size:14px;line-height:1.75}"
+    },
+    {
+      "name": "Storefront Navigation",
+      "kind": "nav",
+      "description": "ลิงก์นำทางหน้าร้านที่ใช้สีเขียวเข้มเมื่อ hover",
+      "html": "<nav class=\"ds-nav\" aria-label=\"เมนูหลัก\"><a class=\"ds-nav-link\" href=\"#\">เลือกซื้อสินค้า</a><a class=\"ds-nav-link\" href=\"#\">จากสวนถึงคุณ</a></nav>",
+      "css": ".ds-nav{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);display:flex;align-items:center;gap:36px}.ds-nav-link{color:var(--foreground,#182c21);font-size:14px;text-decoration:none;transition:color 180ms ease}.ds-nav-link:hover{color:var(--primary-ink,#137a39)}.ds-nav-link:focus-visible{outline:2px solid var(--ring, #16a34a);outline-offset:3px;}"
+    },
+    {
+      "name": "Glass Note",
+      "kind": "custom",
+      "description": "โน้ตกระจกบนภาพ storefront ใช้ blur และขอบโปร่งโดยไม่มีเงา",
+      "html": "<div class=\"ds-glass-note\">คัดด้วยใจ ส่งต่อจากสวน</div>",
+      "css": ".ds-glass-note{font-family:var(--font-family-brand, 'Satoshi', 'Noto Sans Thai Variable', sans-serif);display:inline-flex;align-items:center;padding:16px 22px;border:1px solid var(--glass-border,rgba(255,255,255,.7));border-radius:20px;background:var(--glass-surface,rgba(255,255,255,.78));backdrop-filter:blur(20px) saturate(1.4);color:var(--foreground,#182c21);font-size:14px;font-weight:600}"
+    }
+  ],
+  "narrative": {
+    "northStar": "สวนสดใกล้ตัว",
+    "overview": "หน้าร้าน Suannn ควรให้ความรู้สึกเหมือนแกลเลอรีผลไม้ที่ชวนเดินดู: พื้นสว่างกว้าง ตัวอักษรมั่นใจ ภาพผลผลิตขนาดใหญ่ และคำอธิบายที่สั้นพอให้ภาพเล่าเรื่องเอง ความอบอุ่นมาจากภาพคนปลูก วัสดุคล้ายกระดาษ และภาษาไทยที่เป็นกันเอง สีเขียวสวนสดเป็นสัญญาณสำหรับการกระทำสำคัญ ไม่ใช่สีที่เติมเต็มทุกช่องว่าง\n\nภาพอ้างอิงสามภาพให้บทบาทต่างกัน: หน้าขาวของ Fastwork ให้จังหวะตัวอักษรใหญ่ พื้นที่ว่าง และเรื่องเล่าสองคอลัมน์; หน้าเข้มของ Fastwork ให้ช่วงเปลี่ยนอารมณ์หนึ่งช่วงพร้อมโน้ตสีอ่อนที่ดูจับต้องได้; หน้ารวมสินค้า Apple ให้เวทีภาพสินค้าที่สม่ำเสมอ ตัวเลือกแบบแคปซูล และข้อมูลสินค้าที่เรียงอ่านง่าย ใช้หลักการจัดวางเหล่านี้กับผลไม้และเรื่องของสวน โดยไม่ยืมโลโก้ สีน้ำเงิน ภาษาการขาย หรือรูปทรงสินค้าของต้นฉบับ\n\nภาษาออกแบบเดียวกันรองรับสองจังหวะ: storefront เปิดโล่งและเน้นภาพ ส่วน admin กระชับสำหรับตาราง ฟอร์ม และงานประจำวัน ทั้งคู่ใช้สี ตัวอักษร และคอมโพเนนต์ร่วมจาก `packages/ui` องค์ประกอบควรเป็นมิตร ใช้ง่าย และมั่นใจ โหมดมืดของ admin เป็นธีมใช้งาน ส่วนช่วงพื้นเข้มใน storefront เป็นการจัดองค์ประกอบเพื่อเล่าเรื่อง ไม่ใช่การเปิดโหมดมืดทั้งหน้า",
+    "keyCharacteristics": [
+      "ภาพสินค้าและหัวข้อเป็นจุดนำสายตา UI ถอยหลังเพื่อให้เนื้อหาพูดเอง",
+      "พื้นขาวกับเขียวอ่อนเป็นจังหวะหลัก มีช่วงพื้นเข้มเฉพาะเมื่อเรื่องเล่าต้องการเปลี่ยนอารมณ์",
+      "ส่วนเล่าเรื่องใช้สองคอลัมน์ ภาพหรือแผนภาพหนึ่งฝั่ง ข้อความอีกฝั่ง; บางจุดใช้รอยขีดหรือโน้ตกระดาษอย่างตั้งใจ",
+      "การ์ดและปุ่มแบน ไม่มีเงา; กระจกโปร่งใช้เฉพาะชั้นที่ซ้อนบนเนื้อหา",
+      "Satoshi กับ Noto Sans Thai ให้ความมั่นใจของหัวข้อและความอ่านง่ายของเนื้อหาภาษาไทย"
+    ],
+    "rules": [
+      {
+        "name": "The One Green Rule",
+        "body": "ให้เขียวสวนสดนำสายตาไปยังการกระทำและข้อมูลสำคัญ ส่วนพื้นและข้อความทั่วไปใช้สีที่สงบกว่า",
+        "section": "colors"
+      },
+      {
+        "name": "The Photograph Supplies Color Rule",
+        "body": "ไม่เพิ่มสี UI หลายสีเพื่อให้หน้าดูสนุก สีเหลือง ส้ม หรือม่วงให้มาจากผลไม้ ภาพ และโน้ตประกอบเรื่องเฉพาะจุด; กำหนด token ใหม่เมื่อมีรูปแบบที่ใช้ซ้ำจริง",
+        "section": "colors"
+      },
+      {
+        "name": "The Dark Interlude Rule",
+        "body": "ช่วงพื้นเข้มใช้เพื่อขับเรื่องหนึ่งเรื่องให้เด่น มีตัวอักษรที่อ่านชัดและทางออกกลับสู่หน้าสว่าง ไม่สลับเข้มทุก section ตามสูตรสำเร็จ",
+        "section": "colors"
+      },
+      {
+        "name": "The Thai Reading Rule",
+        "body": "ให้ข้อความไทยยาวมี line-height โปร่งและพื้นที่อ่านเพียงพอ อย่านำระยะตัวอักษรแบบ kicker ภาษาอังกฤษไปใช้กับย่อหน้าภาษาไทย",
+        "section": "typography"
+      },
+      {
+        "name": "The One Message Rule",
+        "body": "หนึ่ง section มีหัวข้อหลักหนึ่งใจความ ตามด้วยคำอธิบายสั้นและภาพหรือหลักฐานที่ตรงกัน; หลีกเลี่ยงข้อความหลายระดับที่แข่งกันเป็นหัวข้อ",
+        "section": "typography"
+      },
+      {
+        "name": "The Two Rhythms Rule",
+        "body": "ใช้พื้นที่หายใจมากกับภาพและเรื่องราวใน storefront; ใช้ความหนาแน่นที่อ่านและทำงานได้เร็วใน admin โดยคง token สีและตัวอักษรร่วมกัน",
+        "section": "layout"
+      },
+      {
+        "name": "The Product Stage Rule",
+        "body": "แถวสินค้าอ่านเป็นชุดเดียวกันด้วยเวทีภาพที่ขนาดเท่ากัน พื้นเรียบ และลำดับข้อมูลตรงกัน; สีและรูปทรงของผลไม้สร้างความต่างภายในชุด",
+        "section": "layout"
+      },
+      {
+        "name": "The Glass Without Shadow Rule",
+        "body": "ผิวกระจกใช้ความโปร่งและ blur เพื่อสร้างชั้น หลีกเลี่ยงเงาทุกระดับในการออกแบบใหม่",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do ปรับ token ใน `packages/ui/src/styles/globals.css`, shared components และเอกสารนี้ให้ตรงกันเมื่อทำ UI ตามทิศทางใหม่",
+      "Do ใช้เขียวสวนสดกับจุดที่ต้องตัดสินใจหรือข้อมูลสำคัญ และใช้หมึกใบไม้สำหรับข้อความเนื้อหา",
+      "Do ให้ภาพสินค้าและข้อมูลที่มามีพื้นที่อ่านชัดเจนใน storefront",
+      "Do ใช้พื้นที่ว่าง หัวข้อใหญ่ และภาพจริงสร้างลำดับก่อนเพิ่มเส้นขอบหรือองค์ประกอบตกแต่ง",
+      "Do รักษาเวทีภาพและลำดับชื่อ คำอธิบาย ราคา การกระทำให้สม่ำเสมอทั้งแถวสินค้า",
+      "Do ใช้โน้ตและรอยขีดแบบทำมือเฉพาะเมื่อช่วยเล่าเรื่องสวนหรืออธิบายข้อมูลจริง",
+      "Do รักษาคู่สีโหมดมืดเมื่อเพิ่มคอมโพเนนต์ที่ใช้ใน admin"
+    ],
+    "donts": [
+      "Don't เพิ่มสีเน้นใหม่เมื่อบทบาทนั้นใช้เขียวสวนสดหรือสีสถานะเดิมได้",
+      "Don't ใช้เงากับองค์ประกอบใหม่ หรือทำทุกพื้นผิวให้เป็นกระจกจนกลบภาพและเนื้อหา",
+      "Don't คัดลอกสีน้ำเงิน ฟอนต์ โลโก้ คำโฆษณา หรือภาพสินค้าจากเว็บไซต์อ้างอิง",
+      "Don't เติม gradient ฟุ้ง การ์ดซ้อน และสีพาสเทลหลายสีเพื่อแทนที่ภาพผลผลิต",
+      "Don't ใช้จังหวะ section ขนาดใหญ่ของหน้าเล่าเรื่องกับตารางและฟอร์ม admin",
+      "Don't ทำให้ motion เป็นเงื่อนไขในการเข้าถึงเนื้อหา"
+    ]
+  }
+}

@@ -60,7 +60,8 @@ export function SideCart() {
       </div>
       {lines.length > 0 && <SheetFooter className="shrink-0 gap-4 border-t p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center justify-between gap-4"><span>ยอดรวมสินค้า</span><span className="text-xl font-semibold tabular-nums">{formatPrice(subtotal)}</span></div>
-        <p className="text-xs leading-6 text-muted-foreground">ราคาและสินค้าเป็นตัวอย่าง ยังไม่รวมค่าจัดส่ง และยังไม่เปิดชำระเงินจริง</p>
+        <p className="text-xs leading-6 text-muted-foreground">รายการและราคาเป็นตัวอย่าง ยังไม่เปิดสั่งซื้อหรือชำระเงินจริง</p>
+        <Button render={<Link to="/checkout" />} nativeButton={false} size="storefront" onClick={() => setOpen(false)}>ดูตัวอย่างการสั่งซื้อ</Button>
         <SheetClose render={<Button variant="outline" />}>เลือกสินค้าต่อ</SheetClose>
       </SheetFooter>}
     </SheetContent>

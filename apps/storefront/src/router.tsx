@@ -40,6 +40,14 @@ export const router = createBrowserRouter([
       { path: 'reset-password', lazy: () => import('./pages/auth/reset-password-page') },
       { path: 'reset-password/:token', lazy: () => import('./pages/auth/reset-password-page') },
       {
+        path: 'checkout',
+        lazy: () => import('./pages/checkout/checkout-page'),
+      },
+      {
+        path: 'checkout/confirmation',
+        lazy: () => import('./pages/checkout/confirmation-page'),
+      },
+      {
         path: 'account',
         Component: CustomerGuard,
         children: [

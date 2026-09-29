@@ -55,9 +55,9 @@ function StorefrontShell() {
                 buttonVariants({ variant: 'outline' }),
                 'hidden h-11 rounded-full px-5 sm:inline-flex',
               )}
-              to="/products"
+              to="/account"
             >
-              เข้าไปเดินสวน <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
+              บัญชีของฉัน <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
             </Link>
             <Button
               variant="ghost"
@@ -88,6 +88,13 @@ function StorefrontShell() {
                 {item.label}
               </Link>
             ))}
+            <Link
+              className="rounded-xl px-3 py-3 hover:bg-muted"
+              to="/account"
+              onClick={() => setMenuOpen(false)}
+            >
+              บัญชีของฉัน
+            </Link>
           </nav>
         )}
       </header>
