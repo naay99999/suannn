@@ -44,7 +44,7 @@ Apply the commerce migrations before deploying cart, checkout, order, or commerc
 
 ### Stripe one-time payments
 
-Stripe checkout is API-only in this release. There is no storefront checkout page or admin refund UI; API clients call the existing checkout and admin order endpoints. Apply all Stripe migrations (`0014_bright_human_fly.sql` through `0020_premium_lenny_balinger.sql`) before deploying an API version that accepts Stripe orders, then verify `bun --filter api db:migrate` completed successfully. Do not start the Stripe-enabled API before those tables and constraints exist.
+The native storefront uses Stripe Hosted Checkout for customer and guest orders. There is no admin refund UI; staff use the admin order API for refunds. Apply all Stripe migrations (`0014_bright_human_fly.sql` through `0020_premium_lenny_balinger.sql`) before deploying an API version that accepts Stripe orders, then verify `bun --filter api db:migrate` completed successfully. Do not start the Stripe-enabled API before those tables and constraints exist.
 
 Set all four Stripe values together to enable Checkout:
 
@@ -72,7 +72,9 @@ curl --request POST "$API_URL/api/v1/admin/orders/$ORDER_ID/refund" \
 
 The API uses the recorded payment amount; clients cannot choose a refund amount. A successful HTTP response records the refund state returned by Stripe, which may still be pending. Check the order's payment refund summary for later webhook or reconciliation updates. Cancellation alone never requests a refund.
 
-Cross-origin browser clients must use `credentials: 'include'` so the browser accepts and sends the `HttpOnly` guest-cart cookie. The cookie is scoped to `/api/v1/store` to reach cart and checkout routes. Guest order reads use `X-Order-Access-Token`; browser preflights allow it and `Idempotency-Key`. Frontend client configuration is a separate integration task.
+The storefront is a native React client in `apps/storefront`. It reads catalog and cart data through the typed API client, requests a signed checkout quote, then places customer COD or customer/guest Stripe orders through `POST /api/v1/store/checkout/orders`. COD requires a customer session; guest checkout is Stripe only. Checkout return URLs are `/checkout/success` and `/checkout/cancel` on `STOREFRONT_URL`. They do not confirm payment or cancel an order: the API order state and verified Stripe webhook are authoritative. Guest order emails link to `/orders/guest/{orderId}` without the access token in the URL; the guest enters the emailed token on that page, and the browser sends it in `X-Order-Access-Token`.
+
+Cross-origin browser clients must use `credentials: 'include'` so the browser accepts and sends the `HttpOnly` guest-cart cookie. The cookie is scoped to `/api/v1/store` to reach cart and checkout routes. Guest order reads use `X-Order-Access-Token`; browser preflights allow it and `Idempotency-Key`. Set `VITE_API_URL` to the API origin for storefront builds and make its exact origin match `STOREFRONT_URL` and the production `CORS_ORIGINS` entry.
 
 Deploy the identity-lock migration and new API as a coordinated cutover: do not run old and new API instances together while identity writes are in progress. If rolling back, stop identity writes, reconcile all `pending_customer` claims against the Better Auth user table, then deploy the old version. Staff, invitation, session, and audit list endpoints now return `{ items, nextCursor }`; `limit` defaults to 50 and is capped at 100, and clients should follow `nextCursor` to load more records.
 
