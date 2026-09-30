@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createApp } from '../../src/app'
 import { loadConfig } from '../../src/config/env'
-import { commerceSettings, inventoryLot, product, productVariant, user, warehouse } from '../../src/database/schema'
+import { commerceOrder, commerceSettings, inventoryLot, inventoryReservation, payment, product, productVariant, user, warehouse } from '../../src/database/schema'
 import { createAuth } from '../../src/plugins/auth/auth'
 import { hashToken } from '../../src/shared/crypto'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -173,29 +173,20 @@ async function place(quoteToken: string, cookie: string, addressInput: unknown =
   })
 }
 
-it('composes guest cart, quote, COD order, token access, and exact lot restoration over HTTP', async () => {
+it('rejects guest COD over HTTP without creating an order or reserving stock', async () => {
   const { variantId, lotId } = await seedVariant()
   const { cookie, quote } = await cartAndQuote(variantId)
   const placed = await place(quote.quoteToken, cookie)
-  expect(placed.status).toBe(201)
-  const result = await placed.json() as { order: { id: string }; guestAccessToken: string }
-  expect(result.guestAccessToken).toBeTruthy()
-  const stranger = await request(`/store/orders/${result.order.id}`, {
-    headers: { 'x-order-access-token': 'wrong' },
-  })
-  expect(stranger.status).toBe(404)
-  const owned = await request(`/store/orders/${result.order.id}`, {
-    headers: { 'x-order-access-token': result.guestAccessToken },
-  })
-  expect(owned.status).toBe(200)
-  const cancelled = await request(`/store/orders/${result.order.id}/cancel`, {
-    method: 'POST', origin: config.storefrontUrl, body: {},
-    headers: { 'x-order-access-token': result.guestAccessToken, 'idempotency-key': crypto.randomUUID() },
-  })
-  expect(cancelled.status).toBe(200)
+  expect(placed.status).toBe(401)
+  expect(await placed.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+  expect(await database.db.select().from(commerceOrder)).toHaveLength(0)
+  expect(await database.db.select().from(inventoryReservation)).toHaveLength(0)
+  expect(await database.db.select().from(payment)).toHaveLength(0)
   const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, lotId))
-  expect(lot?.onHandQuantity).toBe(5)
+  expect(lot?.onHandQuantity).toBe(8)
   expect(lot?.reversibleQuantity).toBe(0)
+  const guestToken = cookie.split('=')[1]!
+  expect((await cart.get({ kind: 'guest', tokenHash: hashToken(guestToken) })).lines).toHaveLength(1)
 })
 
 it('rejects a quote after cart mutation', async () => {

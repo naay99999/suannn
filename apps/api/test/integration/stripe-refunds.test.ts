@@ -178,10 +178,9 @@ async function prepareCancelledOrder(paymentMethod: 'stripe' | 'cod' = 'stripe')
     onHandQuantity: 5,
   })
 
-  const principal: CartPrincipal = {
-    kind: 'guest',
-    tokenHash: createHash('sha256').update(crypto.randomUUID()).digest('hex'),
-  }
+  const principal: CartPrincipal = paymentMethod === 'cod'
+    ? { kind: 'customer', userId: actorId }
+    : { kind: 'guest', tokenHash: createHash('sha256').update(crypto.randomUUID()).digest('hex') }
   const audit = new AuditService(new AuditRepository(database.db))
   const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
   const cart = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db)))

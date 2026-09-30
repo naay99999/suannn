@@ -133,6 +133,7 @@ export function createStoreCheckoutModule(
       if (limited) return limited
       let result
       if (body.paymentMethod === 'cod') {
+        if (principal.kind !== 'customer') throw new DomainError('AUTHENTICATION_REQUIRED')
         result = await checkout.placeCod(body as PlaceCodInput, principal, headers['idempotency-key'])
       } else {
         if (!config.stripe || !stripeCheckout) throw new DomainError('STRIPE_NOT_CONFIGURED')
@@ -148,7 +149,7 @@ export function createStoreCheckoutModule(
       response: { 201: 'orders.createResponse', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Place a store order',
-        description: 'Places an idempotent COD or Stripe order from the customer or guest cart. Stripe orders return a hosted Checkout URL.',
+        description: 'Places an idempotent customer COD or customer or guest Stripe order. Stripe orders return a hosted Checkout URL.',
         tags: ['Store Checkout'],
         security: [],
       },

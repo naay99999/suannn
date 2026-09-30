@@ -29,6 +29,7 @@ export class CheckoutService {
   }
 
   async placeCod(input: PlaceCodInput, principal: CartPrincipal, idempotencyKey: string): Promise<CheckoutResult> {
+    if (principal.kind !== 'customer') throw new DomainError('AUTHENTICATION_REQUIRED')
     const normalized = normalizeCheckoutInput(input)
     const payload = {
       quoteToken: normalized.quoteToken,

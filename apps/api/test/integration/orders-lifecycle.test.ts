@@ -22,6 +22,8 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
+import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -102,6 +104,24 @@ function services() {
   return { cart, quote, checkout, inventory, orders: new OrderService(database.db) }
 }
 
+function testStripeGateway(): StripeGateway {
+  return {
+    checkoutReturnUrls: () => ({
+      successUrl: 'https://shop.example.test/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/checkout/cancel',
+    }),
+    createCheckout: async (input) => ({
+      sessionId: `cs_test_${input.orderId}`,
+      url: `https://checkout.stripe.com/c/pay/cs_test_${input.orderId}`,
+      expiresAt: input.expiresAt,
+    }),
+    retrieveCheckout: async () => { throw new Error('not used') },
+    createFullRefund: async () => { throw new Error('not used') },
+    retrieveRefund: async () => { throw new Error('not used') },
+    constructEvent: () => { throw new Error('not used') },
+  }
+}
+
 async function seedVariant(quantity: number | number[] = 8) {
   const suffix = crypto.randomUUID()
   const productId = crypto.randomUUID()
@@ -153,7 +173,7 @@ async function placeOrder(options: {
   const { cart, quote, checkout, orders, inventory } = services()
   await cart.setItem(principal, seeded.variantId, options.quantity ?? 2)
   const quoteResult = await quote.create(principal, new Date())
-  const result = await checkout.placeCod({
+  const input = {
     quoteToken: quoteResult.quoteToken,
     paymentMethod: 'cod',
     contact: { email: 'buyer@example.test', phone: '081-234-5678' },
@@ -165,7 +185,12 @@ async function placeOrder(options: {
       province: 'Bangkok',
       postalCode: '10100',
     },
-  }, principal, `lifecycle-checkout-${crypto.randomUUID()}`)
+  } as const
+  const key = `lifecycle-checkout-${crypto.randomUUID()}`
+  const result = principal.kind === 'guest'
+    ? await new StripeCheckoutService(database.db, commerceSecret, testStripeGateway())
+      .place({ ...input, paymentMethod: 'stripe' }, principal, key)
+    : await checkout.placeCod(input, principal, key)
   const orderPrincipal: OrderPrincipal = principal.kind === 'customer'
     ? { kind: 'customer', userId: principal.userId }
     : { kind: 'guest', accessToken: result.guestAccessToken! }

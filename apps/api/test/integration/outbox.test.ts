@@ -19,6 +19,9 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
+import { StripeEventService } from '../../src/modules/payments/stripe/events'
+import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -87,6 +90,24 @@ function createCheckoutServices() {
   return { cartService, quote, checkout }
 }
 
+function testStripeGateway(): StripeGateway {
+  return {
+    checkoutReturnUrls: () => ({
+      successUrl: 'https://shop.example.test/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/checkout/cancel',
+    }),
+    createCheckout: async (input) => ({
+      sessionId: `cs_test_${input.orderId}`,
+      url: `https://checkout.stripe.com/c/pay/cs_test_${input.orderId}`,
+      expiresAt: input.expiresAt,
+    }),
+    retrieveCheckout: async () => { throw new Error('not used') },
+    createFullRefund: async () => { throw new Error('not used') },
+    retrieveRefund: async () => { throw new Error('not used') },
+    constructEvent: (rawBody) => JSON.parse(rawBody) as never,
+  }
+}
+
 async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
   const suffix = crypto.randomUUID()
   const productId = crypto.randomUUID()
@@ -136,8 +157,32 @@ async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
     },
   }
   const idempotencyKey = `outbox-checkout-${crypto.randomUUID()}`
-  const result = await checkout.placeCod(input, principal, idempotencyKey)
-  return { result, principal, checkout, input, idempotencyKey }
+  const stripeGateway = principal.kind === 'guest' ? testStripeGateway() : null
+  const stripeCheckout = stripeGateway
+    ? new StripeCheckoutService(database.db, commerceSecret, stripeGateway)
+    : null
+  const result = stripeCheckout
+    ? await stripeCheckout.place({ ...input, paymentMethod: 'stripe' }, principal, idempotencyKey)
+    : await checkout.placeCod(input, principal, idempotencyKey)
+
+  if (stripeGateway && stripeCheckout) {
+    await new StripeEventService(database.db, stripeGateway).handle(JSON.stringify({
+      id: `evt_paid_${result.order.id}`,
+      type: 'checkout.session.completed',
+      data: { object: {
+        id: `cs_test_${result.order.id}`,
+        client_reference_id: result.order.id,
+        metadata: { orderId: result.order.id },
+        amount_total: result.order.totalSatang,
+        currency: 'thb',
+        payment_intent: `pi_test_${result.order.id.replaceAll('-', '')}`,
+        status: 'complete',
+        payment_status: 'paid',
+      } },
+    }), 'valid-signature')
+  }
+
+  return { result, principal, checkout, stripeCheckout, input, idempotencyKey }
 }
 
 function makeSender(send: EmailSender['send']): EmailSender {
@@ -323,10 +368,10 @@ describe('guest order access and confirmation outbox', () => {
   it('does not create duplicate confirmation intent when checkout is replayed', async () => {
     const guest = guestPrincipal('stable-outbox-owner')
     const placed = await placeOrder(guest)
-    const result = await placed.checkout.placeCod(placed.input, guest, placed.idempotencyKey)
+    const result = await placed.stripeCheckout!.place({ ...placed.input, paymentMethod: 'stripe' }, guest, placed.idempotencyKey)
     const outbox = await database.db.select().from(orderOutbox).where(eq(orderOutbox.orderId, placed.result.order.id))
 
-    expect(result).toEqual(placed.result)
+    expect(result).toMatchObject(placed.result)
     expect(outbox).toHaveLength(1)
   })
 
