@@ -55,6 +55,7 @@ type OrderOutboxConstructor = new (
   db: typeof database.db,
   sender: EmailSender,
   secret: Uint8Array,
+  storefrontUrl: string,
 ) => OrderOutboxInstance
 
 type GuestAccessCommands = {
@@ -200,7 +201,7 @@ function makeOutbox(sender: EmailSender): OrderOutboxInstance {
   const Outbox = outboxExports.OrderOutbox as OrderOutboxConstructor | undefined
   expect(typeof Outbox).toBe('function')
   if (!Outbox) throw new Error('OrderOutbox is not implemented')
-  return new Outbox(database.db, sender, commerceSecret)
+  return new Outbox(database.db, sender, commerceSecret, 'https://shop.example.test')
 }
 
 beforeAll(async () => {
@@ -321,7 +322,7 @@ describe('guest order access and confirmation outbox', () => {
       messages.push(message)
       return { id: 'reissued-token-message' }
     })).processBatch(10)
-    const deliveredToken = messages[0]?.text.split('\n').at(-1)
+    const deliveredToken = guest.result.guestAccessToken
 
     expect(first).toEqual(replay)
     expect(events.filter(({ eventType }) => eventType === 'order.guest-access-reissued')).toHaveLength(1)
@@ -335,6 +336,9 @@ describe('guest order access and confirmation outbox', () => {
     expect(deliveredToken).toBeString()
     expect(deliveredToken).not.toBe(previousToken)
     expect(messages.every(({ text }) => text.includes(deliveredToken!))).toBe(true)
+    expect(messages[0]?.text).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[0]?.html).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[0]?.html).not.toContain(`href="https://shop.example.test/orders/guest/${guest.result.order.id}?token=`)
     await makeAccess().verify(guest.result.order.id, deliveredToken, new Date())
     expect(JSON.stringify({ first, replay, audits, operations })).not.toContain(deliveredToken!)
     await expect((async () => {
@@ -403,6 +407,7 @@ describe('guest order access and confirmation outbox', () => {
     expect(sent).toMatchObject({ status: 'sent', attemptCount: 2, lastErrorCode: null })
     expect(errors[1]).toContain(guest.result.guestAccessToken!)
     expect(errors[1]).toContain(guest.result.order.orderNumber)
+    expect(errors[1]).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
   })
 
   it('caps retry delay when repeated delivery failures occur', async () => {

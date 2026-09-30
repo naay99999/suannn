@@ -18,6 +18,7 @@ import type { CustomerAddress } from '@/pages/account/account-api'
 import { clearSubmissionKey, fingerprintCheckoutInput, getOrCreateSubmissionKey } from './checkout-idempotency'
 import { checkoutAddressDefaultValue, checkoutAddressFields } from './checkout-address'
 import { OrderSummary } from './order-summary'
+import { redirectToStripe } from '@/lib/store-orders'
 
 const checkoutSchema = z.object({
   email: z.email('กรุณากรอกอีเมลให้ถูกต้อง').max(320),
@@ -123,8 +124,8 @@ export function Component() {
 
   async function submit(values: CheckoutForm) {
     setSubmitError('')
-    if (!isCustomer || !availableMethods.includes(paymentMethod) || paymentMethod !== 'cod') {
-      setSubmitError('กรุณาเข้าสู่ระบบเพื่อเลือกเก็บเงินปลายทาง หรือรอเปิดชำระเงินออนไลน์')
+    if (!availableMethods.includes(paymentMethod) || (paymentMethod === 'cod' && !isCustomer)) {
+      setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
     const selectedAddress = selectedAddressPayload(effectiveAddressChoice, selectedSavedAddress, values)
@@ -157,15 +158,26 @@ export function Component() {
       currentQuote = refreshed.data
     }
 
-    const input = buildCheckoutOrderBody(currentQuote, 'cod', { email: values.email.trim(), phone: values.phone.trim() }, selectedAddress)
+    const input = buildCheckoutOrderBody(currentQuote, paymentMethod, { email: values.email.trim(), phone: values.phone.trim() }, selectedAddress)
     const fingerprint = await fingerprintCheckoutInput(input)
     const key = getOrCreateSubmissionKey(currentQuote.quoteToken, fingerprint)
     try {
       const result = await orderMutation.mutateAsync({ input, key })
       if (!('order' in result)) throw new StoreCheckoutRequestError(502, 'INVALID_ORDER_RESPONSE')
-      clearSubmissionKey()
       await queryClient.invalidateQueries({ queryKey: ['store-cart'] })
-      navigate(`/checkout/confirmation/${result.order.id}`, { replace: true })
+      if (paymentMethod === 'stripe') {
+        if (!('checkout' in result) || !result.checkout?.url) throw new StoreCheckoutRequestError(502, 'STRIPE_CHECKOUT_URL_MISSING')
+        redirectToStripe({
+          orderId: result.order.id,
+          paymentMethod: 'stripe',
+          ...(result.guestAccessToken ? { guestAccessToken: result.guestAccessToken } : {}),
+          expiresAt: result.checkout.expiresAt,
+        }, result.checkout.url)
+        clearSubmissionKey()
+      } else {
+        clearSubmissionKey()
+        navigate(`/checkout/confirmation/${result.order.id}`, { replace: true })
+      }
     } catch (error) {
       if (isStaleCheckoutQuoteError(error)) await refreshAfterStaleQuote(queryClient, quoteKey)
       setSubmitError(checkoutErrorMessage(error))
@@ -232,15 +244,15 @@ export function Component() {
             <h2 id="payment-heading" className="text-2xl font-semibold">วิธีชำระเงิน</h2>
             <div className="mt-5 grid gap-3">
               {availableMethods.map(method => <label key={method} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 ${method === (isCustomer ? paymentMethod : 'stripe') ? 'border-primary bg-accent' : ''}`}>
-                <input type="radio" name="paymentMethod" value={method} checked={method === (isCustomer ? paymentMethod : 'stripe')} disabled={method === 'stripe'} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
-                <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'สำหรับบัญชีลูกค้าที่เข้าสู่ระบบแล้ว' : 'กำลังเตรียมขั้นตอนชำระเงินออนไลน์'}</span></span>
+                <input type="radio" name="paymentMethod" value={method} checked={method === (isCustomer ? paymentMethod : 'stripe')} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
+                <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'สำหรับบัญชีลูกค้าที่เข้าสู่ระบบแล้ว' : 'ชำระผ่าน Stripe Checkout'}</span></span>
               </label>)}
               {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
             </div>
           </section>
           <div className="mt-8 flex flex-col items-start gap-4">
             {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-            <Button type="submit" size="storefront" className="w-full sm:w-auto" disabled={orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !isCustomer || paymentMethod !== 'cod'}>{orderMutation.isPending ? 'กำลังส่งคำสั่งซื้อ...' : 'ยืนยันคำสั่งซื้อ'}</Button>
+            <Button type="submit" size="storefront" className="w-full sm:w-auto" disabled={orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(paymentMethod)}>{orderMutation.isPending ? 'กำลังส่งคำสั่งซื้อ...' : paymentMethod === 'stripe' ? 'ไปชำระเงินด้วย Stripe' : 'ยืนยันคำสั่งซื้อ'}</Button>
             <Link to="/products" className="text-sm font-medium text-primary-ink underline underline-offset-4 hover:text-foreground">เลือกสินค้าต่อ</Link>
           </div>
         </form>

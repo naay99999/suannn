@@ -36,6 +36,7 @@ export class OrderOutbox {
     private readonly db: Database,
     private readonly emailSender: EmailSender,
     private readonly commerceSecret: Uint8Array,
+    private readonly storefrontUrl: string,
     private readonly now: () => Date = () => new Date(),
   ) {
     if (!(commerceSecret instanceof Uint8Array) || commerceSecret.byteLength < 32) {
@@ -122,7 +123,7 @@ export class OrderOutbox {
       await this.emailSender.send({
         to: order.contactEmail,
         template: 'order-confirmation',
-        ...orderConfirmationEmail(order.orderNumber, accessToken ?? undefined),
+        ...orderConfirmationEmail(row.orderId, order.orderNumber, this.storefrontUrl, accessToken ?? undefined),
       })
       await this.db.update(orderOutbox).set({
         status: 'sent',
