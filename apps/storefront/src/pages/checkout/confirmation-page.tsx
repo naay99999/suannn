@@ -1,87 +1,44 @@
-import { useRef } from 'react'
-import { useGSAP } from '@gsap/react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { Link, useLocation } from 'react-router'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { CheckmarkCircle01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
-import { Button } from '@workspace/ui/components/button'
+import { Link, useParams } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
-import { getCartSummary } from '@/lib/cart'
-import { OrderSummary } from './order-summary'
-import type { ConfirmationState } from './checkout-types'
-
-gsap.registerPlugin(ScrollTrigger, useGSAP)
+import { authSessionQuery } from '@/lib/auth-session'
+import { formatStorePrice } from '@/lib/store-products'
+import { orderQuery } from '@/pages/account/account-queries'
 
 export function Component() {
-  const scope = useRef<HTMLDivElement>(null)
-  const { state } = useLocation() as { state: ConfirmationState | null }
-  const hasPreview = Boolean(state?.details && state?.cart && getCartSummary(state.cart).lines.length)
+  const { orderId } = useParams()
+  const session = useQuery(authSessionQuery)
+  const userId = session.data?.user.accountType === 'customer' ? session.data.user.id : ''
+  const order = useQuery({ ...orderQuery(userId, orderId ?? ''), enabled: Boolean(userId && orderId) })
 
-  useGSAP(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    gsap.utils.toArray<HTMLElement>('[data-confirm-card]').forEach((card) => {
-      gsap.fromTo(card, { y: 18, opacity: 0.88 }, {
-        y: 0,
-        opacity: 1,
-        ease: 'none',
-        scrollTrigger: { trigger: card, start: 'top 95%', end: 'top 72%', scrub: 0.4 },
-      })
-    })
-  }, { scope, dependencies: [hasPreview] })
+  if (!orderId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>ไม่พบคำสั่งซื้อ</EmptyTitle><EmptyDescription>กลับไปตรวจสอบรายการสินค้าและยืนยันคำสั่งซื้ออีกครั้ง</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link to="/checkout" />} nativeButton={false}>กลับไป checkout</Button></EmptyContent></Empty>
+  if (session.isPending || order.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>
+  if (!userId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>เข้าสู่ระบบเพื่อดูคำสั่งซื้อ</EmptyTitle><EmptyDescription>คำสั่งซื้อนี้ผูกกับบัญชีลูกค้าที่ใช้ยืนยันรายการ</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants()} to={`/sign-in?returnTo=${encodeURIComponent(`/checkout/confirmation/${orderId}`)}`}>เข้าสู่ระบบ</Link></EmptyContent></Empty>
+  if (order.isError || !order.data) return <div role="alert" className="py-16 text-center"><p>โหลดสถานะคำสั่งซื้อไม่ได้</p><Button variant="outline" className="mt-4" onClick={() => void order.refetch()}>ลองอีกครั้ง</Button></div>
 
-  if (!hasPreview || !state) {
-    return (
-      <div className="w-full max-w-full overflow-x-hidden">
-        <title>ตัวอย่างคำสั่งซื้อ | suannn</title>
-        <Empty className="rounded-3xl border bg-card py-20">
-          <EmptyHeader>
-            <EmptyTitle>ยังไม่มีรายการให้แสดง</EmptyTitle>
-            <EmptyDescription>กลับไปตรวจสอบตะกร้าและกรอกข้อมูลจัดส่งเพื่อดูตัวอย่างหน้านี้</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent><Button render={<Link to="/checkout" />} nativeButton={false} size="storefront">กลับไปหน้า checkout</Button></EmptyContent>
-        </Empty>
-      </div>
-    )
-  }
-
-  const { details, cart } = state
-
+  const snapshot = order.data
   return (
-    <div ref={scope} className="w-full max-w-full overflow-x-hidden">
-      <title>ตัวอย่างหน้ายืนยันคำสั่งซื้อ | suannn</title>
-      <div className="max-w-5xl pb-12 md:pb-16">
-        <div className="mb-6 flex size-14 items-center justify-center rounded-full bg-accent text-primary-ink" aria-hidden="true">
-          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-8" />
-        </div>
-        <p className="mb-4 text-sm font-medium text-primary-ink">ตัวอย่างหน้ายืนยัน</p>
-        <h1 className="max-w-5xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl md:text-6xl">รายการของคุณ พร้อมให้ตรวจสอบ</h1>
-        <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground">นี่เป็นตัวอย่างหลังตรวจสอบรายการเท่านั้น ร้านยังไม่ได้รับคำสั่งซื้อ และยังไม่มีการชำระเงินหรือจัดส่ง</p>
-      </div>
-
-      <div className="grid grid-flow-dense items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)] lg:gap-12">
-        <div className="flex min-w-0 flex-col gap-6">
-          <section data-confirm-card aria-labelledby="shipping-title" className="rounded-3xl border bg-card p-5 md:p-8">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 id="shipping-title" className="text-2xl font-semibold">ข้อมูลจัดส่งที่กรอกไว้</h2>
-              <Link to="/checkout" state={{ details }} className="text-sm font-medium text-primary-ink underline underline-offset-4 hover:text-foreground">แก้ไขข้อมูล</Link>
-            </div>
-            <dl className="mt-6 grid gap-5 text-sm sm:grid-cols-2">
-              <div className="flex flex-col gap-1"><dt className="text-muted-foreground">ผู้รับ</dt><dd className="font-medium">{details.name}</dd></div>
-              <div className="flex flex-col gap-1"><dt className="text-muted-foreground">เบอร์โทรศัพท์</dt><dd className="font-medium">{details.phone}</dd></div>
-              <div className="flex flex-col gap-1 sm:col-span-2"><dt className="text-muted-foreground">อีเมล</dt><dd className="font-medium break-all">{details.email}</dd></div>
-              <div className="flex flex-col gap-1 sm:col-span-2"><dt className="text-muted-foreground">ที่อยู่</dt><dd className="font-medium leading-7">{details.addressLine1}{details.addressLine2 ? ` ${details.addressLine2}` : ''}<br />{details.subdistrict} {details.district} {details.province} {details.postalCode}</dd></div>
-            </dl>
-          </section>
-          <section data-confirm-card aria-labelledby="next-title" className="rounded-3xl bg-accent p-5 md:p-8">
-            <h2 id="next-title" className="text-2xl font-semibold">เมื่อร้านเปิดรับคำสั่งซื้อ</h2>
-            <p className="mt-3 text-sm leading-7 text-muted-foreground">ระบบจะแจ้งยอดรวมพร้อมค่าจัดส่ง และส่งรายละเอียดคำสั่งซื้อให้ตรวจสอบอีกครั้งก่อนยืนยันจริง</p>
-          </section>
-          <Button render={<Link to="/products" />} nativeButton={false} size="storefront" className="self-start">
-            เลือกสินค้าเพิ่มเติม <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
-          </Button>
-        </div>
-        <div data-confirm-card><OrderSummary cart={cart} /></div>
+    <div className="mx-auto w-full max-w-3xl">
+      <title>{`คำสั่งซื้อ ${snapshot.orderNumber} | suannn`}</title>
+      <p className="mb-3 text-sm font-medium text-primary-ink">ยืนยันคำสั่งซื้อแล้ว</p>
+      <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">ขอบคุณที่สั่งซื้อกับเรา</h1>
+      <p className="mt-4 text-muted-foreground">หมายเลขคำสั่งซื้อ <strong className="text-foreground">{snapshot.orderNumber}</strong></p>
+      <section className="mt-8 rounded-3xl border bg-card p-6 md:p-8" aria-labelledby="confirmation-status-title">
+        <h2 id="confirmation-status-title" className="text-xl font-semibold">สถานะคำสั่งซื้อ</h2>
+        <p role="status" className="mt-3 text-muted-foreground">{snapshot.paymentMethod === 'cod' ? 'ร้านได้รับคำสั่งซื้อแล้ว ชำระเงินปลายทางเมื่อได้รับสินค้า' : snapshot.status === 'pending_payment' ? 'รอการชำระเงินออนไลน์' : 'สถานะการชำระเงินได้รับการอัปเดตจากร้าน'}</p>
+        <ul className="mt-6 divide-y">
+          {snapshot.items.map(item => <li key={item.id} className="flex justify-between gap-4 py-3"><span>{item.productName} · {item.variantName} × {item.quantity}</span><span className="shrink-0 tabular-nums">{formatStorePrice(item.lineTotalSatang)}</span></li>)}
+        </ul>
+        <dl className="mt-4 flex flex-col gap-3 border-t pt-5 text-sm">
+          <div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatStorePrice(snapshot.subtotalSatang)}</dd></div>
+          <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatStorePrice(snapshot.shippingSatang)}</dd></div>
+          <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดคำสั่งซื้อ</dt><dd className="text-primary-ink">{formatStorePrice(snapshot.totalSatang)}</dd></div>
+        </dl>
+      </section>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Link className={buttonVariants()} to={`/account/orders/${snapshot.id}`}>ดูคำสั่งซื้อในบัญชี</Link>
+        <Link className={buttonVariants({ variant: 'outline' })} to="/products">เลือกสินค้าต่อ</Link>
       </div>
     </div>
   )

@@ -48,6 +48,10 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/checkout/confirmation-page'),
       },
       {
+        path: 'checkout/confirmation/:orderId',
+        lazy: () => import('./pages/checkout/confirmation-page'),
+      },
+      {
         path: 'account',
         Component: CustomerGuard,
         children: [

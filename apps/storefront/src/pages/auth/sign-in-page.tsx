@@ -7,7 +7,7 @@ import { Button } from '@workspace/ui/components/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { AuthRequestError, signIn } from '@/lib/auth-client'
-import { safeAccountReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
+import { safeCustomerReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
 import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
 import { mergeCustomerCartOnce } from '@/lib/store-cart'
 import { AuthPageFrame } from './auth-layout'
@@ -15,7 +15,7 @@ import { signInSchema, type SignInValues } from './auth-schemas'
 
 export function Component() {
   const [searchParams] = useSearchParams()
-  const returnTo = safeAccountReturnPath(searchParams.get('returnTo'))
+  const returnTo = safeCustomerReturnPath(searchParams.get('returnTo'))
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const session = useQuery(authSessionQuery)
