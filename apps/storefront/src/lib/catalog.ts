@@ -1,5 +1,6 @@
 export type ProductCategory = 'fresh' | 'processed'
 export type ProductAvailability = 'in-season' | 'coming-soon'
+export { readCatalogFilters, updateCatalogParams } from './store-products'
 
 export interface ProductImage {
   src: string
@@ -146,29 +147,3 @@ export const products: Product[] = [
 ]
 
 export const featuredProducts = products.slice(0, 4)
-
-export function readCatalogFilters(params: URLSearchParams) {
-  const category = params.get('category')
-  const availability = params.get('availability')
-  const sort = params.get('sort')
-  return {
-    q: params.get('q') ?? '',
-    category: category === 'fresh' || category === 'processed' ? category : 'all',
-    availability: availability === 'in-season' || availability === 'coming-soon' ? availability : 'all',
-    sort: sort === 'price-asc' || sort === 'price-desc' ? sort : 'recommended',
-  }
-}
-
-export function filterProducts(params: URLSearchParams) {
-  const filters = readCatalogFilters(params)
-  const query = filters.q.trim().normalize('NFC').toLocaleLowerCase('th-TH')
-  const result = products.filter(product =>
-    (filters.category === 'all' || product.category === filters.category) &&
-    (filters.availability === 'all' || product.availability === filters.availability) &&
-    `${product.name} ${product.english}`.normalize('NFC').toLocaleLowerCase('th-TH').includes(query),
-  )
-  if (filters.sort !== 'recommended') {
-    result.sort((a, b) => filters.sort === 'price-asc' ? a.price - b.price : b.price - a.price)
-  }
-  return result
-}

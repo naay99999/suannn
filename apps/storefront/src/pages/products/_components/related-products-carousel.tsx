@@ -3,9 +3,9 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon, ArrowRight02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@workspace/ui/components/button'
 import { ProductCard } from '@/components/product-card'
-import type { Product } from '@/lib/catalog'
+import type { StoreProductSummary } from '@/lib/store-products'
 
-export function RelatedProductsCarousel({ products }: { products: Product[] }) {
+export function RelatedProductsCarousel({ products }: { products: StoreProductSummary[] }) {
   const track = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
 

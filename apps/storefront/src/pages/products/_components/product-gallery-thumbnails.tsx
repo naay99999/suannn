@@ -1,7 +1,7 @@
-import type { ProductImage } from '@/lib/catalog'
+import type { StoreProductGalleryImage } from '@/lib/store-products'
 
 interface ProductGalleryThumbnailsProps {
-  images: readonly ProductImage[]
+  images: readonly StoreProductGalleryImage[]
   activeIndex: number
   onSelect: (index: number) => void
   variant?: 'inline' | 'viewer'

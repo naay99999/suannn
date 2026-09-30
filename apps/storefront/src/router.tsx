@@ -27,7 +27,7 @@ export const router = createBrowserRouter([
         loader: ({ request }) => redirect(`/products${new URL(request.url).search}`),
       },
       {
-        path: 'products/:id',
+        path: 'products/:slug',
         lazy: () => import('./pages/products/product-detail-page'),
       },
       {
