@@ -16,7 +16,7 @@ gsap.registerPlugin(ScrollTrigger, useGSAP)
 export function Component() {
   const scope = useRef<HTMLDivElement>(null)
   const { state } = useLocation() as { state: ConfirmationState | null }
-  const hasPreview = Boolean(state?.details && state?.items && getCartSummary(state.items).lines.length)
+  const hasPreview = Boolean(state?.details && state?.cart && getCartSummary(state.cart).lines.length)
 
   useGSAP(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -45,7 +45,7 @@ export function Component() {
     )
   }
 
-  const { details, items } = state
+  const { details, cart } = state
 
   return (
     <div ref={scope} className="w-full max-w-full overflow-x-hidden">
@@ -81,7 +81,7 @@ export function Component() {
             เลือกสินค้าเพิ่มเติม <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
           </Button>
         </div>
-        <div data-confirm-card><OrderSummary items={items} /></div>
+        <div data-confirm-card><OrderSummary cart={cart} /></div>
       </div>
     </div>
   )

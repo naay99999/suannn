@@ -2,21 +2,18 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test } from 'bun:test'
 import { MemoryRouter } from 'react-router'
-import * as catalog from '../src/lib/catalog'
+import { readCatalogFilters, updateCatalogParams } from '../src/lib/store-products'
 import { ProductCard } from '../src/components/product-card'
 import { ProductGalleryImage } from '../src/pages/products/_components/product-gallery-image'
 
 describe('store catalog filters', () => {
   test('maps URL filters to only supported product API query fields', () => {
-    expect(catalog.readCatalogFilters(new URLSearchParams('category=fresh&availability=unknown&cursor=old&sort=unknown')))
+    expect(readCatalogFilters(new URLSearchParams('category=fresh&availability=unknown&cursor=old&sort=unknown')))
       .toEqual({ category: 'fresh', sort: undefined })
   })
 
   test('filter change resets the current pagination cursor', () => {
-    expect(catalog.updateCatalogParams).toBeFunction()
-    if (typeof catalog.updateCatalogParams !== 'function') return
-
-    const next = catalog.updateCatalogParams(new URLSearchParams('category=fresh&cursor=page-2'), 'category', 'processed')
+    const next = updateCatalogParams(new URLSearchParams('category=fresh&cursor=page-2'), 'category', 'processed')
     expect(next.get('category')).toBe('processed')
     expect(next.has('cursor')).toBe(false)
   })

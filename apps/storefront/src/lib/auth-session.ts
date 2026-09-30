@@ -1,5 +1,6 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { getSession, type CustomerSession, type StaffSession } from './auth-client'
+import { storeCartQueryKey } from './store-cart'
 
 export type CustomerAuthState = 'anonymous' | 'customer' | 'staff'
 
@@ -14,6 +15,11 @@ export function accountQueryPrefix(userId: string) {
 
 export function clearCustomerQueries(queryClient: QueryClient) {
   queryClient.removeQueries({ predicate: query => query.queryKey[0] === 'customer-account' })
+  clearStoreCartQuery(queryClient)
+}
+
+export function clearStoreCartQuery(queryClient: QueryClient) {
+  queryClient.removeQueries({ queryKey: storeCartQueryKey })
 }
 
 export function reconcileCustomerQueries(queryClient: QueryClient, session: CustomerSession | StaffSession | null) {

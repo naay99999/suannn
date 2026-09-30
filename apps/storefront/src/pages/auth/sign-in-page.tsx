@@ -9,6 +9,7 @@ import { Input } from '@workspace/ui/components/input'
 import { AuthRequestError, signIn } from '@/lib/auth-client'
 import { safeAccountReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
 import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
+import { mergeCustomerCartOnce } from '@/lib/store-cart'
 import { AuthPageFrame } from './auth-layout'
 import { signInSchema, type SignInValues } from './auth-schemas'
 
@@ -45,6 +46,7 @@ export function Component() {
         setStaffFlow(true)
         return
       }
+      void mergeCustomerCartOnce(next.session.id, queryClient).catch(() => undefined)
       navigate(returnTo, { replace: true })
     } catch (error) {
       setRequestError(error instanceof AuthRequestError ? error.message : 'เข้าสู่ระบบไม่ได้ กรุณาลองใหม่')

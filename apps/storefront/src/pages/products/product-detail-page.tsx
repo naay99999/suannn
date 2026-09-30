@@ -9,6 +9,7 @@ import { Field, FieldLabel } from '@workspace/ui/components/field'
 import { Separator } from '@workspace/ui/components/separator'
 import { getStoreProduct, getStoreProducts, formatStorePrice, storeCategoryLabels, storeProductDetailQueryKey, storeProductQueryKey, StoreProductRequestError } from '@/lib/store-products'
 import { ProductGallery } from './_components/product-gallery'
+import { AddToCart } from './_components/add-to-cart'
 import { ProductInformation } from './_components/product-information'
 import { RelatedProductsCarousel } from './_components/related-products-carousel'
 import { useProductMotion } from './_components/use-product-motion'
@@ -75,6 +76,7 @@ export function Component() {
               </select>
             </Field>}
             <p role="status" className="mb-6 text-sm text-muted-foreground">{selectedVariant.canPurchase ? 'สินค้ารายการนี้พร้อมสั่งซื้อ' : 'สินค้ารายการนี้ยังไม่พร้อมสั่งซื้อ'}</p>
+            <AddToCart product={item} variant={selectedVariant} />
           </>}
           {!selectedVariant && <p role="status" className="my-7 text-sm text-muted-foreground">ขณะนี้ไม่มีตัวเลือกสินค้าที่เปิดจำหน่าย</p>}
           <Separator />

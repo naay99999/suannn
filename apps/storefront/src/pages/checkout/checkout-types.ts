@@ -1,4 +1,4 @@
-import type { CartItem } from '@/lib/cart'
+import type { StoreCartDetail } from '@/lib/store-cart'
 
 export interface CheckoutDetails {
   name: string
@@ -14,5 +14,5 @@ export interface CheckoutDetails {
 
 export interface ConfirmationState {
   details: CheckoutDetails
-  items: CartItem[]
+  cart: StoreCartDetail
 }
