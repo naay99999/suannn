@@ -5,14 +5,19 @@ import { A11y } from 'swiper/modules'
 import type { Swiper as SwiperInstance } from 'swiper'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Button } from '@workspace/ui/components/button'
-import type { Product } from '@/lib/catalog'
+import type { StoreProductDetail, StoreProductGallery } from '@/lib/store-products'
 import { ProductGalleryImage } from './product-gallery-image'
 import { ProductGalleryThumbnails } from './product-gallery-thumbnails'
 import { ProductGalleryViewer } from './product-gallery-viewer'
 
 import 'swiper/css'
 
-export function ProductGallery({ product }: { product: Product }) {
+export function ProductGallery({ product }: { product: StoreProductDetail }) {
+  const gallery: StoreProductGallery = {
+    id: product.id,
+    name: product.name,
+    images: product.imageUrl ? [{ src: product.imageUrl, alt: product.imageAlt ?? product.name, caption: '' }] : [],
+  }
   const mainSwiper = useRef<SwiperInstance | null>(null)
   const imageTriggerRefs = useRef<Array<HTMLButtonElement | null>>([])
   const wasViewerOpen = useRef(false)
@@ -49,6 +54,10 @@ export function ProductGallery({ product }: { product: Product }) {
     mainSwiper.current?.slideTo(index)
   }
 
+  if (gallery.images.length === 0) {
+    return <ProductGalleryImage src={null} alt={product.name} failed onImageError={markImageFailed} width={1254} height={1254} className="aspect-square size-full rounded-[1.5rem] md:rounded-[2rem]" />
+  }
+
   return (
     <div role="group" aria-label={`ภาพสินค้า: ${product.name}`} className="product-gallery catalog-reveal min-w-0">
       <div className="relative overflow-hidden rounded-[1.5rem] bg-muted md:rounded-[2rem]">
@@ -69,7 +78,7 @@ export function ProductGallery({ product }: { product: Product }) {
           onSlideChange={swiper => setActiveIndex(swiper.activeIndex)}
           className="product-gallery-main"
         >
-          {product.images.map((image, index) => (
+          {gallery.images.map((image, index) => (
             <SwiperSlide key={image.src}>
               <div className="relative aspect-square overflow-hidden bg-muted md:aspect-[1.08/1]">
                 <button
@@ -103,7 +112,7 @@ export function ProductGallery({ product }: { product: Product }) {
           ))}
         </Swiper>
 
-        {product.images.length > 1 && (
+        {gallery.images.length > 1 && (
           <>
             <Button
               variant="ghost"
@@ -120,22 +129,22 @@ export function ProductGallery({ product }: { product: Product }) {
               size="icon-lg"
               className="absolute right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 rounded-full bg-background/85 md:grid"
               aria-label="ภาพถัดไป"
-              disabled={activeIndex === product.images.length - 1}
+              disabled={activeIndex === gallery.images.length - 1}
               onClick={() => selectImage(activeIndex + 1)}
             >
               <HugeiconsIcon icon={ArrowRight02Icon} />
             </Button>
             <span className="absolute right-4 top-4 z-10 rounded-full bg-background/85 px-3 py-1.5 text-xs tabular-nums text-foreground" aria-live="polite">
-              {activeIndex + 1} / {product.images.length}
+              {activeIndex + 1} / {gallery.images.length}
             </span>
           </>
         )}
       </div>
 
-      {product.images.length > 1 && (
+      {gallery.images.length > 1 && (
         <div className="mt-3">
           <ProductGalleryThumbnails
-            images={product.images}
+            images={gallery.images}
             activeIndex={activeIndex}
             onSelect={selectImage}
           />
@@ -143,7 +152,7 @@ export function ProductGallery({ product }: { product: Product }) {
       )}
 
       <ProductGalleryViewer
-        product={product}
+        product={gallery}
         open={viewerOpen}
         activeIndex={activeIndex}
         failedSources={failedSources}

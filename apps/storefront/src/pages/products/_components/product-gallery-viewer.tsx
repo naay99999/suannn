@@ -6,7 +6,7 @@ import type { Swiper as SwiperInstance } from 'swiper'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Button } from '@workspace/ui/components/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@workspace/ui/components/dialog'
-import type { Product } from '@/lib/catalog'
+import type { StoreProductGallery } from '@/lib/store-products'
 import { ProductGalleryImage } from './product-gallery-image'
 import { ProductGalleryThumbnails } from './product-gallery-thumbnails'
 
@@ -14,7 +14,7 @@ import 'swiper/css'
 import 'swiper/css/zoom'
 
 interface ProductGalleryViewerProps {
-  product: Product
+  product: StoreProductGallery
   open: boolean
   activeIndex: number
   failedSources: ReadonlySet<string>

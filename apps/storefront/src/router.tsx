@@ -27,7 +27,7 @@ export const router = createBrowserRouter([
         loader: ({ request }) => redirect(`/products${new URL(request.url).search}`),
       },
       {
-        path: 'products/:id',
+        path: 'products/:slug',
         lazy: () => import('./pages/products/product-detail-page'),
       },
       {
@@ -46,6 +46,22 @@ export const router = createBrowserRouter([
       {
         path: 'checkout/confirmation',
         lazy: () => import('./pages/checkout/confirmation-page'),
+      },
+      {
+        path: 'checkout/confirmation/:orderId',
+        lazy: () => import('./pages/checkout/confirmation-page'),
+      },
+      {
+        path: 'checkout/success',
+        lazy: () => import('./pages/checkout/checkout-return-page'),
+      },
+      {
+        path: 'checkout/cancel',
+        lazy: () => import('./pages/checkout/checkout-return-page'),
+      },
+      {
+        path: 'orders/guest/:orderId',
+        lazy: () => import('./pages/orders/guest-order-page'),
       },
       {
         path: 'account',

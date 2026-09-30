@@ -19,6 +19,9 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
+import { StripeEventService } from '../../src/modules/payments/stripe/events'
+import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -52,6 +55,7 @@ type OrderOutboxConstructor = new (
   db: typeof database.db,
   sender: EmailSender,
   secret: Uint8Array,
+  storefrontUrl: string,
 ) => OrderOutboxInstance
 
 type GuestAccessCommands = {
@@ -85,6 +89,24 @@ function createCheckoutServices() {
   const quote = new QuoteService(cartService, settings, commerceSecret)
   const checkout = new CheckoutService(database.db, commerceSecret)
   return { cartService, quote, checkout }
+}
+
+function testStripeGateway(): StripeGateway {
+  return {
+    checkoutReturnUrls: () => ({
+      successUrl: 'https://shop.example.test/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://shop.example.test/checkout/cancel',
+    }),
+    createCheckout: async (input) => ({
+      sessionId: `cs_test_${input.orderId}`,
+      url: `https://checkout.stripe.com/c/pay/cs_test_${input.orderId}`,
+      expiresAt: input.expiresAt,
+    }),
+    retrieveCheckout: async () => { throw new Error('not used') },
+    createFullRefund: async () => { throw new Error('not used') },
+    retrieveRefund: async () => { throw new Error('not used') },
+    constructEvent: (rawBody) => JSON.parse(rawBody) as never,
+  }
 }
 
 async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
@@ -136,8 +158,32 @@ async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
     },
   }
   const idempotencyKey = `outbox-checkout-${crypto.randomUUID()}`
-  const result = await checkout.placeCod(input, principal, idempotencyKey)
-  return { result, principal, checkout, input, idempotencyKey }
+  const stripeGateway = principal.kind === 'guest' ? testStripeGateway() : null
+  const stripeCheckout = stripeGateway
+    ? new StripeCheckoutService(database.db, commerceSecret, stripeGateway)
+    : null
+  const result = stripeCheckout
+    ? await stripeCheckout.place({ ...input, paymentMethod: 'stripe' }, principal, idempotencyKey)
+    : await checkout.placeCod(input, principal, idempotencyKey)
+
+  if (stripeGateway && stripeCheckout) {
+    await new StripeEventService(database.db, stripeGateway).handle(JSON.stringify({
+      id: `evt_paid_${result.order.id}`,
+      type: 'checkout.session.completed',
+      data: { object: {
+        id: `cs_test_${result.order.id}`,
+        client_reference_id: result.order.id,
+        metadata: { orderId: result.order.id },
+        amount_total: result.order.totalSatang,
+        currency: 'thb',
+        payment_intent: `pi_test_${result.order.id.replaceAll('-', '')}`,
+        status: 'complete',
+        payment_status: 'paid',
+      } },
+    }), 'valid-signature')
+  }
+
+  return { result, principal, checkout, stripeCheckout, input, idempotencyKey }
 }
 
 function makeSender(send: EmailSender['send']): EmailSender {
@@ -155,7 +201,7 @@ function makeOutbox(sender: EmailSender): OrderOutboxInstance {
   const Outbox = outboxExports.OrderOutbox as OrderOutboxConstructor | undefined
   expect(typeof Outbox).toBe('function')
   if (!Outbox) throw new Error('OrderOutbox is not implemented')
-  return new Outbox(database.db, sender, commerceSecret)
+  return new Outbox(database.db, sender, commerceSecret, 'https://shop.example.test')
 }
 
 beforeAll(async () => {
@@ -276,7 +322,7 @@ describe('guest order access and confirmation outbox', () => {
       messages.push(message)
       return { id: 'reissued-token-message' }
     })).processBatch(10)
-    const deliveredToken = messages[0]?.text.split('\n').at(-1)
+    const deliveredToken = guest.result.guestAccessToken
 
     expect(first).toEqual(replay)
     expect(events.filter(({ eventType }) => eventType === 'order.guest-access-reissued')).toHaveLength(1)
@@ -290,6 +336,9 @@ describe('guest order access and confirmation outbox', () => {
     expect(deliveredToken).toBeString()
     expect(deliveredToken).not.toBe(previousToken)
     expect(messages.every(({ text }) => text.includes(deliveredToken!))).toBe(true)
+    expect(messages[0]?.text).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[0]?.html).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[0]?.html).not.toContain(`href="https://shop.example.test/orders/guest/${guest.result.order.id}?token=`)
     await makeAccess().verify(guest.result.order.id, deliveredToken, new Date())
     expect(JSON.stringify({ first, replay, audits, operations })).not.toContain(deliveredToken!)
     await expect((async () => {
@@ -323,10 +372,10 @@ describe('guest order access and confirmation outbox', () => {
   it('does not create duplicate confirmation intent when checkout is replayed', async () => {
     const guest = guestPrincipal('stable-outbox-owner')
     const placed = await placeOrder(guest)
-    const result = await placed.checkout.placeCod(placed.input, guest, placed.idempotencyKey)
+    const result = await placed.stripeCheckout!.place({ ...placed.input, paymentMethod: 'stripe' }, guest, placed.idempotencyKey)
     const outbox = await database.db.select().from(orderOutbox).where(eq(orderOutbox.orderId, placed.result.order.id))
 
-    expect(result).toEqual(placed.result)
+    expect(result).toMatchObject(placed.result)
     expect(outbox).toHaveLength(1)
   })
 
@@ -358,6 +407,7 @@ describe('guest order access and confirmation outbox', () => {
     expect(sent).toMatchObject({ status: 'sent', attemptCount: 2, lastErrorCode: null })
     expect(errors[1]).toContain(guest.result.guestAccessToken!)
     expect(errors[1]).toContain(guest.result.order.orderNumber)
+    expect(errors[1]).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
   })
 
   it('caps retry delay when repeated delivery failures occur', async () => {

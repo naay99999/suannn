@@ -3,6 +3,7 @@ import { useLocation } from 'react-router'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft02Icon,
@@ -13,11 +14,12 @@ import {
   PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { Marquee } from '@workspace/ui/components/marquee'
 import { ToggleGroup, ToggleGroupItem } from '@workspace/ui/components/toggle-group'
 import { cn } from '@workspace/ui/lib/utils'
 import { principles } from './home-data'
-import { featuredProducts as products } from '@/lib/catalog'
+import { getStoreProducts, storeProductQueryKey } from '@/lib/store-products'
 import { ProductCard } from '@/components/product-card'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
@@ -53,9 +55,11 @@ export function Component() {
   const [story, setStory] = useState(0)
   const [paused, setPaused] = useState(false)
   const { hash, key } = useLocation()
-  const visibleProducts = products.filter(
-    (product) => category === 'all' || product.category === category,
-  )
+  const featured = useQuery({
+    queryKey: storeProductQueryKey({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: 4 }),
+    queryFn: () => getStoreProducts({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: 4 }),
+  })
+  const visibleProducts = featured.data?.items ?? []
 
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
@@ -256,22 +260,23 @@ export function Component() {
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
-        <div
-          className={cn(
-            'mt-10 grid grid-flow-dense gap-x-5 gap-y-10',
-            category === 'all' && 'grid-cols-2 lg:grid-cols-4',
-            category === 'fresh' && 'grid-cols-1 sm:grid-cols-3',
-            category === 'processed' && 'max-w-sm grid-cols-1',
-          )}
-        >
-          {visibleProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-        <p role="status" className="mt-7 text-xs leading-6 text-muted-foreground">
-          แสดง {visibleProducts.length} รายการตัวอย่าง · ราคา สถานะ และข้อมูลสวนเป็นตัวอย่าง
-          ยังไม่เปิดสั่งซื้อ
-        </p>
+        {featured.isPending ? <p role="status" className="mt-8 text-muted-foreground">กำลังโหลดสินค้า...</p> : null}
+        {featured.isError ? <div role="alert" className="mt-8 flex flex-wrap items-center gap-3"><p>โหลดสินค้าแนะนำไม่ได้</p><Button variant="outline" onClick={() => void featured.refetch()}>ลองอีกครั้ง</Button></div> : null}
+        {featured.data && visibleProducts.length === 0 ? (
+          <Empty className="mt-8 border py-12">
+            <EmptyHeader><EmptyTitle>ยังไม่มีสินค้าในหมวดนี้</EmptyTitle><EmptyDescription>กลับมาดูอีกครั้งเมื่อมีสินค้าเผยแพร่</EmptyDescription></EmptyHeader>
+            <EmptyContent><Button variant="outline" onClick={() => setCategory('all')}>ดูสินค้าทั้งหมด</Button></EmptyContent>
+          </Empty>
+        ) : null}
+        {visibleProducts.length > 0 ? <div className={cn(
+          'mt-10 grid grid-flow-dense gap-x-5 gap-y-10',
+          category === 'all' && 'grid-cols-2 lg:grid-cols-4',
+          category === 'fresh' && 'grid-cols-1 sm:grid-cols-3',
+          category === 'processed' && 'max-w-sm grid-cols-1',
+        )}>
+          {visibleProducts.map(product => <ProductCard key={product.id} product={product} />)}
+        </div> : null}
+        {featured.data ? <p role="status" className="mt-7 text-xs leading-6 text-muted-foreground">แสดง {visibleProducts.length} รายการ</p> : null}
       </section>
 
       <section

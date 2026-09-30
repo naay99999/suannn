@@ -7,9 +7,11 @@ test('sign-out removes account and session cache after the server accepts it', a
   const client = new QueryClient()
   client.setQueryData(['auth', 'session'], { user: { id: 'customer-1' } })
   client.setQueryData(['customer-account', 'customer-1', 'profile'], { name: 'มะลิ' })
+  client.setQueryData(['store-cart'], { cartVersion: 1, lines: [] })
   await performSignOut(client, async () => undefined)
   expect(client.getQueryData(['auth', 'session'])).toBeNull()
   expect(client.getQueryData(['customer-account', 'customer-1', 'profile'])).toBeUndefined()
+  expect(client.getQueryData(['store-cart'])).toBeUndefined()
 })
 
 test('revoking the current session clears the account, while another session stays signed in', async () => {

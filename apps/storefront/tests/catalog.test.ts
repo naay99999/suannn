@@ -1,51 +1,60 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test } from 'bun:test'
-import { existsSync } from 'node:fs'
-import { products, filterProducts, readCatalogFilters } from '../src/lib/catalog'
+import { MemoryRouter } from 'react-router'
+import { readCatalogFilters, updateCatalogParams } from '../src/lib/store-products'
+import { ProductCard } from '../src/components/product-card'
+import { ProductGalleryImage } from '../src/pages/products/_components/product-gallery-image'
 
-const select = (query: string) => filterProducts(new URLSearchParams(query))
+describe('store catalog filters', () => {
+  test('maps URL filters to only supported product API query fields', () => {
+    expect(readCatalogFilters(new URLSearchParams('category=fresh&availability=unknown&cursor=old&sort=unknown')))
+      .toEqual({ category: 'fresh', sort: undefined })
+  })
 
-describe('mock catalog', () => {
-  test('provides six unique products with stable existing IDs', () => {
-    expect(products).toHaveLength(6)
-    expect(new Set(products.map(product => product.id)).size).toBe(6)
-    expect(products.map(product => product.id)).toEqual(expect.arrayContaining(['mango', 'orange', 'avocado', 'dried-mango']))
-    expect(select('category=fresh')).toHaveLength(3)
-    expect(select('category=processed')).toHaveLength(3)
-  })
-  test('combines Thai search, category and availability', () => {
-    expect(select('q=มะม่วง&category=processed&availability=in-season').map(product => product.id)).toEqual(['dried-mango'])
-    expect(select('q=มะม่วง&category=processed&availability=coming-soon')).toHaveLength(0)
-  })
-  test('handles empty searches and unmatched text', () => {
-    expect(select('q=%20%20')).toHaveLength(6)
-    expect(select('q=missing-product')).toHaveLength(0)
-    expect(select('q=SUNSHINE')[0]?.id).toBe('mango')
-  })
-  test('invalid URL values fall back to the default catalog', () => {
-    expect(readCatalogFilters(new URLSearchParams('category=unknown&availability=unknown&sort=unknown'))).toEqual({ q: '', category: 'all', availability: 'all', sort: 'recommended' })
-    expect(select('category=unknown&availability=unknown&sort=unknown')).toEqual(products)
-  })
-  test('sorts prices without mutating recommendation order', () => {
-    const original = products.map(product => product.id)
-    expect(select('sort=price-asc').map(product => product.price)).toEqual([89, 99, 119, 129, 139, 159])
-    expect(select('sort=price-desc').map(product => product.price)).toEqual([159, 139, 129, 119, 99, 89])
-    expect(select('').map(product => product.id)).toEqual(original)
+  test('filter change resets the current pagination cursor', () => {
+    const next = updateCatalogParams(new URLSearchParams('category=fresh&cursor=page-2'), 'category', 'processed')
+    expect(next.get('category')).toBe('processed')
+    expect(next.has('cursor')).toBe(false)
   })
 })
 
-describe('product galleries', () => {
-  test('provides three distinct illustrated images with accessible descriptions for every product', () => {
-    for (const product of products) {
-      expect(product.images).toHaveLength(3)
-      expect(new Set(product.images.map(image => image.src)).size).toBe(product.images.length)
-      for (const image of product.images) {
-        expect(image.alt.trim()).not.toBe('')
-        expect(image.caption.trim()).not.toBe('')
-        expect(existsSync(new URL(`../public${image.src}`, import.meta.url))).toBe(true)
-        if (image.thumbnailSrc) {
-          expect(existsSync(new URL(`../public${image.thumbnailSrc}`, import.meta.url))).toBe(true)
-        }
-      }
-    }
+describe('API product fallbacks and URLs', () => {
+  test('renders a neutral fallback when a product image is missing', () => {
+    const html = renderToStaticMarkup(createElement(ProductGalleryImage, {
+      src: '',
+      alt: 'Mango product',
+      failed: false,
+      onImageError: () => undefined,
+    }))
+
+    expect(html).toContain('role="img"')
+    expect(html).toContain('Mango product')
+    expect(html).not.toContain('<img')
+  })
+
+  test('links product cards with the API slug', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null,
+      createElement(ProductCard, {
+        product: {
+          id: 'server-id',
+          slug: 'mango-from-the-garden',
+          name: 'Mango',
+          englishName: null,
+          category: 'fresh',
+          imageUrl: null,
+          imageAlt: null,
+          minPriceSatang: 12000,
+          canPurchase: true,
+          images: [{ src: '', alt: 'Mango', caption: '' }],
+          price: 120,
+          unit: 'kg',
+          availability: 'in-season',
+          categoryLabel: 'ผลไม้สด',
+        } as never,
+      }),
+    ))
+
+    expect(html).toContain('href="/products/mango-from-the-garden"')
   })
 })

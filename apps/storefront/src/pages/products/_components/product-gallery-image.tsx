@@ -1,7 +1,7 @@
 import type { ImgHTMLAttributes } from 'react'
 
 interface ProductGalleryImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'alt' | 'src'> {
-  src: string
+  src: string | null
   alt: string
   failed: boolean
   onImageError: (src: string) => void
@@ -17,7 +17,7 @@ export function ProductGalleryImage({
   className,
   ...props
 }: ProductGalleryImageProps) {
-  if (failed) {
+  if (failed || !src) {
     return (
       <span
         role={thumbnail ? undefined : 'img'}
@@ -25,7 +25,7 @@ export function ProductGalleryImage({
         aria-hidden={thumbnail || undefined}
         className={`flex size-full items-center justify-center bg-muted px-4 text-center text-sm text-muted-foreground ${className ?? ''}`}
       >
-        ภาพนี้โหลดไม่ได้
+        ภาพสินค้าไม่พร้อมใช้งาน
       </span>
     )
   }

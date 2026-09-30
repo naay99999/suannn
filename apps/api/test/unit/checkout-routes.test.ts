@@ -3,6 +3,8 @@ import { createApp, type AppDependencies } from '../../src/app'
 import { loadConfig } from '../../src/config/env'
 import type { Auth } from '../../src/plugins/auth/auth'
 import { DomainError } from '../../src/shared/domain-error'
+import { CheckoutService } from '../../src/modules/checkout/service'
+import type { CartPrincipal } from '../../src/modules/cart/types'
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
@@ -242,15 +244,25 @@ function checkoutRequest(body: unknown, cookie = `suannn_cart=${guestCartToken}`
 }
 
 describe('store checkout and order HTTP contracts', () => {
-  it('accepts Stripe orders and keeps the COD response shape unchanged', async () => {
+  it('rejects guest COD before calling the order service', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest(validCheckoutBody))
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+  })
+
+  it('accepts customer COD and Stripe orders while keeping the COD response shape unchanged', async () => {
     const { appPromise, calls } = createHarness({ stripeConfigured: true })
     const app = await appPromise
-    const cod = await app.handle(checkoutRequest(validCheckoutBody))
+    const cod = await app.handle(checkoutRequest(validCheckoutBody, 'session=customer'))
     const stripe = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'stripe' }, undefined, 'checkout-stripe-1'))
     const invalid = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'wire' }, undefined, 'checkout-invalid-1'))
 
     expect(cod.status).toBe(201)
-    expect(await cod.json()).toEqual({ order: guestOrder, guestAccessToken: 'guest-access-secret' })
+    expect(await cod.json()).toEqual({ order: customerOrder })
     expect(stripe.status).toBe(201)
     expect(await stripe.json()).toEqual({
       order: { ...guestOrder, status: 'pending_payment', paymentMethod: 'stripe' },
@@ -260,6 +272,26 @@ describe('store checkout and order HTTP contracts', () => {
     expect(invalid.status).toBe(422)
     expect(calls.some((call) => call.method === 'checkout.placeStripe')).toBe(true)
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(true)
+  })
+
+  it('rejects a guest principal in the checkout service before touching persistence', async () => {
+    const checkout = new CheckoutService({} as never, new Uint8Array(32).fill(1))
+    const guest: CartPrincipal = { kind: 'guest', tokenHash: 'a'.repeat(64) }
+
+    await expect(checkout.placeCod({
+      quoteToken: 'signed-quote',
+      paymentMethod: 'cod',
+      contact: { email: 'guest@example.com', phone: '+66812345678' },
+      address: {
+        recipientName: 'Somchai',
+        addressLine1: '1 Main Road',
+        addressLine2: null,
+        subdistrict: 'Suthep',
+        district: 'Mueang Chiang Mai',
+        province: 'Chiang Mai',
+        postalCode: '50200',
+      },
+    }, guest, 'guest-cod-key')).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
   })
 
   it('rejects Stripe checkout before service calls when Stripe is not configured', async () => {
@@ -280,7 +312,7 @@ describe('store checkout and order HTTP contracts', () => {
     const quoteResponse = await app.handle(request('/api/v1/store/checkout/quote', {
       method: 'POST', body: '{}',
     }, `suannn_cart=${guestCartToken}`))
-    const createResponse = await app.handle(checkoutRequest(validCheckoutBody))
+    const createResponse = await app.handle(checkoutRequest(validCheckoutBody, 'session=customer'))
     const listResponse = await app.handle(request('/api/v1/store/orders', {}, 'session=customer'))
     const detailResponse = await app.handle(request(`/api/v1/store/orders/${guestOrderId}`, {
       headers: { 'x-order-access-token': 'guest-access-secret' },
@@ -296,7 +328,7 @@ describe('store checkout and order HTTP contracts', () => {
     expect(quoteResponse.status).toBe(200)
     expect(await quoteResponse.json()).toEqual(quote)
     expect(createResponse.status).toBe(201)
-    expect(created).toHaveProperty('guestAccessToken', 'guest-access-secret')
+    expect(created).not.toHaveProperty('guestAccessToken')
     expect(listResponse.status).toBe(200)
     expect(detailResponse.status).toBe(200)
     expect(detail).not.toHaveProperty('guestAccessToken')
@@ -373,7 +405,7 @@ describe('store checkout and order HTTP contracts', () => {
   it('maps a stale quote to 409 without changing the route contract', async () => {
     const { appPromise, calls } = createHarness({ checkoutError: 'QUOTE_STALE' })
     const app = await appPromise
-    const response = await app.handle(checkoutRequest(validCheckoutBody))
+    const response = await app.handle(checkoutRequest(validCheckoutBody, 'session=customer'))
 
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual({ code: 'QUOTE_STALE', message: 'Checkout quote is expired or no longer current' })
@@ -504,6 +536,7 @@ describe('store checkout and order HTTP contracts', () => {
       expect(document.paths[path]?.[method]).toBeDefined()
       expect(document.paths[path]?.[method]?.responses).toBeDefined()
     }
+    expect(document.paths['/api/v1/store/checkout/orders']?.post?.description).toContain('customer COD')
     expect(document.paths['/api/v1/store/orders/']).toBeUndefined()
     expect(document.components.securitySchemes.orderAccessToken).toMatchObject({
       type: 'apiKey',

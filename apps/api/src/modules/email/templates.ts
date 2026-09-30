@@ -67,20 +67,29 @@ export function changeEmailCodeEmail(code: string): EmailContent {
   }
 }
 
-export function orderConfirmationEmail(orderNumber: string, guestAccessToken?: string): EmailContent {
+export function orderConfirmationEmail(
+  orderId: string,
+  orderNumber: string,
+  storefrontUrl: string,
+  guestAccessToken?: string,
+): EmailContent {
   const safeOrderNumber = escapeHtml(orderNumber)
+  const storefront = new URL(storefrontUrl)
+  if (storefront.protocol !== 'https:' && storefront.protocol !== 'http:') throw new Error('INVALID_STOREFRONT_URL')
   if (!guestAccessToken) {
+    const url = new URL(`/account/orders/${encodeURIComponent(orderId)}`, storefront).toString()
     return {
       subject: `Your Suannn order ${orderNumber} is confirmed`,
-      text: `We received your order.\nOrder number: ${orderNumber}`,
-      html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p>`,
+      text: `We received your order.\nOrder number: ${orderNumber}\n\nView your order: ${url}`,
+      html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p><a href="${escapeHtml(url)}">View your order</a></p>`,
     }
   }
 
+  const url = new URL(`/orders/guest/${encodeURIComponent(orderId)}`, storefront).toString()
   const safeToken = escapeHtml(guestAccessToken)
   return {
     subject: `Your Suannn order ${orderNumber} is confirmed`,
-    text: `We received your order.\nOrder number: ${orderNumber}\n\nUse this guest access token in the X-Order-Access-Token header to view or cancel your order:\n${guestAccessToken}`,
-    html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p>Use this guest access token in the <code>X-Order-Access-Token</code> header to view or cancel your order:</p><p><code>${safeToken}</code></p>`,
+    text: `We received your order.\nOrder number: ${orderNumber}\n\nView your guest order: ${url}\n\nEnter this guest access token on that page:\n${guestAccessToken}`,
+    html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p><a href="${escapeHtml(url)}">View your guest order</a></p><p>Enter this guest access token on that page:</p><p><code>${safeToken}</code></p>`,
   }
 }

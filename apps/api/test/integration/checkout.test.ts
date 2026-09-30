@@ -156,7 +156,7 @@ async function seedVariant(options: { priceSatang?: number; quantities?: number[
 }
 
 async function prepareCheckout(
-  principal: CartPrincipal = guestPrincipal(),
+  principal: CartPrincipal = { kind: 'customer', userId: actorId },
   options: { priceSatang?: number; quantities?: number[]; quantity?: number } = {},
 ) {
   const seeded = await seedVariant(options)
@@ -202,8 +202,9 @@ describe('atomic COD checkout', () => {
 
   const checkoutBehavior = it
 
-  checkoutBehavior('snapshots an order, allocates FIFO, clears the guest cart, and raises reversible capacity', async () => {
-    const prepared = await prepareCheckout(guestPrincipal(), { quantities: [2, 5], quantity: 4 })
+  checkoutBehavior('snapshots a customer order, allocates FIFO, clears the customer cart, and raises reversible capacity', async () => {
+    const principal = { kind: 'customer', userId: actorId } as const
+    const prepared = await prepareCheckout(principal, { quantities: [2, 5], quantity: 4 })
 
     const result = await prepared.checkout.placeCod(prepared.input, prepared.principal, 'checkout-success-1')
     const [savedOrder] = await database.db.select().from(commerceOrder)
@@ -231,9 +232,9 @@ describe('atomic COD checkout', () => {
       .where(and(eq(inventoryLot.variantId, prepared.variantId)))
       .orderBy(asc(inventoryLot.receivedAt))
 
-    expect(result.guestAccessToken).toMatch(/^[A-Za-z0-9_-]{40,}$/)
+    expect(result.guestAccessToken).toBeUndefined()
     expect(savedOrder).toMatchObject({
-      customerId: null,
+      customerId: actorId,
       status: 'placed',
       contactEmail: 'buyer@example.test',
       contactPhone: '081-234-5678',
@@ -270,13 +271,13 @@ describe('atomic COD checkout', () => {
     expect(savedPayment).toHaveLength(1)
     expect(savedPayment[0]).toMatchObject({ method: 'cod', provider: 'cod', status: 'awaiting_collection', amountSatang: 5525 })
     expect(events.map(({ eventType, actorType }) => ({ eventType, actorType }))).toContainEqual({
-      eventType: 'order.placed', actorType: 'guest',
+      eventType: 'order.placed', actorType: 'customer',
     })
     expect(outbox).toHaveLength(1)
     expect(savedReservation?.actorId).toBe(result.order.id)
     expect(audit).toHaveLength(1)
-    expect(audit[0]).toMatchObject({ actorUserId: null, metadata: {
-      actorType: 'guest', principalId: result.order.id, reservationId: savedOrder!.reservationId,
+    expect(audit[0]).toMatchObject({ actorUserId: actorId, metadata: {
+      actorType: 'customer', principalId: actorId, reservationId: savedOrder!.reservationId,
       paymentId: savedPayment[0]!.id, totalSatang: 5525, lineCount: 1,
     } })
     expect(JSON.stringify({ audit, outbox, operationResult: await database.db.select().from(orderOperation) }))
@@ -285,8 +286,21 @@ describe('atomic COD checkout', () => {
     expect(lots.map(({ onHandQuantity, reversibleQuantity }) => [onHandQuantity, reversibleQuantity])).toEqual([[0, 2], [3, 2]])
   })
 
-  checkoutBehavior('replays the same order and guest token before checking an expired quote or cleared cart', async () => {
-    const principal = guestPrincipal('replay-owner')
+  checkoutBehavior('rejects guest COD before any order, reservation, payment, or cart mutation', async () => {
+    const principal = guestPrincipal('guest-cod-rejected')
+    const prepared = await prepareCheckout(principal, { quantity: 1 })
+
+    await expect(prepared.checkout.placeCod(prepared.input, principal, 'guest-cod-rejected-1'))
+      .rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED', status: 401 })
+
+    expect(await countRows('commerce_order')).toBe(0)
+    expect(await countRows('inventory_reservation')).toBe(0)
+    expect(await countRows('payment')).toBe(0)
+    expect((await prepared.cartService.get(principal)).lines).toHaveLength(1)
+  })
+
+  checkoutBehavior('replays the same customer order before checking an expired quote or cleared cart', async () => {
+    const principal = { kind: 'customer', userId: actorId } as const
     const prepared = await prepareCheckout(principal, { quantity: 1 })
     let now = new Date()
     const service = new CheckoutService(database.db, commerceSecret, () => now)
@@ -299,7 +313,7 @@ describe('atomic COD checkout', () => {
 
     expect(replay).toEqual(first)
     expect(replay.order.status).toBe('placed')
-    expect(replay.guestAccessToken).toBe(first.guestAccessToken)
+    expect(replay.guestAccessToken).toBeUndefined()
     const [currentOrder] = await database.db.select().from(commerceOrder)
       .where(eq(commerceOrder.id, first.order.id))
     expect(currentOrder?.status).toBe('processing')

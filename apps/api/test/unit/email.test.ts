@@ -6,6 +6,7 @@ import {
 } from '../../src/modules/email/sender'
 import {
   invitationEmail,
+  orderConfirmationEmail,
   resetPasswordEmail,
   verificationEmail,
 } from '../../src/modules/email/templates'
@@ -117,5 +118,17 @@ describe('authentication email', () => {
     finishFirst()
     expect(await queue.drain(100)).toBe(true)
     expect(maximumActive).toBe(1)
+  })
+})
+
+describe('order confirmation email', () => {
+  it('includes a guest order link without the access token in the URL', () => {
+    const content = orderConfirmationEmail('order-123', 'S-2026-0001', 'https://shop.example.test', 'guest-secret')
+
+    expect(content.text).toContain('https://shop.example.test/orders/guest/order-123')
+    expect(content.html).toContain('https://shop.example.test/orders/guest/order-123')
+    expect(content.text).toContain('guest-secret')
+    const links = content.html.match(/href="([^"]+)"/g) ?? []
+    expect(links.some(link => link.includes('guest-secret'))).toBe(false)
   })
 })

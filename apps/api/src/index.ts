@@ -89,7 +89,7 @@ const stripeCheckout = new StripeCheckoutService(
 const stripeEvents = new StripeEventService(database.db, stripeGateway)
 const stripeRefunds = new StripeRefundService(database.db, stripeGateway)
 const orders = new OrderService(database.db, config.commerceSecret)
-const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret)
+const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret, config.storefrontUrl)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,

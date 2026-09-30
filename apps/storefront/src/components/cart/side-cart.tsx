@@ -4,14 +4,15 @@ import { ShoppingBag01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@workspace/ui/components/button'
 import { SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '@workspace/ui/components/sheet'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@workspace/ui/components/empty'
-import { formatPrice } from '@/lib/catalog'
+import { formatStorePrice } from '@/lib/store-products'
 import { getCartSummary } from '@/lib/cart'
+import { StoreProductImage } from '@/components/store-product-image'
 import { useCart } from './cart-context'
 import { QuantityControl } from './quantity-control'
 
 export function CartTrigger() {
-  const { items, triggerRef } = useCart()
-  const { count } = getCartSummary(items)
+  const { cart, triggerRef } = useCart()
+  const { count } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
   return (
     <SheetTrigger render={<Button ref={triggerRef} variant="outline" size="icon-lg" className="relative rounded-full" />} aria-label={`เปิดตะกร้า ${count} ชิ้น`}>
       <HugeiconsIcon icon={ShoppingBag01Icon} />
@@ -21,47 +22,59 @@ export function CartTrigger() {
 }
 
 export function SideCart() {
-  const { items, dispatch, setOpen, storageError, triggerRef } = useCart()
-  const { lines, count, subtotal } = getCartSummary(items)
+  const { cart, pending, error, setItem, removeItem, mergeNotice, setOpen, triggerRef } = useCart()
+  const { lines, count, subtotalSatang, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
+  const canCheckout = lines.length > 0 && !hasUnavailable && !pending
+
   return (
     <SheetContent side="right" finalFocus={triggerRef} showCloseButton={false} className="suannn-store gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg motion-reduce:transition-none">
       <SheetHeader className="shrink-0 border-b p-6 pr-16">
         <SheetTitle>ตะกร้าจากสวน · {count} ชิ้น</SheetTitle>
-        <SheetDescription>เก็บของอร่อยที่เลือกไว้ด้วยกัน</SheetDescription>
+        <SheetDescription>รายการและราคาจากข้อมูลปัจจุบันของร้าน</SheetDescription>
       </SheetHeader>
       <SheetClose render={<Button variant="ghost" size="icon-lg" className="absolute right-3 top-4" />} aria-label="ปิดตะกร้า"><HugeiconsIcon icon={Cancel01Icon} /></SheetClose>
-      {storageError && <p role="status" className="px-6 pt-4 text-sm text-destructive">เบราว์เซอร์ไม่อนุญาตให้บันทึก ตะกร้าจะอยู่จนกว่าจะรีเฟรชหน้านี้</p>}
+      {pending && <p role="status" className="px-6 pt-4 text-sm text-muted-foreground">กำลังอัปเดตตะกร้า...</p>}
+      {mergeNotice && <p role="status" className="px-6 pt-4 text-sm text-muted-foreground">{mergeNotice}</p>}
+      {error && <p role="alert" className="px-6 pt-4 text-sm text-destructive">{error}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
         {lines.length === 0 ? (
           <Empty className="h-full px-0">
-            <EmptyHeader><EmptyTitle>ตะกร้ายังว่างอยู่</EmptyTitle><EmptyDescription>เลือกผลไม้หรือของอร่อยจากสวน แล้วเพิ่มลงตะกร้าได้เลย</EmptyDescription></EmptyHeader>
-            <EmptyContent><Button render={<Link to="/products" />} onClick={() => setOpen(false)}>ไปเลือกของอร่อย</Button></EmptyContent>
+            <EmptyHeader><EmptyTitle>ตะกร้ายังว่างอยู่</EmptyTitle><EmptyDescription>เลือกสินค้าจากร้านแล้วเพิ่มลงตะกร้าได้เลย</EmptyDescription></EmptyHeader>
+            <EmptyContent><Button render={<Link to="/products" />} onClick={() => setOpen(false)}>ไปเลือกสินค้า</Button></EmptyContent>
           </Empty>
         ) : (
           <ul className="flex flex-col gap-6">
-            {lines.map(({ product, quantity, total }) => (
-              <li key={product.id} className="flex gap-4 border-b pb-6 last:border-0">
-                <Link to={`/products/${product.id}`} onClick={() => setOpen(false)} className="shrink-0 self-start overflow-hidden rounded-xl">
-                  <img src={product.images[0].src} alt={product.images[0].alt} width={80} height={96} className="h-24 w-20 object-cover" />
-                </Link>
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Link to={`/products/${product.id}`} onClick={() => setOpen(false)} className="font-medium leading-6">{product.name}</Link>
-                  <p className="text-xs text-muted-foreground">{product.unit} · {formatPrice(product.price)} / แพ็ก</p>
-                  <p className="font-semibold text-primary-ink">{formatPrice(total)}</p>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <QuantityControl label={product.name} quantity={quantity} onChange={value => dispatch({ type: 'quantity', productId: product.id, quantity: value })} />
-                    <Button variant="ghost" size="sm" aria-label={`ลบ ${product.name}`} onClick={() => dispatch({ type: 'remove', productId: product.id })}>ลบ</Button>
+            {lines.map(line => {
+              const image = <StoreProductImage src={line.productImageUrl} alt={line.productImageAlt ?? line.productName ?? 'สินค้า'} className="size-full object-cover" />
+              return (
+                <li key={line.variantId} className="flex gap-4 border-b pb-6 last:border-0">
+                  {line.productSlug
+                    ? <Link to={`/products/${line.productSlug}`} onClick={() => setOpen(false)} className="size-20 shrink-0 self-start overflow-hidden rounded-xl">{image}</Link>
+                    : <div className="size-20 shrink-0 self-start overflow-hidden rounded-xl">{image}</div>}
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    {line.productSlug
+                      ? <Link to={`/products/${line.productSlug}`} onClick={() => setOpen(false)} className="font-medium leading-6">{line.productName ?? 'สินค้า'}</Link>
+                      : <p className="font-medium leading-6">{line.productName ?? 'สินค้า'}</p>}
+                    <p className="text-xs text-muted-foreground">{line.variantName ?? 'ตัวเลือกสินค้า'}{line.unit ? ` · ${line.unit}` : ''}{line.priceSatang === null ? '' : ` · ${formatStorePrice(line.priceSatang)}`}</p>
+                    {line.issues.length > 0 && <p role="status" className="text-xs text-destructive">{line.issues.includes('OUT_OF_STOCK') ? 'สินค้าไม่พอสำหรับจำนวนนี้' : 'รายการนี้ไม่พร้อมสั่งซื้อ'}</p>}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <QuantityControl label={line.productName ?? 'สินค้า'} quantity={line.quantity} onChange={value => { void setItem(line.variantId, value).catch(() => undefined) }} />
+                      {line.totalSatang !== null && <span className="font-semibold text-primary-ink">{formatStorePrice(line.totalSatang!)}</span>}
+                      <Button variant="ghost" size="sm" aria-label={`ลบ ${line.productName ?? 'สินค้า'}`} onClick={() => { void removeItem(line.variantId).catch(() => undefined) }}>ลบ</Button>
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
       {lines.length > 0 && <SheetFooter className="shrink-0 gap-4 border-t p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between gap-4"><span>ยอดรวมสินค้า</span><span className="text-xl font-semibold tabular-nums">{formatPrice(subtotal)}</span></div>
-        <p className="text-xs leading-6 text-muted-foreground">รายการและราคาเป็นตัวอย่าง ยังไม่เปิดสั่งซื้อหรือชำระเงินจริง</p>
-        <Button render={<Link to="/checkout" />} nativeButton={false} size="storefront" onClick={() => setOpen(false)}>ดูตัวอย่างการสั่งซื้อ</Button>
+        <div className="flex items-center justify-between gap-4"><span>ยอดรวมสินค้า</span><span className="text-xl font-semibold tabular-nums">{formatStorePrice(subtotalSatang)}</span></div>
+        {hasUnavailable && <p role="status" className="text-xs leading-6 text-destructive">มีสินค้าไม่พร้อมสั่งซื้อ กรุณาลบรายการหรือปรับจำนวนก่อน checkout</p>}
+        {canCheckout
+          ? <Button render={<Link to="/checkout" />} nativeButton={false} size="storefront" onClick={() => setOpen(false)}>ตรวจสอบและชำระเงิน</Button>
+          : <Button size="storefront" disabled>ตรวจสอบและชำระเงิน</Button>}
         <SheetClose render={<Button variant="outline" />}>เลือกสินค้าต่อ</SheetClose>
       </SheetFooter>}
     </SheetContent>

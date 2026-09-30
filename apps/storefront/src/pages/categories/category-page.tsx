@@ -1,15 +1,21 @@
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
+import { buttonVariants } from '@workspace/ui/components/button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
+import { ProductCatalog } from '@/pages/products/product-list-page'
+import { readStoreCategorySlug } from '@/lib/store-products'
 
 export function Component() {
   const { slug } = useParams()
+  const category = readStoreCategorySlug(slug)
 
-  return (
-    <section className="flex flex-col gap-3">
-      <p className="text-sm font-medium text-muted-foreground">Category</p>
-      <h1 className="text-3xl font-semibold tracking-tight">{slug}</h1>
-      <p className="max-w-2xl text-muted-foreground">
-        This route will display the category catalog when category data is available.
-      </p>
-    </section>
-  )
+  if (!category) {
+    return (
+      <Empty className="min-h-[50svh]">
+        <EmptyHeader><EmptyTitle><h1>ไม่พบหมวดหมู่สินค้า</h1></EmptyTitle><EmptyDescription>หมวดหมู่นี้ไม่มีอยู่ในรายการของร้าน</EmptyDescription></EmptyHeader>
+        <EmptyContent><Link className={buttonVariants({ variant: 'outline' })} to="/products">กลับไปดูสินค้าทั้งหมด</Link></EmptyContent>
+      </Empty>
+    )
+  }
+
+  return <ProductCatalog fixedCategory={category} title={category === 'fresh' ? 'ผลไม้สด' : 'ผลิตภัณฑ์แปรรูป'} />
 }

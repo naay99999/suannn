@@ -1,17 +1,22 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@workspace/ui/components/tabs'
-import type { Product } from '@/lib/catalog'
+import type { StoreProductDetail } from '@/lib/store-products'
 
-export function ProductInformation({ product }: { product: Product }) {
+export function ProductInformation({ product }: { product: StoreProductDetail }) {
+  if (!product.description && !product.originStory && !product.storageInstructions) return null
+
   return (
-    <Tabs defaultValue="storage" className="mt-8">
-      <TabsList aria-label="รายละเอียดสินค้า" className="max-w-full">
-        <TabsTrigger value="storage">การเก็บรักษา</TabsTrigger>
-        <TabsTrigger value="details">{product.ingredients ? 'ส่วนประกอบ' : 'ข้อมูลผลผลิต'}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="storage" className="pt-4 leading-7 text-muted-foreground">{product.storage}</TabsContent>
-      <TabsContent value="details" className="pt-4 leading-7 text-muted-foreground">
-        {product.ingredients ?? 'ขนาด สี และระดับความสุกของผลไม้แต่ละผลอาจแตกต่างกันตามธรรมชาติ รายละเอียดพันธุ์และมาตรฐานการคัดผลจริงจะยืนยันก่อนจำหน่าย'}
-      </TabsContent>
-    </Tabs>
+    <div className="mt-8 grid gap-5">
+      {product.description && <section aria-labelledby="product-description-title">
+        <h2 id="product-description-title" className="text-base font-semibold">รายละเอียดสินค้า</h2>
+        <p className="mt-2 leading-7 text-muted-foreground">{product.description}</p>
+      </section>}
+      {product.storageInstructions && <section aria-labelledby="product-storage-title">
+        <h2 id="product-storage-title" className="text-base font-semibold">การเก็บรักษา</h2>
+        <p className="mt-2 leading-7 text-muted-foreground">{product.storageInstructions}</p>
+      </section>}
+      {product.originStory && <section aria-labelledby="product-origin-title">
+        <h2 id="product-origin-title" className="text-base font-semibold">เรื่องราวของสินค้า</h2>
+        <p className="mt-2 leading-7 text-muted-foreground">{product.originStory}</p>
+      </section>}
+    </div>
   )
 }
