@@ -296,7 +296,7 @@ describe('inventory HTTP contracts', () => {
     }
     const reserveBody = { warehouseId, lines: [{ variantId, quantity: 2 }] }
     const receipt = await app.handle(request('/api/v1/admin/inventory/lots', {
-      method: 'POST', body: receiveBody, cookie: 'owner', idempotencyKey: 'receipt-1',
+      method: 'POST', body: receiveBody, cookie: 'fulfillment', idempotencyKey: 'receipt-1',
     }))
     const reserve = await app.handle(request('/api/v1/admin/inventory/reservations', {
       method: 'POST', body: reserveBody, cookie: 'owner', idempotencyKey: 'reserve-1',

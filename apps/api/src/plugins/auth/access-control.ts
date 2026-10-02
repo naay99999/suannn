@@ -51,6 +51,7 @@ export const rolePermissions = {
     order: ['read'],
   },
   fulfillment: {
+    catalog: ['read'],
     inventory: permissions.inventory,
     order: ['read', 'update-address', 'add-note', 'fulfill', 'collect'],
     customer: permissions.customer,

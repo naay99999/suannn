@@ -27,6 +27,7 @@ const expectedCapabilities: Record<Role, readonly Permission[]> = {
     'order:read',
   ],
   fulfillment: [
+    'catalog:read',
     'inventory:read',
     'inventory:adjust',
     'order:read',

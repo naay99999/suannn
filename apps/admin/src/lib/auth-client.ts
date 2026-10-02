@@ -1,4 +1,5 @@
 import { api } from './api'
+import { resolveApiUrl } from './api-url'
 import type { AuthSession } from './auth-session'
 
 export class AuthRequestError extends Error {
@@ -115,7 +116,7 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
   }
 }
 
-const authClient = createAuthClient(import.meta.env.VITE_API_URL || 'http://localhost:6767')
+const authClient = createAuthClient(resolveApiUrl(import.meta.env.VITE_API_URL, import.meta.env.PROD))
 
 export const { getSession, signIn, verifyTotp, verifyBackupCode, signOut } = authClient
 

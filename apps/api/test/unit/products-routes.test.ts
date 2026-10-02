@@ -81,7 +81,7 @@ function createAuth() {
         if (identity === 'customer') return {
           user: { id: 'customer-1', accountType: 'customer' as const }, session: { id: 'session-1' },
         }
-        const role = identity === 'support' ? 'support' : 'catalog_manager'
+        const role = identity === 'support' ? 'support' : identity === 'fulfillment' ? 'fulfillment' : 'catalog_manager'
         return {
           user: { id: 'staff-1', accountType: 'staff' as const },
           staff: { role, permissions: [] }, session: { id: 'session-1' },
@@ -139,12 +139,40 @@ describe('products HTTP contracts', () => {
   })
 
   it('requires a staff session and catalog permission for admin reads', async () => {
-    const { app } = createApp()
+    const { app, calls } = createApp()
     const missing = await app.handle(request('/api/v1/admin/products'))
     const customer = await app.handle(request('/api/v1/admin/products', {}, 'customer'))
+    const support = await app.handle(request('/api/v1/admin/products', {}, 'support'))
 
     expect(missing.status).toBe(401)
     expect(customer.status).toBe(403)
+    expect(support.status).toBe(403)
+    expect(calls).toEqual([])
+  })
+
+  it('allows fulfillment catalog reads and denies every catalog write before service invocation', async () => {
+    const { app, calls } = createApp()
+    const list = await app.handle(request('/api/v1/admin/products', {}, 'fulfillment'))
+    const detail = await app.handle(request(`/api/v1/admin/products/${productId}`, {}, 'fulfillment'))
+    const productBody = JSON.stringify({ slug: 'coconut', name: 'Coconut', category: 'fresh' })
+    const variantBody = JSON.stringify({ sku: 'COCO-1L', name: '1 litre', unit: 'bottle', priceSatang: 2500 })
+    const updateBody = JSON.stringify({ name: 'Coconut water' })
+    const variantUpdateBody = JSON.stringify({ name: '1 litre bottle' })
+    const writes = await Promise.all([
+      app.handle(request('/api/v1/admin/products', { method: 'POST', body: productBody }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}`, { method: 'PATCH', body: updateBody }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}/publish`, { method: 'POST', body: '{}' }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}/unpublish`, { method: 'POST', body: '{}' }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}`, { method: 'DELETE' }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}/variants`, { method: 'POST', body: variantBody }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: variantUpdateBody }, 'fulfillment')),
+      app.handle(request(`/api/v1/admin/products/${productId}/variants/${variantId}`, { method: 'DELETE' }, 'fulfillment')),
+    ])
+
+    expect(list.status).toBe(200)
+    expect(detail.status).toBe(200)
+    expect(writes.map(({ status }) => status)).toEqual(Array(8).fill(403))
+    expect(calls).toEqual(['listAdmin', 'getAdminById'])
   })
 
   it('returns product details with the complete variant collection', async () => {
