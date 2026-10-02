@@ -3,12 +3,13 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
-import { Button } from '@workspace/ui/components/button'
+import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select'
 import { Textarea } from '@workspace/ui/components/textarea'
 import { toast } from '@workspace/ui/components/toast'
+import { Link } from 'react-router'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { catalogApi, type ProductDetail } from '@/lib/catalog/api'
 import {
@@ -19,7 +20,7 @@ import {
   type ProductCreateValues,
   type ProductEditValues,
 } from '@/lib/catalog/forms'
-import { invalidateCatalog } from '@/lib/catalog/queries'
+import { catalogKeys, invalidateCatalog, productsQuery } from '@/lib/catalog/queries'
 import { ConfirmActionDialog } from './product-actions'
 
 const emptyValues: ProductCreateValues = {
@@ -40,10 +41,14 @@ type ProductFormProps =
 
 function errorForCreate(error: unknown): string {
   const message = apiErrorMessage(error)
-  if (error instanceof ApiRequestError && error.status === 0) {
+  if (isAmbiguousCreateFailure(error)) {
     return `${message} หากไม่แน่ใจว่าบันทึกสำเร็จหรือไม่ ให้ตรวจสอบรายการสินค้าก่อนสร้างใหม่`
   }
   return message
+}
+
+function isAmbiguousCreateFailure(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && (error.status === 0 || error.status >= 500)
 }
 
 function fromProduct(product: ProductDetail): ProductEditValues {
@@ -72,6 +77,7 @@ export function ProductForm(props: ProductFormProps) {
   const [createdProductId, setCreatedProductId] = useState<string | null>(null)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [createRecoveryStatus, setCreateRecoveryStatus] = useState<'idle' | 'checking' | 'ready' | 'failed'>('idle')
   const onCreated = props.mode === 'create' ? props.onCreated : null
   const onDirtyChange = props.onDirtyChange
   const watchedImageUrl = useWatch({ control: form.control, name: 'imageUrl' })
@@ -86,6 +92,17 @@ export function ProductForm(props: ProductFormProps) {
   }, [form.formState.isDirty, onDirtyChange])
 
   useEffect(() => () => onDirtyChange(false), [onDirtyChange])
+
+  const refreshCatalogAfterUncertainCreate = async () => {
+    setCreateRecoveryStatus('checking')
+    await queryClient.invalidateQueries({ queryKey: catalogKeys.lists(), refetchType: 'none' })
+    try {
+      await queryClient.fetchQuery({ ...productsQuery({ limit: 25 }), staleTime: 0 })
+      setCreateRecoveryStatus('ready')
+    } catch {
+      setCreateRecoveryStatus('failed')
+    }
+  }
 
   const onSubmit = form.handleSubmit(async (values) => {
     setServerError(null)
@@ -107,6 +124,10 @@ export function ProductForm(props: ProductFormProps) {
       }
     } catch (error) {
       setServerError(props.mode === 'create' ? errorForCreate(error) : apiErrorMessage(error))
+      if (props.mode === 'create' && isAmbiguousCreateFailure(error)) {
+        setServerError(`${errorForCreate(error)} ระบบจะไม่ส่งคำขอสร้างซ้ำโดยอัตโนมัติ`)
+        await refreshCatalogAfterUncertainCreate()
+      }
       if (props.mode === 'edit' && error instanceof ApiRequestError && error.status === 409) {
         await invalidateCatalog(queryClient, props.product.id)
       }
@@ -131,11 +152,12 @@ export function ProductForm(props: ProductFormProps) {
               label="ชื่อ URL สินค้า"
               description={isCreate ? 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลาง' : 'ชื่อ URL เปลี่ยนไม่ได้หลังสร้างสินค้า'}
               error={errors.slug?.message}
+              disabled={pending}
               {...form.register('slug')}
               required={isCreate}
               readOnly={!isCreate}
             />
-            <FormInput id="product-name" label="ชื่อสินค้า" error={errors.name?.message} {...form.register('name')} required />
+            <FormInput disabled={pending} id="product-name" label="ชื่อสินค้า" error={errors.name?.message} {...form.register('name')} required />
           </div>
           <Field data-invalid={Boolean(errors.category)}>
             <FieldLabel htmlFor="product-category">หมวดหมู่</FieldLabel>
@@ -143,7 +165,7 @@ export function ProductForm(props: ProductFormProps) {
               control={form.control}
               name="category"
               render={({ field }) => (
-                <Select items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={field.onChange} value={field.value}>
+                <Select disabled={pending} items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger aria-describedby={errors.category ? 'product-category-error' : undefined} aria-invalid={Boolean(errors.category)} aria-required="true" id="product-category">
                     <SelectValue />
                   </SelectTrigger>
@@ -156,13 +178,13 @@ export function ProductForm(props: ProductFormProps) {
             />
             <FieldError id="product-category-error">{errors.category?.message}</FieldError>
           </Field>
-          <FormInput id="product-english-name" label="ชื่อภาษาอังกฤษ" error={errors.englishName?.message} {...form.register('englishName')} />
-          <FormTextarea id="product-description" label="คำอธิบาย" description="ข้อมูลนี้จำเป็นก่อนเผยแพร่สินค้า" error={errors.description?.message} {...form.register('description')} />
-          <FormTextarea id="product-origin-story" label="เรื่องราวจากสวน" error={errors.originStory?.message} {...form.register('originStory')} />
-          <FormTextarea id="product-storage-instructions" label="วิธีเก็บรักษา" error={errors.storageInstructions?.message} {...form.register('storageInstructions')} />
+          <FormInput disabled={pending} id="product-english-name" label="ชื่อภาษาอังกฤษ" error={errors.englishName?.message} {...form.register('englishName')} />
+          <FormTextarea disabled={pending} id="product-description" label="คำอธิบาย" description="ข้อมูลนี้จำเป็นก่อนเผยแพร่สินค้า" error={errors.description?.message} {...form.register('description')} />
+          <FormTextarea disabled={pending} id="product-origin-story" label="เรื่องราวจากสวน" error={errors.originStory?.message} {...form.register('originStory')} />
+          <FormTextarea disabled={pending} id="product-storage-instructions" label="วิธีเก็บรักษา" error={errors.storageInstructions?.message} {...form.register('storageInstructions')} />
           <div className="grid gap-5 md:grid-cols-2">
-            <FormInput id="product-image-url" label="URL รูปสินค้า HTTPS" description="วาง URL รูปภาพ HTTPS ที่เปิดดูได้ ไม่มีระบบอัปโหลดรูป" error={errors.imageUrl?.message} {...form.register('imageUrl')} />
-            <FormInput id="product-image-alt" label="คำอธิบายรูปภาพ" description="อธิบายสิ่งสำคัญในภาพสำหรับผู้ใช้โปรแกรมอ่านหน้าจอ" error={errors.imageAlt?.message} {...form.register('imageAlt')} />
+            <FormInput disabled={pending} id="product-image-url" label="URL รูปสินค้า HTTPS" description="วาง URL รูปภาพ HTTPS ที่เปิดดูได้ ไม่มีระบบอัปโหลดรูป" error={errors.imageUrl?.message} {...form.register('imageUrl')} />
+            <FormInput disabled={pending} id="product-image-alt" label="คำอธิบายรูปภาพ" description="อธิบายสิ่งสำคัญในภาพสำหรับผู้ใช้โปรแกรมอ่านหน้าจอ" error={errors.imageAlt?.message} {...form.register('imageAlt')} />
           </div>
         </FieldGroup>
 
@@ -174,8 +196,14 @@ export function ProductForm(props: ProductFormProps) {
         </div>
 
         {serverError && <div aria-live="assertive" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{serverError}</div>}
+        {createRecoveryStatus === 'checking' && <p className="text-sm text-muted-foreground" role="status">กำลังตรวจสอบรายการสินค้าล่าสุด...</p>}
+        {createRecoveryStatus === 'ready' && <Link className={buttonVariants({ variant: 'outline' })} to="/products">ตรวจสอบรายการสินค้า</Link>}
+        {createRecoveryStatus === 'failed' && <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-destructive" role="alert">อัปเดตรายการสินค้าไม่สำเร็จ กรุณาตรวจสอบรายการก่อนสร้างสินค้าอีกครั้ง</p>
+          <Button disabled={pending} onClick={() => void refreshCatalogAfterUncertainCreate()} type="button" variant="outline">ลองโหลดรายการสินค้าอีกครั้ง</Button>
+        </div>}
         <div className="flex flex-wrap gap-2">
-          <Button disabled={pending} type="submit">{pending ? 'กำลังบันทึก...' : isCreate ? 'สร้างสินค้า' : 'บันทึกสินค้า'}</Button>
+          <Button disabled={pending || (props.mode === 'create' && createRecoveryStatus !== 'idle')} type="submit">{pending ? 'กำลังบันทึก...' : isCreate ? 'สร้างสินค้า' : 'บันทึกสินค้า'}</Button>
           {props.mode === 'edit' && <Button disabled={pending} onClick={() => form.formState.isDirty ? setConfirmCancel(true) : props.onCancel()} type="button" variant="outline">ยกเลิกการแก้ไข</Button>}
         </div>
       </form>

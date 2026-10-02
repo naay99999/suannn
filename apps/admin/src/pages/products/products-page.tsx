@@ -10,14 +10,13 @@ import { ServerDataTable, type ServerDataTableFeatures } from '@/components/serv
 import { useCursorPagination } from '@/hooks/use-cursor-pagination'
 import { productsQuery } from '@/lib/catalog/queries'
 import type { CatalogListInput, ProductSummary } from '@/lib/catalog/api'
+import { formatDateOnly } from '@/lib/format'
 import { authSessionQuery } from '@/lib/auth-session'
 import { hasPermission } from '@/lib/permissions'
 import { cn } from '@workspace/ui/lib/utils'
 
 const productFilters = ['q', 'status'] as const
 const emptyProducts: ProductSummary[] = []
-const dateFormatter = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
-
 const column = createColumnHelper<ServerDataTableFeatures, ProductSummary>()
 const columns: ColumnDef<ServerDataTableFeatures, ProductSummary>[] = column.columns([
   column.accessor('name', {
@@ -30,6 +29,7 @@ const columns: ColumnDef<ServerDataTableFeatures, ProductSummary>[] = column.col
             {row.original.name}
           </Link>
           {row.original.englishName && <span className="truncate text-sm text-muted-foreground">{row.original.englishName}</span>}
+          <span className="truncate text-xs text-muted-foreground">{row.original.slug}</span>
         </div>
       </div>
     ),
@@ -48,7 +48,7 @@ const columns: ColumnDef<ServerDataTableFeatures, ProductSummary>[] = column.col
   }),
   column.accessor('updatedAt', {
     header: 'แก้ไขล่าสุด',
-    cell: ({ getValue }) => dateFormatter.format(new Date(getValue())),
+    cell: ({ getValue }) => formatDateOnly(getValue().toISOString()),
   }),
 ])
 

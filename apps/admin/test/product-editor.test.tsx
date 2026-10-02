@@ -144,6 +144,24 @@ test('retains product form input and shows a safe API error after a rejected cre
   expect(screen.queryByText('private server detail')).toBeNull()
 })
 
+test('refreshes the catalog before offering recovery after an ambiguous create failure', async () => {
+  const user = userEvent.setup()
+  const createSpy = stub('create', async () => { throw new ApiRequestError(500, 'SERVER_ERROR', 'failed') })
+  const listSpy = stub('list', async () => ({ items: [product], nextCursor: null }))
+  const { queryClient } = renderCatalog('/products')
+  queryClient.setQueryDefaults(catalogKeys.lists(), { staleTime: 60_000 })
+
+  await screen.findByRole('link', { name: product.name })
+  await user.click(screen.getByRole('link', { name: 'เพิ่มสินค้า' }))
+  await user.type(await screen.findByRole('textbox', { name: 'ชื่อ URL สินค้า' }), 'mango-box')
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'กล่องมะม่วง')
+  await user.click(screen.getByRole('button', { name: 'สร้างสินค้า' }))
+
+  expect(await screen.findByRole('link', { name: 'ตรวจสอบรายการสินค้า' })).toBeTruthy()
+  expect(listSpy).toHaveBeenCalledTimes(2)
+  expect(createSpy).toHaveBeenCalledTimes(1)
+})
+
 test('edits every mutable product field while keeping slug read-only and out of the payload', async () => {
   const user = userEvent.setup()
   const updateSpy = stub('update', async () => detail)
@@ -180,6 +198,23 @@ test('edits every mutable product field while keeping slug read-only and out of 
     expect(queryClient.getQueryState(catalogKeys.lists())?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(['inventory', 'lots'])?.isInvalidated).toBe(true)
   })
+})
+
+test('disables product inputs while a save is pending', async () => {
+  const user = userEvent.setup()
+  let resolveUpdate: ((value: ProductDetail) => void) | undefined
+  stub('update', () => new Promise((resolve) => { resolveUpdate = resolve }))
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'ใหม่')
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }).matches(':disabled')).toBe(true))
+  expect(screen.getByRole('textbox', { name: 'คำอธิบาย' }).matches(':disabled')).toBe(true)
+  expect((screen.getByRole('combobox', { name: 'หมวดหมู่' }) as HTMLButtonElement).disabled).toBe(true)
+
+  await act(async () => resolveUpdate?.(detail))
 })
 
 test('keeps product edits protected by the shared detail-page blocker', async () => {
@@ -346,6 +381,45 @@ test('updates variant fields while keeping its SKU immutable and out of the payl
   expect(updateVariantSpy.mock.calls[0]?.[2]).not.toHaveProperty('sku')
 })
 
+test('disables variant inputs while a save is pending', async () => {
+  const user = userEvent.setup()
+  let resolveUpdate: ((value: Variant) => void) | undefined
+  stub('updateVariant', () => new Promise((resolve) => { resolveUpdate = resolve }))
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขรูปแบบ MANGO-1KG' }))
+  await user.clear(screen.getByRole('textbox', { name: 'ราคา (บาท)' }))
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '199.00')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  await waitFor(() => expect((screen.getByRole('textbox', { name: 'ราคา (บาท)' }) as HTMLInputElement).disabled).toBe(true))
+  expect((screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }) as HTMLInputElement).disabled).toBe(true)
+  expect(screen.getByRole('checkbox', { name: 'เปิดขายรูปแบบนี้' }).getAttribute('aria-disabled')).toBe('true')
+  await act(async () => resolveUpdate?.(variant))
+})
+
+test('refreshes and shows the latest archived variant after a concurrent edit conflict', async () => {
+  const user = userEvent.setup()
+  const archived = { ...variant, archivedAt: updatedAt, name: 'เวอร์ชันล่าสุด' }
+  const getSpy = stub('get', async () => detail)
+  const updateSpy = stub('updateVariant', async () => { throw new ApiRequestError(409, 'VARIANT_STATE_CONFLICT', 'conflict') })
+  getSpy.mockImplementationOnce(async () => detail).mockImplementationOnce(async () => ({ ...detail, variants: [archived] }))
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขรูปแบบ MANGO-1KG' }))
+  await user.clear(screen.getByRole('textbox', { name: 'ราคา (บาท)' }))
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '199.00')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  expect((await screen.findAllByText('เวอร์ชันล่าสุด')).length).toBeGreaterThan(1)
+  expect(screen.getByText('รูปแบบสินค้านี้ถูกเก็บถาวรแล้วบนเซิร์ฟเวอร์')).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(getSpy).toHaveBeenCalledTimes(2)
+  expect(updateSpy).toHaveBeenCalledTimes(1)
+  expect((screen.getByRole('textbox', { name: 'ราคา (บาท)' }) as HTMLInputElement).value).toBe('199.00')
+})
+
 test('archives a nonfinal active variant only after confirmation', async () => {
   const user = userEvent.setup()
   const archiveVariantSpy = stub('archiveVariant', async () => undefined)
@@ -392,4 +466,13 @@ test('shows a safe not-found state with a route back to the catalog', async () =
 
   expect(await screen.findByRole('heading', { name: 'ไม่พบสินค้า' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'กลับไปหน้าสินค้า' })).toBeTruthy()
+})
+
+test('rejects malformed product IDs before requesting product details', async () => {
+  const getSpy = stub('get', async () => detail)
+  renderCatalog('/products/not-a-uuid')
+
+  expect(await screen.findByRole('heading', { name: 'รหัสสินค้าไม่ถูกต้อง' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'กลับไปหน้าสินค้า' })).toBeTruthy()
+  expect(getSpy).not.toHaveBeenCalled()
 })

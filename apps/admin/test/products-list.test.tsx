@@ -96,6 +96,16 @@ test('renders API catalog records without invented price, stock, or totals', asy
   expect(screen.queryByRole('button', { name: 'เพิ่มสินค้า' })).toBeNull()
 })
 
+test('shows product slugs and formats the last updated date in Bangkok with a Gregorian year', async () => {
+  spyList(async () => ({ items: [mango], nextCursor: null }))
+  renderProducts()
+
+  await screen.findByRole('link', { name: mango.name })
+  expect(screen.getByText(mango.slug)).toBeTruthy()
+  expect(screen.getByText('12 ก.ย. 2026')).toBeTruthy()
+  expect(screen.queryByText(/2569/)).toBeNull()
+})
+
 test('debounces Thai search for 300 ms and requests the selected status and page size', async () => {
   const listSpy = spyList(async () => ({ items: [], nextCursor: null }))
   const user = userEvent.setup()

@@ -142,3 +142,36 @@ The admin dev server at port 5184 rendered the staff-session network-error state
 No authenticated live-browser acceptance or screenshots are claimed. The 1440px/390px browser sweep, keyboard-only dialogs/picker, and real session expiry checks remain pending a safe migrated environment and the existing owner/asset-host inputs. The component-level cross-page coverage and server route authorization checks passed independently.
 
 The work is limited to the catalog/inventory admin subproject; later customer and order admin work is not claimed complete.
+
+## Final review fix wave — 2026-10-03
+
+The following is the preserved snapshot of the final review requirements:
+
+1. **IMPORTANT — ambiguous product creation:** status `0` and `5xx` responses can leave product creation uncertain. Invalidate and refetch the catalog list before recovery is offered, provide a direct path to that refreshed list, and never retry the non-idempotent create automatically.
+2. **IMPORTANT — catalog navigation permission:** require `catalog:read` for the product navigation item so support staff without that capability do not see it.
+3. **IMPORTANT — variant conflict recovery:** on a variant `409`, refresh product/catalog state and expose the latest server state for review. A concurrently archived variant must not leave a stale dialog that can repeatedly submit; preserve the user's unsaved draft until they choose the refreshed values or close it.
+4. **MINOR — product slug:** show the required slug in the product list.
+5. **MINOR — date formatting:** format product `updatedAt` with the shared Bangkok, Gregorian date formatter.
+6. **MINOR — malformed IDs:** validate product, lot, and variant UUID route parameters before querying; show a distinct invalid-ID state and a route back. Do not issue requests containing malformed IDs. Reservation lookup already validates its ID.
+7. **MINOR — pending edits:** disable product and variant fields during save so edits cannot be made and then discarded by the success reset.
+
+### Final review checks
+
+The final admin checks below supersede the earlier admin test/build/lint counts in this report for the `codex/admin-catalog-inventory` review-fix commit:
+
+| Command | Result | Captured output |
+|---|---|---|
+| `bun test --preload ./apps/admin/test/setup.ts apps/admin/test` | 177 passed; 0 failed; 659 expectations across 33 files | `/private/tmp/admin-final-tests-final.log` |
+| `bun --filter admin lint` | Exit 0; four existing non-blocking diagnostics | `/private/tmp/admin-final-lint-final.log` |
+| `VITE_API_URL=http://localhost:6767 bun --filter admin build` | Exit 0 | `/private/tmp/admin-final-build-final.log` |
+| `git diff --check` | Exit 0 | No output |
+
+Lint retained four warnings: React Hook Form `react(incompatible-library)` diagnostics at `src/pages/inventory/reservation-create-page.tsx:41:17`, `src/pages/inventory/receive-lot-page.tsx:62:27`, and `src/pages/inventory/_components/lot-command-dialog.tsx:232:95`; and the existing `react(only-export-components)` diagnostic at `src/main.tsx:11:10`. The new navigation helper is in `src/lib/navigation.ts`, so it adds no Fast Refresh warning.
+
+The regression cases cover uncertain create recovery and no auto-resubmission; catalog navigation filtering; variant conflict refresh, preserved draft, latest values, and concurrent archive; slug and date output; invalid product/lot/variant IDs with no target API requests; and disabled product/variant controls during a pending save. The final aggregate includes these cases.
+
+### Verification limitations
+
+The regressions were added before their production changes. The first combined red-phase run confirmed the missing slug and malformed lot states. Auto-review rejected a proposed broad source rollback to replay every new case against the branch snapshot because it could lose untracked or staged work; no rollback was attempted. As a result, not every new regression was individually observed failing before implementation. The focused editor suite later passed 24 tests, and the full final admin suite passed as recorded above.
+
+No API integration suite was rerun in this fix wave. The previous feature-versus-baseline comparison documented above remains the available evidence for its 13 out-of-scope pre-existing failures. Authenticated browser acceptance also remains pending the safe migrated environment and owner/asset-host inputs described above.

@@ -6,6 +6,7 @@ import { useCursorPagination } from '@/hooks/use-cursor-pagination'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { authSessionQuery } from '@/lib/auth-session'
 import { productQuery } from '@/lib/catalog/queries'
+import { isUuid } from '@/lib/ids'
 import { lotsQuery, stockSummaryQuery, warehouseQuery } from '@/lib/inventory/queries'
 import { hasPermission } from '@/lib/permissions'
 import { cn } from '@workspace/ui/lib/utils'
@@ -26,11 +27,13 @@ export function Component() {
   const { cursor, limit, canPrevious, next, previous, first, setLimit } = useCursorPagination([])
   const params = new URLSearchParams(location.search)
   const productId = params.get('productId') || undefined
+  const validVariantId = isUuid(variantId)
+  const validProductContextId = isUuid(productId)
   const session = queryClient.getQueryData(authSessionQuery.queryKey)
   const canReadCatalog = hasPermission(session, 'catalog:read')
-  const warehouse = useQuery(warehouseQuery())
-  const summary = useQuery({ ...stockSummaryQuery(variantId ?? ''), enabled: Boolean(variantId) })
-  const product = useQuery({ ...productQuery(productId ?? ''), enabled: Boolean(productId && canReadCatalog) })
+  const warehouse = useQuery({ ...warehouseQuery(), enabled: validVariantId })
+  const summary = useQuery({ ...stockSummaryQuery(variantId ?? ''), enabled: validVariantId })
+  const product = useQuery({ ...productQuery(productId ?? ''), enabled: Boolean(validProductContextId && canReadCatalog) })
   const matchingVariant = productId && product.data?.id === productId
     ? product.data.variants.find((candidate) => candidate.id === variantId)
     : undefined
@@ -38,9 +41,13 @@ export function Component() {
     ? matchingVariant && product.data ? { product: product.data, variant: matchingVariant } : undefined
     : canReadCatalog && variantId ? cachedVariantMetadata(queryClient, variantId) : undefined
   const query = { warehouseId: warehouse.data?.id, variantId, limit, cursor }
-  const lots = useQuery({ ...lotsQuery(query), enabled: Boolean(warehouse.data && variantId) })
+  const lots = useQuery({ ...lotsQuery(query), enabled: Boolean(validVariantId && warehouse.data) })
 
   if (!variantId) return <section className="px-4 lg:px-6"><QueryState kind="not-found" message="ไม่พบรหัสรูปแบบสินค้า" /></section>
+  if (!validVariantId) return <section className="flex flex-col gap-4 px-4 lg:px-6">
+    <QueryState kind="not-found" message="รหัสรูปแบบสินค้าไม่ถูกต้อง" />
+    <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/inventory">กลับไปหน้าสต็อก</Link>
+  </section>
   if (warehouse.isPending || summary.isPending) return <section className="px-4 lg:px-6"><QueryState kind="loading" /></section>
   if (notFound(summary.error)) return <section className="flex flex-col gap-4 px-4 lg:px-6"><QueryState kind="not-found" message="ไม่พบสต็อกของรูปแบบสินค้านี้" /><Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/inventory">กลับไปหน้าสต็อก</Link></section>
   if (warehouse.error || summary.error) {
@@ -60,6 +67,7 @@ export function Component() {
         </div>
       <InventoryNavigation variantId={variantId} productId={productId} />
       {productId && !canReadCatalog && <p className="text-sm text-muted-foreground" role="status">ไม่มีสิทธิ์อ่านข้อมูลสินค้า จะแสดงรหัสรูปแบบสินค้าแทนชื่อ</p>}
+      {productId && canReadCatalog && !validProductContextId && <p className="text-sm text-muted-foreground" role="status">รหัสสินค้าในลิงก์ไม่ถูกต้อง จะแสดงรหัสรูปแบบสินค้าแทนชื่อ</p>}
       </div>
       {productId && product.data && !matchingVariant && <p className="text-sm text-muted-foreground" role="status">รูปแบบสินค้านี้ไม่ได้อยู่ในสินค้าที่ระบุ จึงแสดงรหัสรูปแบบสินค้าโดยไม่ใช้ชื่อสินค้า</p>}
       {productId && product.error && <p className="text-sm text-muted-foreground" role="status">โหลดข้อมูลสินค้าเพื่อแสดงชื่อไม่สำเร็จ แสดงรหัสรูปแบบสินค้าแทน</p>}

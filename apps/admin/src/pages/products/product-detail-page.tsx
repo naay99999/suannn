@@ -10,8 +10,9 @@ import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { authSessionQuery } from '@/lib/auth-session'
 import { catalogApi, type ProductDetail, type Variant, type VariantCreateInput, type VariantUpdateInput } from '@/lib/catalog/api'
 import { formatMoney, formatTimestamp } from '@/lib/format'
+import { isUuid } from '@/lib/ids'
 import { hasPermission } from '@/lib/permissions'
-import { invalidateCatalog, productQuery } from '@/lib/catalog/queries'
+import { catalogKeys, invalidateCatalog, productQuery } from '@/lib/catalog/queries'
 import { toast } from '@workspace/ui/components/toast'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
@@ -55,6 +56,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
   const [variantDirty, setVariantDirty] = useState(false)
   const [variantBeingEdited, setVariantBeingEdited] = useState<Variant | null>(null)
+  const [variantConflictRefreshFailed, setVariantConflictRefreshFailed] = useState(false)
   const [variantBeingArchived, setVariantBeingArchived] = useState<Variant | null>(null)
   const [variantError, setVariantError] = useState<string | null>(null)
   const unsavedConfirmation = useUnsavedChanges(productDirty || variantDirty)
@@ -74,9 +76,23 @@ function ProductDetail({ product }: { product: ProductDetail }) {
     },
   })
 
+  const refreshVariantConflict = async (variantId?: string) => {
+    await queryClient.invalidateQueries({ queryKey: catalogKeys.all, refetchType: 'all' })
+    const refreshedProduct = queryClient.getQueryData<ProductDetail>(productQuery(product.id).queryKey)
+    const latestVariant = variantId ? refreshedProduct?.variants.find((candidate) => candidate.id === variantId) : undefined
+    const refreshFailed = Boolean(queryClient.getQueryState(productQuery(product.id).queryKey)?.error || (variantId && !latestVariant))
+    setVariantConflictRefreshFailed(refreshFailed)
+    if (latestVariant) setVariantBeingEdited(latestVariant)
+  }
+
   const saveVariant = async (input: VariantCreateInput | VariantUpdateInput, variantId?: string) => {
-    if (variantId) await catalogApi.updateVariant(product.id, variantId, input as VariantUpdateInput)
-    else await catalogApi.createVariant(product.id, input as VariantCreateInput)
+    try {
+      if (variantId) await catalogApi.updateVariant(product.id, variantId, input as VariantUpdateInput)
+      else await catalogApi.createVariant(product.id, input as VariantCreateInput)
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) await refreshVariantConflict(variantId)
+      throw error
+    }
     await invalidateCatalog(queryClient, product.id)
     toast.add({ title: variantId ? 'บันทึกรูปแบบสินค้าแล้ว' : 'เพิ่มรูปแบบสินค้าแล้ว', type: 'success' })
     setVariantBeingEdited(null)
@@ -126,6 +142,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
           </div>
           {canCreate && product.status !== 'archived' && <Button onClick={() => {
             setVariantBeingEdited(null)
+            setVariantConflictRefreshFailed(false)
             setVariantDialogOpen(true)
           }}>เพิ่มรูปแบบสินค้า</Button>}
         </div>
@@ -164,6 +181,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
                       {!variant.archivedAt && <div className="flex flex-wrap gap-2">
                         {canUpdate && product.status !== 'archived' && <Button onClick={() => {
                           setVariantBeingEdited(variant)
+                          setVariantConflictRefreshFailed(false)
                           setVariantDialogOpen(true)
                         }} size="sm" variant="outline">แก้ไขรูปแบบ {variant.sku}</Button>}
                         {canDelete && product.status !== 'archived' && <Button disabled={!canArchive || archiveVariantMutation.isPending} onClick={() => setVariantBeingArchived(variant)} size="sm" variant="outline" aria-describedby={lastActiveVariant ? `variant-${variant.id}-archive-reason` : undefined}>
@@ -180,6 +198,8 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         </div>
       </section>
       {variantDialogOpen && <VariantDialog
+        latestVariant={variantBeingEdited ? product.variants.find((candidate) => candidate.id === variantBeingEdited.id) ?? null : null}
+        onRefreshLatest={() => refreshVariantConflict(variantBeingEdited?.id)}
         onDirtyChange={setVariantDirty}
         onOpenChange={(open) => {
           setVariantDialogOpen(open)
@@ -190,6 +210,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         }}
         onSave={saveVariant}
         open={variantDialogOpen}
+        refreshFailed={variantConflictRefreshFailed}
         variant={variantBeingEdited}
       />}
       {variantBeingArchived && <ConfirmActionDialog
@@ -217,9 +238,14 @@ function DetailField({ label, value }: { label: string; value: string | null }) 
 
 export function Component() {
   const { productId } = useParams()
-  const product = useQuery({ ...productQuery(productId ?? ''), enabled: Boolean(productId) })
+  const validProductId = isUuid(productId)
+  const product = useQuery({ ...productQuery(productId ?? ''), enabled: validProductId })
 
   if (!productId) return <QueryState kind="not-found" message="ไม่พบสินค้า" />
+  if (!validProductId) return <section className="flex flex-col gap-4 px-4 lg:px-6">
+    <QueryState kind="not-found" message="รหัสสินค้าไม่ถูกต้อง" />
+    <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/products">กลับไปหน้าสินค้า</Link>
+  </section>
   if (product.isPending) return <QueryState kind="loading" />
   if (product.error) {
     const state = detailState(product.error)

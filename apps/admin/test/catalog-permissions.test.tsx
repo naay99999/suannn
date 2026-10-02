@@ -7,6 +7,7 @@ import { authSessionQuery, type AuthSession } from '../src/lib/auth-session'
 import { catalogApi } from '../src/lib/catalog/api'
 import { hasPermission } from '../src/lib/permissions'
 import { Component as ProductsPage } from '../src/pages/products/products-page'
+import { filterNavigationForSession } from '../src/lib/navigation'
 
 const sessionFor = (role: NonNullable<AuthSession['staff']>['role'], permissions: string[]): AuthSession => ({
   session: { id: `session-${role}`, expiresAt: '2026-10-03T00:00:00.000Z' },
@@ -61,4 +62,11 @@ test('allows an owner with catalog read and denies fulfillment/support without a
     expect(listSpy).not.toHaveBeenCalled()
     cleanup()
   }
+})
+
+test('hides the product navigation link from staff without catalog:read', () => {
+  const support = sessionFor('support', ['customers:read'])
+  const navigation = [{ title: 'สินค้า', url: '/products', permission: 'catalog:read' }]
+
+  expect(filterNavigationForSession(navigation, support).some((item) => item.url === '/products')).toBe(false)
 })

@@ -239,6 +239,25 @@ test('denies inventory reads to staff without inventory:read before issuing API 
   expect(inventoryApi.lots).not.toHaveBeenCalled()
 })
 
+test('rejects malformed lot and variant IDs before issuing inventory requests', async () => {
+  mockInventory()
+  renderInventory('/inventory/lots/not-a-uuid')
+
+  expect(await screen.findByRole('heading', { name: 'รหัสล็อตไม่ถูกต้อง' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'กลับไปหน้าสต็อก' })).toBeTruthy()
+  expect(inventoryApi.lot).not.toHaveBeenCalled()
+  expect(inventoryApi.movements).not.toHaveBeenCalled()
+  cleanup()
+
+  renderInventory('/inventory/variants/not-a-uuid')
+
+  expect(await screen.findByRole('heading', { name: 'รหัสรูปแบบสินค้าไม่ถูกต้อง' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'กลับไปหน้าสต็อก' })).toBeTruthy()
+  expect(inventoryApi.warehouse).not.toHaveBeenCalled()
+  expect(inventoryApi.summary).not.toHaveBeenCalled()
+  expect(inventoryApi.lots).not.toHaveBeenCalled()
+})
+
 test('adds live stock links to product variants for staff with inventory read access', async () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   const session = sessionFor(['catalog:read', 'inventory:read'])

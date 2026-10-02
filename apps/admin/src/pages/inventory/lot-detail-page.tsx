@@ -12,6 +12,7 @@ import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { authSessionQuery } from '@/lib/auth-session'
 import { hasPermission } from '@/lib/permissions'
 import { formatDateOnly, formatTimestamp } from '@/lib/format'
+import { isUuid } from '@/lib/ids'
 import { inventoryApi, type CountAdjustmentInput, type Lot, type QuarantineInput, type WriteOffInput } from '@/lib/inventory/api'
 import { lotQuery, movementsQuery } from '@/lib/inventory/queries'
 import { cn } from '@workspace/ui/lib/utils'
@@ -40,10 +41,11 @@ export function Component() {
 function LotDetailPage({ lotId }: { lotId: string | undefined }) {
   const queryClient = useQueryClient()
   const { cursor, limit, canPrevious, next, previous, first, setLimit } = useCursorPagination([])
-  const lot = useQuery({ ...lotQuery(lotId ?? ''), enabled: Boolean(lotId) })
+  const validLotId = isUuid(lotId)
+  const lot = useQuery({ ...lotQuery(lotId ?? ''), enabled: validLotId })
   const movements = useQuery({
     ...movementsQuery({ lotId, limit, cursor }),
-    enabled: Boolean(lot.data),
+    enabled: validLotId && Boolean(lot.data),
   })
   const session = useQuery(authSessionQuery)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -88,6 +90,10 @@ function LotDetailPage({ lotId }: { lotId: string | undefined }) {
   )
 
   if (!lotId) return <section className="px-4 lg:px-6"><QueryState kind="not-found" message="ไม่พบรหัสล็อต" /></section>
+  if (!validLotId) return <section className="flex flex-col gap-4 px-4 lg:px-6">
+    <QueryState kind="not-found" message="รหัสล็อตไม่ถูกต้อง" />
+    <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/inventory">กลับไปหน้าสต็อก</Link>
+  </section>
   if (lot.isPending) return <section className="px-4 lg:px-6"><QueryState kind="loading" /></section>
   if (lot.error) {
     const state = lotErrorState(lot.error)
