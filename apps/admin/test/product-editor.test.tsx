@@ -420,6 +420,116 @@ test('refreshes and shows the latest archived variant after a concurrent edit co
   expect((screen.getByRole('textbox', { name: 'ราคา (บาท)' }) as HTMLInputElement).value).toBe('199.00')
 })
 
+test('blocks stale variant creation and shows current parent and variants after the product is archived', async () => {
+  const user = userEvent.setup()
+  const archivedProduct = { ...detail, status: 'archived' as const, archivedAt: updatedAt, variants: [{ ...variant, name: 'รูปแบบล่าสุดจากเซิร์ฟเวอร์' }] }
+  const getSpy = stub('get', async () => detail)
+  const createSpy = stub('createVariant', async () => { throw new ApiRequestError(409, 'PRODUCT_STATE_CONFLICT', 'conflict') })
+  getSpy.mockImplementationOnce(async () => detail).mockImplementationOnce(async () => archivedProduct)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }), 'ครึ่งกิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'หน่วย' }), 'กิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '99.90')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  expect(await screen.findByText('สินค้านี้ถูกเก็บถาวรแล้วบนเซิร์ฟเวอร์')).toBeTruthy()
+  expect(screen.getByText('รูปแบบล่าสุดจากเซิร์ฟเวอร์')).toBeTruthy()
+  expect((screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }) as HTMLInputElement).value).toBe('ครึ่งกิโลกรัม')
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(createSpy).toHaveBeenCalledTimes(1)
+})
+
+test('explains an SKU conflict and allows a create retry only after reviewing current variants', async () => {
+  const user = userEvent.setup()
+  const latest = { ...detail, variants: [{ ...variant, sku: 'MANGO-500G', name: 'ครึ่งกิโลกรัมที่มีอยู่แล้ว' }] }
+  const getSpy = stub('get', async () => detail)
+  const createSpy = stub('createVariant', async () => variant)
+  createSpy.mockImplementationOnce(async () => { throw new ApiRequestError(409, 'SKU_CONFLICT', 'conflict') })
+  let resolveRefresh: ((value: ProductDetail) => void) | undefined
+  getSpy.mockImplementationOnce(async () => detail).mockImplementationOnce(async () => latest).mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve }))
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }), 'ครึ่งกิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'หน่วย' }), 'กิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '99.90')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  expect(await screen.findByText('SKU นี้ถูกใช้งานแล้ว')).toBeTruthy()
+  expect(screen.getByText('ครึ่งกิโลกรัมที่มีอยู่แล้ว')).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(createSpy).toHaveBeenCalledTimes(1)
+  expect((screen.getByRole('textbox', { name: 'SKU' }) as HTMLInputElement).value).toBe('MANGO-500G')
+
+  await user.click(screen.getByRole('button', { name: 'ตรวจสอบแล้ว ใช้ร่างเดิม' }))
+  await user.clear(screen.getByRole('textbox', { name: 'SKU' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-250G')
+  await user.click(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }))
+  await waitFor(() => expect(getSpy).toHaveBeenCalledTimes(3))
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect((screen.getByRole('button', { name: 'ตรวจสอบแล้ว ใช้ร่างเดิม' }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => resolveRefresh?.(latest))
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  await user.click(screen.getByRole('button', { name: 'ตรวจสอบแล้ว ใช้ร่างเดิม' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2))
+  expect(createSpy.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ sku: 'MANGO-250G', priceSatang: 9990 }))
+})
+
+test('keeps a create draft blocked after refresh failure and recovers after retrying the refresh', async () => {
+  const user = userEvent.setup()
+  const getSpy = stub('get', async () => detail)
+  const createSpy = stub('createVariant', async () => variant)
+  createSpy.mockImplementationOnce(async () => { throw new ApiRequestError(409, 'VARIANT_STATE_CONFLICT', 'conflict') })
+  getSpy.mockImplementationOnce(async () => detail).mockRejectedValueOnce(new Error('refresh failed')).mockImplementationOnce(async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }), 'ครึ่งกิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'หน่วย' }), 'กิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '99.90')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  expect(await screen.findByText('โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณาลองโหลดอีกครั้งก่อนบันทึก')).toBeTruthy()
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(createSpy).toHaveBeenCalledTimes(1)
+  expect((screen.getByRole('textbox', { name: 'SKU' }) as HTMLInputElement).value).toBe('MANGO-500G')
+
+  await user.click(screen.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }))
+  expect(await screen.findByRole('button', { name: 'ตรวจสอบแล้ว ใช้ร่างเดิม' })).toBeTruthy()
+  expect((screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }) as HTMLInputElement).value).toBe('ครึ่งกิโลกรัม')
+  await user.click(screen.getByRole('button', { name: 'ตรวจสอบแล้ว ใช้ร่างเดิม' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2))
+})
+
+test('blocks variant edits when the latest product state is archived', async () => {
+  const user = userEvent.setup()
+  const archivedProduct = { ...detail, status: 'archived' as const, archivedAt: updatedAt, variants: [{ ...variant, name: 'ชื่อรูปแบบล่าสุด' }] }
+  const getSpy = stub('get', async () => detail)
+  const updateSpy = stub('updateVariant', async () => { throw new ApiRequestError(409, 'VARIANT_STATE_CONFLICT', 'conflict') })
+  getSpy.mockImplementationOnce(async () => detail).mockImplementationOnce(async () => archivedProduct)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขรูปแบบ MANGO-1KG' }))
+  await user.clear(screen.getByRole('textbox', { name: 'ราคา (บาท)' }))
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '199.00')
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+
+  expect(await screen.findByText('สินค้านี้ถูกเก็บถาวรแล้วบนเซิร์ฟเวอร์')).toBeTruthy()
+  expect((await screen.findAllByText('ชื่อรูปแบบล่าสุด')).length).toBeGreaterThan(1)
+  expect((screen.getByRole('textbox', { name: 'ราคา (บาท)' }) as HTMLInputElement).value).toBe('199.00')
+  expect((screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(updateSpy).toHaveBeenCalledTimes(1)
+})
+
 test('archives a nonfinal active variant only after confirmation', async () => {
   const user = userEvent.setup()
   const archiveVariantSpy = stub('archiveVariant', async () => undefined)

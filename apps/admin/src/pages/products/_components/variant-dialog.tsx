@@ -16,7 +16,7 @@ import {
 } from '@workspace/ui/components/dialog'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { formatMoney } from '@/lib/format'
-import type { Variant } from '@/lib/catalog/api'
+import type { ProductDetail, Variant } from '@/lib/catalog/api'
 import {
   toVariantCreateInput,
   toVariantUpdateInput,
@@ -33,6 +33,8 @@ type VariantDialogProps = {
   onOpenChange: (open: boolean) => void
   onDirtyChange: (dirty: boolean) => void
   latestVariant: Variant | null
+  latestVariants: Variant[]
+  latestProductStatus: ProductDetail['status']
   onRefreshLatest: () => Promise<void>
   refreshFailed: boolean
   onSave: (input: ReturnType<typeof toVariantCreateInput> | ReturnType<typeof toVariantUpdateInput>, variantId?: string) => Promise<void>
@@ -50,7 +52,7 @@ function defaultValues(variant: Variant | null): VariantCreateValues {
   }
 }
 
-export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, latestVariant, onRefreshLatest, refreshFailed, onSave }: VariantDialogProps) {
+export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, latestVariant, latestVariants, latestProductStatus, onRefreshLatest, refreshFailed, onSave }: VariantDialogProps) {
   const isEdit = Boolean(variant)
   const form = useForm<VariantCreateValues | VariantEditValues>({
     resolver: zodResolver(isEdit ? variantEditSchema : variantCreateSchema),
@@ -60,7 +62,12 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [saving, setSaving] = useState(false)
   const [conflictDetected, setConflictDetected] = useState(false)
+  const [conflictReviewed, setConflictReviewed] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const latestArchived = isEdit && Boolean(latestVariant?.archivedAt)
+  const productArchived = latestProductStatus === 'archived'
+  const latestVariantUnavailable = isEdit && !latestVariant
+  const submitBlocked = saving || refreshing || productArchived || latestArchived || (conflictDetected && (!conflictReviewed || refreshFailed || latestVariantUnavailable))
 
   useEffect(() => {
     onDirtyChange(form.formState.isDirty)
@@ -87,14 +94,31 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
     } catch (error) {
       const message = apiErrorMessage(error)
       const conflict = error instanceof ApiRequestError && error.status === 409
-      setServerError(conflict
-        ? 'ข้อมูลเปลี่ยนแปลงบนเซิร์ฟเวอร์ ตรวจสอบสถานะล่าสุดก่อนบันทึกอีกครั้ง'
-        : message)
-      if (conflict && isEdit) setConflictDetected(true)
+      const skuConflict = conflict && error instanceof ApiRequestError && error.code === 'SKU_CONFLICT'
+      setServerError(skuConflict
+        ? message
+        : conflict
+          ? 'ข้อมูลเปลี่ยนแปลงบนเซิร์ฟเวอร์ ตรวจสอบสถานะล่าสุดก่อนบันทึกอีกครั้ง'
+          : message)
+      if (conflict) {
+        setConflictDetected(true)
+        setConflictReviewed(false)
+      }
     } finally {
       setSaving(false)
     }
   })
+
+  const refreshLatest = async () => {
+    setConflictReviewed(false)
+    setRefreshing(true)
+    try {
+      await onRefreshLatest()
+    } finally {
+      setConflictReviewed(false)
+      setRefreshing(false)
+    }
+  }
 
   const errors = form.formState.errors
   const fieldError = (field: keyof typeof errors) => errors[field]?.message
@@ -110,12 +134,12 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
           <form className="flex flex-col gap-5" noValidate onSubmit={submit}>
             <FieldGroup>
               <div className="grid gap-4 sm:grid-cols-2">
-                <VariantInput disabled={saving || latestArchived} id="variant-sku" label="SKU" error={fieldError('sku')} {...form.register('sku')} readOnly={isEdit} required={!isEdit} />
-                <VariantInput disabled={saving || latestArchived} id="variant-name" label="ชื่อรูปแบบ" error={fieldError('name')} {...form.register('name')} required />
-                <VariantInput disabled={saving || latestArchived} id="variant-unit" label="หน่วย" error={fieldError('unit')} {...form.register('unit')} required />
-                <VariantInput disabled={saving || latestArchived} id="variant-price" label="ราคา (บาท)" error={fieldError('priceBaht')} inputMode="decimal" placeholder="0.00" {...form.register('priceBaht')} required />
-                <VariantInput disabled={saving || latestArchived} id="variant-order" label="ลำดับการแสดง" error={fieldError('displayOrder')} type="number" {...form.register('displayOrder', { valueAsNumber: true })} />
-                <VariantInput disabled={saving || latestArchived} id="variant-shelf-life" label="อายุคงเหลือขั้นต่ำ (วัน)" error={fieldError('minRemainingShelfLifeDays')} type="number" {...form.register('minRemainingShelfLifeDays', { valueAsNumber: true })} />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-sku" label="SKU" error={fieldError('sku')} {...form.register('sku')} readOnly={isEdit} required={!isEdit} />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-name" label="ชื่อรูปแบบ" error={fieldError('name')} {...form.register('name')} required />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-unit" label="หน่วย" error={fieldError('unit')} {...form.register('unit')} required />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-price" label="ราคา (บาท)" error={fieldError('priceBaht')} inputMode="decimal" placeholder="0.00" {...form.register('priceBaht')} required />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-order" label="ลำดับการแสดง" error={fieldError('displayOrder')} type="number" {...form.register('displayOrder', { valueAsNumber: true })} />
+                <VariantInput disabled={saving || latestArchived || productArchived} id="variant-shelf-life" label="อายุคงเหลือขั้นต่ำ (วัน)" error={fieldError('minRemainingShelfLifeDays')} type="number" {...form.register('minRemainingShelfLifeDays', { valueAsNumber: true })} />
               </div>
               {isEdit && <p className="text-sm text-muted-foreground">SKU {variant?.sku} เปลี่ยนไม่ได้</p>}
               <FieldSet>
@@ -125,7 +149,7 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
                     <Controller
                       control={form.control}
                       name="salesEnabled"
-                      render={({ field }) => <Checkbox checked={field.value} disabled={saving || latestArchived} id="variant-sales-enabled" onCheckedChange={field.onChange} />}
+                      render={({ field }) => <Checkbox checked={field.value} disabled={saving || latestArchived || productArchived} id="variant-sales-enabled" onCheckedChange={field.onChange} />}
                     />
                     เปิดขายรูปแบบนี้
                   </FieldLabel>
@@ -134,29 +158,46 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
               </FieldSet>
             </FieldGroup>
             {serverError && <p aria-live="assertive" className="text-sm text-destructive" role="alert">{serverError}</p>}
-            {conflictDetected && isEdit && <section aria-label="สถานะรูปแบบสินค้าล่าสุด" className="flex flex-col gap-3 rounded-md border p-3">
+            {conflictDetected && <section aria-label="สถานะข้อมูลล่าสุด" className="flex flex-col gap-3 rounded-md border p-3">
               <h3 className="font-medium">ตรวจสอบข้อมูลล่าสุดจากเซิร์ฟเวอร์</h3>
-              {refreshFailed || !latestVariant
+              <p className="text-sm">{refreshFailed ? 'สถานะที่โหลดไว้ก่อนหน้า' : 'สถานะสินค้าล่าสุด'}: {latestProductStatus === 'published' ? 'เผยแพร่แล้ว' : latestProductStatus === 'draft' ? 'ร่าง' : 'เก็บถาวร'}</p>
+              {productArchived && !refreshFailed && <p className="text-sm text-destructive" role="status">สินค้านี้ถูกเก็บถาวรแล้วบนเซิร์ฟเวอร์</p>}
+              {refreshFailed && <p className="text-sm text-destructive" role="status">ยืนยันสถานะสินค้าและรูปแบบปัจจุบันไม่ได้ กรุณาโหลดข้อมูลล่าสุดก่อนบันทึก</p>}
+              {refreshFailed || latestVariantUnavailable
                 ? <p className="text-sm text-muted-foreground" role="status">โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณาลองโหลดอีกครั้งก่อนบันทึก</p>
                 : <>
-                  <dl className="grid gap-2 text-sm sm:grid-cols-3">
-                    <div><dt className="font-medium">ชื่อรูปแบบ</dt><dd className="text-muted-foreground">{latestVariant.name}</dd></div>
-                    <div><dt className="font-medium">หน่วย</dt><dd className="text-muted-foreground">{latestVariant.unit}</dd></div>
-                    <div><dt className="font-medium">ราคา</dt><dd className="text-muted-foreground">{formatMoney(latestVariant.priceSatang)}</dd></div>
-                  </dl>
+                  {isEdit && latestVariant
+                    ? <dl className="grid gap-2 text-sm sm:grid-cols-3">
+                      <div><dt className="font-medium">ชื่อรูปแบบ</dt><dd className="text-muted-foreground">{latestVariant.name}</dd></div>
+                      <div><dt className="font-medium">หน่วย</dt><dd className="text-muted-foreground">{latestVariant.unit}</dd></div>
+                      <div><dt className="font-medium">ราคา</dt><dd className="text-muted-foreground">{formatMoney(latestVariant.priceSatang)}</dd></div>
+                    </dl>
+                    : <div>
+                      <p className="mb-1 text-sm font-medium">รูปแบบสินค้าและ SKU ปัจจุบัน</p>
+                      {latestVariants.length > 0
+                        ? <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                          {latestVariants.map((candidate) => <li key={candidate.id}>{candidate.sku} · {candidate.name}{candidate.archivedAt ? ' · เก็บถาวร' : ''}</li>)}
+                        </ul>
+                        : <p className="text-sm text-muted-foreground">สินค้านี้ยังไม่มีรูปแบบสินค้า</p>}
+                    </div>}
                   {latestArchived && <p className="text-sm text-destructive" role="status">รูปแบบสินค้านี้ถูกเก็บถาวรแล้วบนเซิร์ฟเวอร์</p>}
-                  <Button disabled={saving} onClick={() => {
+                  {isEdit && latestVariant && !latestArchived && !productArchived && <Button disabled={saving || refreshing} onClick={() => {
                     form.reset(defaultValues(latestVariant))
                     onDirtyChange(false)
                     setConflictDetected(false)
+                    setConflictReviewed(false)
                     setServerError(null)
-                  }} type="button" variant="outline">ใช้ข้อมูลล่าสุด</Button>
+                  }} type="button" variant="outline">ใช้ข้อมูลล่าสุด</Button>}
+                  {!latestArchived && !productArchived && <Button disabled={saving || refreshing} onClick={() => {
+                    setConflictReviewed(true)
+                    setServerError(null)
+                  }} type="button" variant="outline">ตรวจสอบแล้ว ใช้ร่างเดิม</Button>}
                 </>}
-              <Button disabled={saving} onClick={() => void onRefreshLatest()} type="button" variant="outline">โหลดข้อมูลล่าสุด</Button>
+              <Button disabled={saving || refreshing} onClick={() => void refreshLatest()} type="button" variant="outline">{refreshing ? 'กำลังโหลด...' : 'โหลดข้อมูลล่าสุด'}</Button>
             </section>}
             <DialogFooter>
               <Button disabled={saving} onClick={requestClose} type="button" variant="outline">ยกเลิก</Button>
-              <Button disabled={saving || conflictDetected || latestArchived} type="submit">{saving ? 'กำลังบันทึก...' : 'บันทึกรูปแบบสินค้า'}</Button>
+              <Button disabled={submitBlocked} type="submit">{saving ? 'กำลังบันทึก...' : 'บันทึกรูปแบบสินค้า'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

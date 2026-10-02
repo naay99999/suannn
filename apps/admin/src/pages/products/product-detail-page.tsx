@@ -77,10 +77,16 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   })
 
   const refreshVariantConflict = async (variantId?: string) => {
-    await queryClient.invalidateQueries({ queryKey: catalogKeys.all, refetchType: 'all' })
-    const refreshedProduct = queryClient.getQueryData<ProductDetail>(productQuery(product.id).queryKey)
+    let refreshFailed = false
+    try {
+      await queryClient.invalidateQueries({ queryKey: catalogKeys.all, refetchType: 'all' }, { throwOnError: true })
+    } catch {
+      refreshFailed = true
+    }
+    const detailQueryKey = productQuery(product.id).queryKey
+    const refreshedProduct = queryClient.getQueryData<ProductDetail>(detailQueryKey)
     const latestVariant = variantId ? refreshedProduct?.variants.find((candidate) => candidate.id === variantId) : undefined
-    const refreshFailed = Boolean(queryClient.getQueryState(productQuery(product.id).queryKey)?.error || (variantId && !latestVariant))
+    refreshFailed = refreshFailed || !refreshedProduct || Boolean(queryClient.getQueryState(detailQueryKey)?.error) || Boolean(variantId && !latestVariant)
     setVariantConflictRefreshFailed(refreshFailed)
     if (latestVariant) setVariantBeingEdited(latestVariant)
   }
@@ -198,6 +204,8 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         </div>
       </section>
       {variantDialogOpen && <VariantDialog
+        latestProductStatus={product.status}
+        latestVariants={product.variants}
         latestVariant={variantBeingEdited ? product.variants.find((candidate) => candidate.id === variantBeingEdited.id) ?? null : null}
         onRefreshLatest={() => refreshVariantConflict(variantBeingEdited?.id)}
         onDirtyChange={setVariantDirty}
@@ -247,7 +255,7 @@ export function Component() {
     <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/products">กลับไปหน้าสินค้า</Link>
   </section>
   if (product.isPending) return <QueryState kind="loading" />
-  if (product.error) {
+  if (product.error && !product.data) {
     const state = detailState(product.error)
     return <section className="flex flex-col gap-4 px-4 lg:px-6">
       <QueryState kind={state.kind} message={state.message} onRetry={state.kind === 'error' ? () => void product.refetch() : undefined} />

@@ -175,3 +175,23 @@ The regression cases cover uncertain create recovery and no auto-resubmission; c
 The regressions were added before their production changes. The first combined red-phase run confirmed the missing slug and malformed lot states. Auto-review rejected a proposed broad source rollback to replay every new case against the branch snapshot because it could lose untracked or staged work; no rollback was attempted. As a result, not every new regression was individually observed failing before implementation. The focused editor suite later passed 24 tests, and the full final admin suite passed as recorded above.
 
 No API integration suite was rerun in this fix wave. The previous feature-versus-baseline comparison documented above remains the available evidence for its 13 out-of-scope pre-existing failures. Authenticated browser acceptance also remains pending the safe migrated environment and owner/asset-host inputs described above.
+
+## Residual variant conflict recovery — 2026-10-03
+
+The final residual review fix closes every variant `409` path in the detail editor. Create conflicts now show the refreshed parent status and current variant/SKU list; edit conflicts show the current parent status and edited variant. The form retains its draft until staff selects the latest variant values or explicitly confirms review of the existing draft. SKU conflicts keep the specific “SKU is already in use” message. Writes remain disabled when the parent is archived, when the edited variant is archived or unavailable, when refresh fails, and while a manual refresh is in progress. A manual refresh clears the prior review acknowledgement, disables both review actions until the request settles, and staff must review the returned state again before saving.
+
+Background detail refetch errors no longer replace the route when cached detail data exists. The dialog remains mounted with the user's draft; it labels cached parent status as previously loaded, reports that current state could not be confirmed, blocks writes, and allows a retry. A successful retry exposes refreshed state and permits an explicit review/recovery path.
+
+### Residual fix checks
+
+| Command | Result | Captured output |
+|---|---|---|
+| `bun test --preload ./apps/admin/test/setup.ts apps/admin/test/product-editor.test.tsx` | 28 passed; 0 failed; 100 expectations | `/private/tmp/variant-conflict-focused-green.log` |
+| `bun test --preload ./apps/admin/test/setup.ts apps/admin/test` | 181 passed; 0 failed; 687 expectations across 33 files | `/private/tmp/variant-conflict-tests.log` |
+| `bun --filter admin lint` | Exit 0; four existing non-blocking diagnostics | `/private/tmp/variant-conflict-lint.log` |
+| `VITE_API_URL=http://localhost:6767 bun --filter admin build` | Exit 0, including TypeScript project build | `/private/tmp/variant-conflict-build.log` |
+| `git diff --check` | Exit 0 | No output |
+
+The new product-editor regressions cover create conflict after parent archive, an SKU conflict that requires reviewing refreshed variants before retry, refresh failure with retained draft and successful retry recovery, edit conflict after parent archive, and a manual refresh that relocks a previously reviewed conflict until the refreshed state is reviewed again. The manual-refresh regressions failed before their lock implementation was restored: submit remained enabled during the request, then the review acknowledgement remained enabled in a second red check. The focused suite then passed with both actions disabled during refresh and review reset after completion. Existing edit recovery for a concurrently archived variant remains green.
+
+Admin lint retains the same four diagnostics recorded above. The admin tests also emit the existing Base UI `SelectRoot`/`SelectValue` `act(...)` warnings. No API integration suite or authenticated browser acceptance was run in this residual wave; the previous baseline comparison and browser-environment limitations remain as documented above.
