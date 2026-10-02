@@ -58,6 +58,9 @@ export const router = createBrowserRouter([
             children: [
               { index: true, lazy: () => import('./pages/inventory/inventory-page') },
               { path: 'receive', lazy: () => import('./pages/inventory/receive-lot-page') },
+              { path: 'reservations', lazy: () => import('./pages/inventory/reservation-lookup-page') },
+              { path: 'reservations/new', lazy: () => import('./pages/inventory/reservation-create-page') },
+              { path: 'reservations/:reservationId', lazy: () => import('./pages/inventory/reservation-detail-page') },
               { path: 'lots/:lotId', lazy: () => import('./pages/inventory/lot-detail-page') },
               { path: 'variants/:variantId', lazy: () => import('./pages/inventory/variant-stock-page') },
               { path: 'movements', lazy: () => import('./pages/inventory/movements-page') },

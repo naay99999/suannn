@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type {
   CountAdjustmentInput,
   QuarantineInput,
+  ReserveInput,
   ReceiveInput,
   WriteOffInput,
 } from './api'
@@ -79,10 +80,35 @@ export const countAdjustmentSchema = z.object({
   reason: z.string().trim().min(1, 'กรุณาระบุรหัสเหตุผล').max(100, 'รหัสเหตุผลต้องไม่เกิน 100 ตัวอักษร').regex(/^[a-z][a-z0-9._-]{0,99}$/, 'ใช้ตัวพิมพ์เล็ก ตัวเลข จุด ขีด หรือขีดล่าง โดยขึ้นต้นด้วยตัวอักษร'),
 })
 
+export const reservationSchema = z.object({
+  lines: z.array(z.object({
+    variantId: z.uuid('กรุณาเลือกรูปแบบสินค้าที่ถูกต้อง'),
+    quantity: z.number().int('จำนวนต้องเป็นจำนวนเต็ม').min(1, 'จำนวนต้องไม่น้อยกว่า 1').max(1_000_000, 'จำนวนต้องไม่เกิน 1,000,000'),
+  })).min(1, 'กรุณาเพิ่มรูปแบบสินค้าอย่างน้อย 1 รายการ').max(50, 'เพิ่มรูปแบบสินค้าได้ไม่เกิน 50 รายการ'),
+  externalReference: z.string().trim().max(255, 'รหัสอ้างอิงต้องไม่เกิน 255 ตัวอักษร').optional(),
+}).superRefine((values, context) => {
+  const variantIds = new Set<string>()
+  values.lines.forEach((line, index) => {
+    if (variantIds.has(line.variantId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['lines', index, 'variantId'],
+        message: 'ห้ามเพิ่มรูปแบบสินค้าเดิมซ้ำ',
+      })
+    }
+    variantIds.add(line.variantId)
+  })
+})
+
+export const reservationLookupSchema = z.object({
+  reservationId: z.uuid('กรุณาระบุรหัสการจองเป็น UUID ที่ถูกต้อง'),
+})
+
 export type ReceiveLotValues = z.infer<typeof receiveLotSchema>
 export type QuarantineValues = z.infer<typeof quarantineSchema>
 export type WriteOffValues = z.infer<typeof writeOffSchema>
 export type CountAdjustmentValues = z.infer<typeof countAdjustmentSchema>
+export type ReservationValues = z.infer<typeof reservationSchema>
 
 export function toReceiveInput(values: ReceiveLotValues, warehouseId: string, variantId: string): ReceiveInput {
   const input: ReceiveInput = {
@@ -112,4 +138,13 @@ export function toWriteOffInput(values: WriteOffValues): WriteOffInput {
 
 export function toCountAdjustmentInput(values: CountAdjustmentValues): CountAdjustmentInput {
   return { countedQuantity: values.countedQuantity, reason: values.reason }
+}
+
+export function toReserveInput(values: ReservationValues, warehouseId: string): ReserveInput {
+  const input: ReserveInput = {
+    warehouseId,
+    lines: values.lines.map(({ variantId, quantity }) => ({ variantId, quantity })),
+  }
+  if (values.externalReference) input.externalReference = values.externalReference
+  return input
 }

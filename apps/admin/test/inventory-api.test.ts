@@ -91,3 +91,37 @@ test('sends idempotent stock command POSTs with strict JSON payloads', async () 
     JSON.stringify({ countedQuantity: 0, reason: 'cycle_count' }),
   ])
 })
+
+test('uses the reservation endpoints with typed bodies and idempotency keys', async () => {
+  const requests: Array<{ url: string; init: RequestInit }> = []
+  const client = createApiClient('https://api.example.test', async (input, init) => {
+    requests.push({ url: String(input), init: init ?? {} })
+    return Response.json({ ok: true })
+  })
+  const inventory = createInventoryApi(client)
+  const reservationId = '00000000-0000-4000-8000-000000000004'
+  const input = { warehouseId, lines: [{ variantId, quantity: 3 }], externalReference: 'ORDER-42' }
+
+  expect(inventory.reserve).toBeFunction()
+  expect(inventory.reservation).toBeFunction()
+  expect(inventory.confirmReservation).toBeFunction()
+  expect(inventory.releaseReservation).toBeFunction()
+
+  await inventory.reserve(input, 'reserve-key')
+  await inventory.reservation(reservationId)
+  await inventory.confirmReservation(reservationId, 'confirm-key')
+  await inventory.releaseReservation(reservationId, 'release-key')
+
+  expect(requests.map(({ url, init }) => [new URL(url).pathname, init.method, new Headers(init.headers).get('Idempotency-Key')])).toEqual([
+    ['/api/v1/admin/inventory/reservations', 'POST', 'reserve-key'],
+    [`/api/v1/admin/inventory/reservations/${reservationId}`, 'GET', null],
+    [`/api/v1/admin/inventory/reservations/${reservationId}/confirm`, 'POST', 'confirm-key'],
+    [`/api/v1/admin/inventory/reservations/${reservationId}/release`, 'POST', 'release-key'],
+  ])
+  expect(requests.map(({ init }) => init.body)).toEqual([
+    JSON.stringify(input),
+    undefined,
+    '{}',
+    '{}',
+  ])
+})

@@ -1,6 +1,8 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { inventoryApi, type LotListInput, type MovementListInput } from './api'
 
+export const RESERVATION_POLL_INTERVAL = 30_000
+
 export const inventoryKeys = {
   all: ['inventory'] as const,
   warehouse: () => [...inventoryKeys.all, 'warehouse'] as const,
@@ -11,6 +13,7 @@ export const inventoryKeys = {
   movements: () => [...inventoryKeys.all, 'movements'] as const,
   movementList: (query: MovementListInput) => [...inventoryKeys.movements(), 'list', query] as const,
   reservations: () => [...inventoryKeys.all, 'reservations'] as const,
+  reservation: (id: string) => [...inventoryKeys.reservations(), id] as const,
 }
 
 export function warehouseQuery() {
@@ -48,6 +51,50 @@ export function movementsQuery(query: MovementListInput) {
     queryKey: inventoryKeys.movementList(query),
     queryFn: () => inventoryApi.movements(query),
   })
+}
+
+export function reservationQuery(id: string) {
+  return queryOptions({
+    queryKey: inventoryKeys.reservation(id),
+    queryFn: () => inventoryApi.reservation(id),
+    enabled: Boolean(id),
+    refetchInterval: (query) => query.state.data?.status === 'active'
+      && typeof document !== 'undefined'
+      && document.visibilityState === 'visible'
+      ? RESERVATION_POLL_INTERVAL
+      : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export type ReservationExpiryScheduler = {
+  now: () => number
+  setTimeout: (callback: () => void, delay: number) => unknown
+  clearTimeout: (timer: unknown) => void
+}
+
+export function scheduleReservationExpiry(
+  expiresAt: string,
+  onExpiry: () => void,
+  scheduler: ReservationExpiryScheduler = {
+    now: () => Date.now(),
+    setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay),
+    clearTimeout: (timer) => globalThis.clearTimeout(timer as ReturnType<typeof setTimeout>),
+  },
+): () => void {
+  let cancelled = false
+  let fired = false
+  const timer = scheduler.setTimeout(() => {
+    if (cancelled || fired) return
+    fired = true
+    onExpiry()
+  }, Math.max(0, Date.parse(expiresAt) - scheduler.now()))
+
+  return () => {
+    cancelled = true
+    scheduler.clearTimeout(timer)
+  }
 }
 
 export async function invalidateInventory(client: QueryClient): Promise<void> {

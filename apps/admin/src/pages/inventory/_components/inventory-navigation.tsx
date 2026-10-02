@@ -11,6 +11,7 @@ export function InventoryNavigation({ variantId, lotId, productId }: { variantId
   return (
     <nav aria-label="นำทางคลังสินค้า" className="flex flex-wrap gap-2">
       <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to="/inventory">รายการล็อต</Link>
+      <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to="/inventory/reservations">การจองสินค้า</Link>
       <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to={movementHref}>ประวัติความเคลื่อนไหว</Link>
       {variantId && <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to={`/inventory/variants/${variantId}${productId ? `?productId=${productId}` : ''}`}>สต็อกรูปแบบสินค้า</Link>}
       {lotId && <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))} to={`/inventory/lots/${lotId}`}>รายละเอียดล็อต</Link>}
