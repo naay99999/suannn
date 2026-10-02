@@ -318,7 +318,15 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       ...(quarantineReason ? { quarantineReason } : {}),
     }
     const receiptOperationId = demoId('operation', receiptOperationIndex)
-    const receiptTime = receivedAt
+    const receiptVariant = variants.find(({ id }) => id === variantId)!
+    const receiptProduct = products.find(({ id }) => id === receiptVariant.productId)!
+    const receiptSellableQuantity = !quarantined
+      && receiptProduct.status === 'published'
+      && receiptVariant.salesEnabled
+      && receiptVariant.archivedAt === null
+      && isLotEligible(expiryDate, receiptVariant.minRemainingShelfLifeDays ?? 0, now)
+      ? receiptQuantity
+      : 0
     const receiptBody = {
       id: lotId,
       warehouseId,
@@ -330,7 +338,7 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       quarantineReason,
       onHandQuantity: receiptQuantity,
       reservedQuantity: 0,
-      sellableQuantity: 0,
+      sellableQuantity: receiptSellableQuantity,
       createdAt: createdAt.toISOString(),
       updatedAt: createdAt.toISOString(),
     }
@@ -342,7 +350,7 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       httpStatus: 201,
       resultPayload: { body: receiptBody },
       actorId,
-      createdAt: receiptTime,
+      createdAt,
     })
     movements.push({
       id: demoId('movement', index),
@@ -352,14 +360,14 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       balanceAfter: receiptQuantity,
       type: 'receipt',
       reasonCode: 'receipt',
-      occurredAt: receiptTime,
+      occurredAt: createdAt,
       actorId,
     })
     recordAudit('inventory.received', 'inventory_lot', lotId, {
       variantId,
       warehouseId,
       quantity: receiptQuantity,
-    }, receiptTime)
+    })
 
     if (quarantined) {
       recordAudit('inventory.quarantined', 'inventory_lot', lotId, {
@@ -381,7 +389,12 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
         idempotencyKey: `demo-v1-write-off-${String(lossIndex).padStart(2, '0')}`,
         requestHash: requestHash(payload),
         httpStatus: 200,
-        resultPayload: { body: { ...receiptBody, onHandQuantity: 0, updatedAt: createdAt.toISOString() } },
+        resultPayload: { body: {
+          ...receiptBody,
+          onHandQuantity: 0,
+          sellableQuantity: 0,
+          updatedAt: createdAt.toISOString(),
+        } },
         actorId,
         createdAt,
       })

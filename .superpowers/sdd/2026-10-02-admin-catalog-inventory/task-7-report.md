@@ -26,7 +26,9 @@ The integration runner loaded the local env file without displaying it, derived 
 
 ```sh
 bun --env-file=/Users/naay/workspace/naay/suannn/apps/api/.env.local -e '
-const derivedUrl = new URL(process.env.DATABASE_URL!)
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) throw new Error("DATABASE_URL is required")
+const derivedUrl = new URL(databaseUrl)
 derivedUrl.pathname = "/suannn_test"
 const childEnv = { ...process.env, TEST_DATABASE_URL: derivedUrl.toString() }
 const test = Bun.spawn(["sh", "-c", "bun test/require-test-database.ts && bun test test/integration/seed-demo.test.ts"], {
@@ -38,6 +40,20 @@ const test = Bun.spawn(["sh", "-c", "bun test/require-test-database.ts && bun te
 process.exitCode = await test.exited
 '
 ```
+
+## Task 7 fixround1: receipt replay fidelity
+
+**RED:** The new focused integration case invoked `InventoryStockRepository.receiveLot` with the seed's `demo-v1-receipt-01` key and same normalized receipt. Replay matched the stored request hash but returned `sellableQuantity: 0` instead of the runtime-eligible quantity. The case also checks receipt operation, movement, and audit execution timestamps.
+
+**Implementation:** Receipt replay bodies now calculate sellability with the inventory eligibility policy and seeded catalog/variant state. A subsequent write-off replay body explicitly remains at zero sellable quantity. Receipt operation creation, movement occurrence, and receipt audit times now use seed execution time; the lot's physical `receivedAt` remains one day earlier.
+
+**GREEN:**
+
+- `bun test test/unit/seed-demo.test.ts` — 6 passed, 0 failed, 73 assertions.
+- `bun test/require-test-database.ts && bun test test/integration/seed-demo.test.ts` — 8 passed, 0 failed, 39 assertions against guarded `suannn_test`.
+- `bun --filter api typecheck` — passed.
+- `bun --filter api lint` — passed.
+- Manifest counts and deterministic IDs remain unchanged; no development database seed was run.
 
 ## Self-review
 

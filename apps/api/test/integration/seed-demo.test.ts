@@ -18,6 +18,8 @@ import {
 import { buildDemoFixtures } from '../../src/cli/demo/fixtures'
 import { seedDemo } from '../../src/cli/demo/seed'
 import { parseDemoSeedOptions } from '../../src/cli/seed-demo'
+import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
+import type { CommandContext, ReceiveLotInput } from '../../src/modules/inventory/types'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 
 const database = createTestDatabase()
@@ -125,6 +127,67 @@ describe('catalog and stock demo seed', () => {
     expect(storedMovements.every(({ operationId, actorId }) =>
       fixtures.manifest.operationIds.includes(operationId) && actorId === ownerId)).toBe(true)
     expect(storedAudits.every(({ actorUserId }) => actorUserId === ownerId)).toBe(true)
+  })
+
+  it('replays an eligible seeded receipt through the stock command with runtime response and execution timestamps', async () => {
+    await createOwner()
+    const seedOpts = await seedOptions()
+    await seedDemo(database.db, seedOpts, now)
+
+    const fixtures = buildDemoFixtures({
+      now,
+      warehouseId: seedOpts.warehouseId,
+      actorId: ownerId,
+      imageBaseUrl: options.imageBaseUrl,
+    })
+    const seededLot = fixtures.lots[0]!
+    const receiptMovement = fixtures.movements.find(({ lotId, type }) => lotId === seededLot.id && type === 'receipt')!
+    const receiptOperation = fixtures.operations.find(({ scope, idempotencyKey }) =>
+      scope === 'inventory.receive-lot' && idempotencyKey === 'demo-v1-receipt-01')!
+    const lotId = seededLot.id!
+    const operationId = receiptOperation.id!
+    const receivedAt = seededLot.receivedAt!.toISOString()
+    const receipt: ReceiveLotInput = {
+      warehouseId: seededLot.warehouseId!,
+      variantId: seededLot.variantId!,
+      lotCode: seededLot.lotCode!,
+      quantity: receiptMovement.quantityDelta!,
+      expiryDate: seededLot.expiryDate!,
+      receivedAt,
+      quarantined: false,
+    }
+    const actor: CommandContext['actor'] = {
+      kind: 'staff',
+      userId: ownerId,
+      auditContext: { requestId: 'demo-receipt-replay-test', ipAddress: '127.0.0.1', userAgent: 'test' },
+    }
+    const replayed = await new InventoryStockRepository(database.db).receiveLot(receipt, {
+      actor,
+      idempotencyKey: 'demo-v1-receipt-01',
+    })
+    const [operation] = await database.db.select().from(inventoryOperation).where(eq(inventoryOperation.id, operationId))
+    const [movement] = await database.db.select().from(stockMovement).where(eq(stockMovement.operationId, operationId))
+    const [audit] = await database.db.select().from(auditLog).where(eq(auditLog.targetId, lotId))
+
+    expect(replayed).toEqual({
+      id: lotId,
+      warehouseId: seededLot.warehouseId,
+      variantId: seededLot.variantId,
+      lotCode: seededLot.lotCode,
+      receivedAt,
+      expiryDate: seededLot.expiryDate,
+      quarantinedAt: null,
+      quarantineReason: null,
+      onHandQuantity: receiptMovement.quantityDelta,
+      reservedQuantity: 0,
+      sellableQuantity: 100,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    })
+    expect(operation?.createdAt).toEqual(now)
+    expect(movement?.occurredAt).toEqual(now)
+    expect(audit?.occurredAt).toEqual(now)
+    expect(await rowCounts()).toMatchObject({ products: 8, variants: 12, lots: 16, operations: 18, movements: 18 })
   })
 
   it('returns already-seeded without overwriting edits or timestamps', async () => {
