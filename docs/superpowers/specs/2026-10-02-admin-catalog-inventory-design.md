@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-02
 
-**Status:** Conversational design approved; awaiting written-spec review.
+**Status:** Written spec approved by the human on 2026-10-02; implementation plan approved; subagent-driven execution selected (gpt-6-luna, xhigh).
 
 ## 1. Purpose and approved decisions
 
