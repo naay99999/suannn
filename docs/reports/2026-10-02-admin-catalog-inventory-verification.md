@@ -70,7 +70,7 @@ The focused test log contains eight repeated Base UI warnings: “An update to S
 
 ### API integration failure comparison
 
-Both integration runs were guarded to use only `suannn_test`: the URL was derived in memory from the existing local API configuration by replacing its pathname, then checked by `test/require-test-database.ts` before schema reset. The development database was not reset. The feature adds 8 passing integration cases and 39 assertions, with no new failing integration test.
+Both integration runs were guarded to use only `suannn_test`: the URL was derived in memory from the existing local API configuration by replacing its pathname, then validated for presence by `test/require-test-database.ts`; `test/helpers/database.ts` checks the actual connected database name ends in `_test` before schema reset. The development database was not reset. The feature adds 8 passing integration cases and 39 assertions, with no new failing integration test.
 
 The same 13 failing test names occurred on baseline and feature:
 
@@ -111,7 +111,7 @@ process.exitCode = await test.exited
 '
 ```
 
-For the baseline control, the same runner was used with `cwd: "/Users/naay/workspace/naay/suannn/apps/api"` at `c5d2322`. `test/require-test-database.ts` verified the actual connected database name before any test reset. The local environment files and credentials were not changed, printed, or added to the repository.
+For the baseline control, the same runner was used with `cwd: "/Users/naay/workspace/naay/suannn/apps/api"` at `c5d2322`. `test/helpers/database.ts` verified the actual connected database name before any test reset; `test/require-test-database.ts` checks that the URL is supplied. The local environment files and credentials were not changed, printed, or added to the repository.
 
 ### Production API URL build check
 
