@@ -42,3 +42,12 @@
 - Verified invalid lookup IDs make no HTTP call, allocation rows preserve lot IDs, copy success and failure are reported, and route changes reset command identity with a visible warning.
 - Verified expiry/hidden-page polling behavior with controlled timers and a mounted query observer; unmount clears timers and polling stops after terminal status.
 - No functional concerns found. Lint exits successfully with the React Hook Form compiler compatibility warning noted above.
+
+## Fix Round 1: Accessible Reservation Quantity Errors
+
+- **RED:** From `apps/admin/`, ran `bun test --preload ./test/setup.ts ./test/reservation-flow.test.tsx`. The new invalid-quantity regression failed because it could not find `จำนวนต้องไม่น้อยกว่า 1`; submitting an invalid line was blocked without exposing its field error.
+- **Change:** Pass per-variant quantity errors into the editable reservation line table. Invalid inputs now set `aria-invalid`, link to their visible shared `FieldError` with `aria-describedby`, and keep the existing array-level line-count/other errors intact.
+- **GREEN:** From `apps/admin/`, ran `bun test --preload ./test/setup.ts ./test/reservation-forms.test.ts ./test/reservation-flow.test.tsx ./test/inventory-api.test.ts ./test/inventory-command.test.ts`. Result: **24 pass, 0 fail, 110 assertions**. The regression checks quantity zero, exact description linkage and localized text, no request before correction, then one successful request after correcting the quantity.
+- `bun --filter admin lint` — exit 0; only the existing React Hook Form/fast-refresh compiler warnings remain.
+- `VITE_API_URL=http://localhost:6767 bun --filter admin build` — exit 0; TypeScript check and Vite production build completed.
+- Self-review: the row-level error IDs are unique per variant, `aria-describedby` is present only while an error is shown, and the existing array-level message rendering remains unchanged.

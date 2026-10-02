@@ -222,6 +222,35 @@ test('creating a reservation redirects to the server returned ID with one atomic
   })
 })
 
+test('invalid reservation quantity shows its localized line error and can be corrected before submission', async () => {
+  const { reserveSpy } = mockReservationApis()
+  const { router } = renderReservation('/inventory/reservations/new')
+
+  await screen.findByText(/คลังหลัก/)
+  fireEvent.change(screen.getByRole('searchbox', { name: 'ค้นหาสินค้าเพื่อเลือกสต็อก' }), { target: { value: 'มะม่วง' } })
+  fireEvent.click(await screen.findByRole('button', { name: /มะม่วงน้ำดอกไม้/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /MANGO-1KG/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'เพิ่มรูปแบบที่เลือก' }))
+
+  const quantity = screen.getByLabelText('จำนวน มะม่วงน้ำดอกไม้ · MANGO-1KG · ขนาด 1 กิโลกรัม')
+  fireEvent.change(quantity, { target: { value: '0' } })
+  fireEvent.click(screen.getByRole('button', { name: 'สร้างการจอง' }))
+
+  expect(await screen.findByText('จำนวนต้องไม่น้อยกว่า 1')).toBeTruthy()
+  expect(quantity.getAttribute('aria-invalid')).toBe('true')
+  const quantityErrorId = quantity.getAttribute('aria-describedby')
+  expect(quantityErrorId).toBe(`reservation-quantity-${variantId}-error`)
+  expect(document.getElementById(quantityErrorId ?? '')?.textContent).toBe('จำนวนต้องไม่น้อยกว่า 1')
+  expect(reserveSpy).not.toHaveBeenCalled()
+
+  fireEvent.change(quantity, { target: { value: '2' } })
+  fireEvent.click(screen.getByRole('button', { name: 'สร้างการจอง' }))
+
+  await waitFor(() => expect(router.state.location.pathname).toBe(`/inventory/reservations/${reservationId}`))
+  expect(reserveSpy).toHaveBeenCalledTimes(1)
+  expect(reserveSpy.mock.calls[0]?.[0].lines).toEqual([{ variantId, quantity: 2 }])
+})
+
 test('insufficient stock keeps every line and sends the multi-line reservation only once', async () => {
   const { reserveSpy } = mockReservationApis()
   reserveSpy.mockRejectedValueOnce(new ApiRequestError(409, 'INVENTORY_STOCK_CONFLICT', 'stock changed'))

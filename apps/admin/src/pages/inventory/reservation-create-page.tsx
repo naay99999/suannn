@@ -63,6 +63,10 @@ export function Component() {
     ...lineMetadata[line.variantId],
   }))
   const linesError = form.formState.errors.lines?.message
+  const quantityErrors = Object.fromEntries(lines.flatMap((line, index) => {
+    const message = form.formState.errors.lines?.[index]?.quantity?.message
+    return message ? [[line.variantId, message]] : []
+  }))
   const canUseMainWarehouse = warehouse.data.code === 'MAIN' && warehouse.data.isActive
 
   function addSelection() {
@@ -159,6 +163,7 @@ export function Component() {
         <ReservationLines
           disabled={command.isPending || command.uncertain}
           lines={displayedLines}
+          quantityErrors={quantityErrors}
           onQuantityChange={changeQuantity}
           onRemove={removeLine}
         />
