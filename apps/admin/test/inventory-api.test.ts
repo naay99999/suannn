@@ -48,3 +48,46 @@ test('normalizes failed inventory reads without exposing server details', async 
     expect((error as Error).message).not.toContain('private database detail')
   }
 })
+
+
+test('sends idempotent stock command POSTs with strict JSON payloads', async () => {
+  const requests: Array<{ url: string; init: RequestInit }> = []
+  const client = createApiClient('https://api.example.test', async (input, init) => {
+    requests.push({ url: String(input), init: init ?? {} })
+    return Response.json({ ok: true })
+  })
+  const inventory = createInventoryApi(client)
+
+  expect(inventory.receive).toBeFunction()
+  expect(inventory.quarantine).toBeFunction()
+  expect(inventory.releaseQuarantine).toBeFunction()
+  expect(inventory.writeOff).toBeFunction()
+  expect(inventory.adjustCount).toBeFunction()
+
+  await inventory.receive({
+    warehouseId,
+    variantId,
+    lotCode: 'MANGO-1',
+    quantity: 4,
+    expiryDate: '2026-12-31',
+  }, 'receipt-key')
+  await inventory.quarantine(lotId, { reason: 'ตรวจสอบ' }, 'quarantine-key')
+  await inventory.releaseQuarantine(lotId, 'release-key')
+  await inventory.writeOff(lotId, { quantity: 1, reason: 'damaged' }, 'write-off-key')
+  await inventory.adjustCount(lotId, { countedQuantity: 0, reason: 'cycle_count' }, 'count-key')
+
+  expect(requests.map(({ url, init }) => [new URL(url).pathname, init.method, new Headers(init.headers).get('Idempotency-Key')])).toEqual([
+    ['/api/v1/admin/inventory/lots', 'POST', 'receipt-key'],
+    [`/api/v1/admin/inventory/lots/${lotId}/quarantine`, 'POST', 'quarantine-key'],
+    [`/api/v1/admin/inventory/lots/${lotId}/release-quarantine`, 'POST', 'release-key'],
+    [`/api/v1/admin/inventory/lots/${lotId}/write-offs`, 'POST', 'write-off-key'],
+    [`/api/v1/admin/inventory/lots/${lotId}/count-adjustments`, 'POST', 'count-key'],
+  ])
+  expect(requests.map(({ init }) => init.body)).toEqual([
+    JSON.stringify({ warehouseId, variantId, lotCode: 'MANGO-1', quantity: 4, expiryDate: '2026-12-31' }),
+    JSON.stringify({ reason: 'ตรวจสอบ' }),
+    '{}',
+    JSON.stringify({ quantity: 1, reason: 'damaged' }),
+    JSON.stringify({ countedQuantity: 0, reason: 'cycle_count' }),
+  ])
+})

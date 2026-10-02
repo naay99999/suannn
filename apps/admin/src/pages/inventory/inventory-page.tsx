@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { ProductVariantPicker, type VariantSelection } from '@/components/product-variant-picker'
+import { buttonVariants } from '@workspace/ui/components/button'
+import { cn } from '@workspace/ui/lib/utils'
 import { QueryState } from '@/components/query-state'
 import { useCursorPagination } from '@/hooks/use-cursor-pagination'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
@@ -29,6 +31,7 @@ export function Component() {
   const productId = params.get('productId') || undefined
   const session = queryClient.getQueryData(authSessionQuery.queryKey)
   const canReadCatalog = hasPermission(session, 'catalog:read')
+  const canAdjustInventory = hasPermission(session, 'inventory:adjust')
   const product = useQuery({ ...productQuery(productId ?? ''), enabled: Boolean(productId && canReadCatalog) })
   const selectedVariant = product.data?.variants.find((candidate) => candidate.id === variantId)
   const selection: VariantSelection | null = selectedVariant && product.data
@@ -56,9 +59,12 @@ export function Component() {
   const metadata = selection ? { product: product.data!, variant: selectedVariant! } : undefined
   return (
     <section className="flex flex-col gap-6 px-4 lg:px-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">สต็อกสินค้า</h1>
-        <p className="text-sm text-muted-foreground">คลังหลัก · {warehouse.data.name} ({warehouse.data.code})</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold tracking-tight">สต็อกสินค้า</h1>
+          <p className="text-sm text-muted-foreground">คลังหลัก · {warehouse.data.name} ({warehouse.data.code})</p>
+        </div>
+        {canAdjustInventory && <Link className={cn(buttonVariants(), 'w-fit')} to="/inventory/receive">รับสินค้าเข้าคลัง</Link>}
       </div>
       <InventoryNavigation variantId={variantId} productId={productId} />
       {canReadCatalog && <ProductVariantPicker onChange={selectVariant} value={selection} />}

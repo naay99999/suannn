@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { inventoryApi, type LotListInput, type MovementListInput } from './api'
 
 export const inventoryKeys = {
@@ -48,4 +48,11 @@ export function movementsQuery(query: MovementListInput) {
     queryKey: inventoryKeys.movementList(query),
     queryFn: () => inventoryApi.movements(query),
   })
+}
+
+export async function invalidateInventory(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: inventoryKeys.all }),
+    client.invalidateQueries({ queryKey: ['catalog'] }),
+  ])
 }
