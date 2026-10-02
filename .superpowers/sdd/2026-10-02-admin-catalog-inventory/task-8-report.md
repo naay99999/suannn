@@ -2,7 +2,7 @@
 
 **Status:** DONE WITH BROWSER ACCEPTANCE PENDING
 **Validation date:** 2026-10-03 (Asia/Bangkok)
-**Branch:** `codex/admin-catalog-inventory`, based on `b574058`
+**Branch:** `codex/admin-catalog-inventory`; repository baseline `c5d2322`; Task 8 started at `b574058`
 
 ## Changes made
 
@@ -110,7 +110,7 @@ The local user's env files were not removed or modified.
 
 ## Browser acceptance and limits
 
-The admin dev server was available at `http://localhost:5184`, but the API at port 6767 was offline. The in-app browser displayed the expected staff-session network-error state; after retry it remained unchanged. The API runtime was intentionally not started because its entrypoint starts background outbox and Stripe workers. The requested existing owner email and HTTPS asset base were not available, so no credentials or MFA policy were fabricated and no seed was run.
+The admin dev server was available at `http://localhost:5184`, but the API at port 6767 was offline. The in-app browser displayed the expected staff-session network-error state; after retry it remained unchanged. The API runtime was intentionally not started because its entrypoint starts background outbox and Stripe workers. The requested existing owner email and HTTPS asset base were not available, so no credentials or MFA policy were fabricated. No development seed CLI was executed; the API integration suite did run seed-demo integration tests against guarded `suannn_test`.
 
 Therefore this report does **not** claim authenticated browser acceptance. No 1440px/390px browser sweep, live dirty-navigation/reload/session-expiry path, or browser screenshot was completed. The workflow was verified in the cross-page component test using an HTTP boundary, with API authorization verified by route tests. Browser acceptance still needs the existing owner/host inputs and a safe migrated runtime environment.
 
@@ -123,3 +123,11 @@ Therefore this report does **not** claim authenticated browser acceptance. No 14
 - The integration baseline comparison confirms no new API integration failures. Existing order/checkout/Stripe failures are out of this task's scope and are not represented as passing.
 - Implementer self-review is complete. The controller will perform its requested independent whole-branch review after this report/verification commit.
 - This delivery covers the approved catalog/inventory subproject. It makes no claim that later customer/order admin subprojects are complete.
+
+## Task 8 fixround1 report: durable verification details
+
+- Copied the 24-operation endpoint map, exact lint and `SelectRoot` act diagnostics, all 13 baseline-matched API integration failure names, and the guarded database runner into the committed verification report. It no longer relies on this git-ignored SDD report for evidence.
+- Clarified the branch history: repository baseline `c5d2322`; Task 8 began at `b574058`.
+- Clarified that no development seed CLI was run, while the full API integration suite did execute seed-demo integration tests against `suannn_test`.
+- Added the controller's implementation decisions and their stated rationale/tradeoffs to the durable verification report.
+- This follow-up changes documentation only. No source, test, build, lint, or integration suite was rerun; `git diff --check` is the only required validation for this documentation change.
