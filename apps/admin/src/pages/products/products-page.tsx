@@ -1,14 +1,18 @@
 import { createColumnHelper, type ColumnDef } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { Badge } from '@workspace/ui/components/badge'
+import { buttonVariants } from '@workspace/ui/components/button'
 import { Input } from '@workspace/ui/components/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select'
 import { ServerDataTable, type ServerDataTableFeatures } from '@/components/server-data-table'
 import { useCursorPagination } from '@/hooks/use-cursor-pagination'
 import { productsQuery } from '@/lib/catalog/queries'
 import type { CatalogListInput, ProductSummary } from '@/lib/catalog/api'
+import { authSessionQuery } from '@/lib/auth-session'
+import { hasPermission } from '@/lib/permissions'
+import { cn } from '@workspace/ui/lib/utils'
 
 const productFilters = ['q', 'status'] as const
 const emptyProducts: ProductSummary[] = []
@@ -60,6 +64,9 @@ function ProductImage({ product }: { product: ProductSummary }) {
 
 export function Component() {
   const location = useLocation()
+  const queryClient = useQueryClient()
+  const session = queryClient.getQueryData(authSessionQuery.queryKey)
+  const canCreate = hasPermission(session, 'catalog:create')
   const { cursor, limit, canPrevious, next, previous, first, setLimit, setFilters } = useCursorPagination(productFilters)
   const searchParams = new URLSearchParams(location.search)
   const searchQuery = searchParams.get('q') ?? ''
@@ -92,6 +99,7 @@ export function Component() {
           <p className="text-muted-foreground">ดูสินค้าและสถานะจากแค็ตตาล็อก</p>
         </div>
       </div>
+      {canCreate && <Link className={cn(buttonVariants(), 'w-fit')} to="/products/new">เพิ่มสินค้า</Link>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
           aria-label="ค้นหาสินค้า"

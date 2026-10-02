@@ -44,6 +44,11 @@ export const router = createBrowserRouter([
             element: <PermissionGate permission="catalog:read" />,
             children: [
               { index: true, lazy: () => import('./pages/products/products-page') },
+              {
+                path: 'new',
+                element: <PermissionGate permission="catalog:create" />,
+                children: [{ index: true, lazy: () => import('./pages/products/product-create-page') }],
+              },
               { path: ':productId', lazy: () => import('./pages/products/product-detail-page') },
             ],
           },

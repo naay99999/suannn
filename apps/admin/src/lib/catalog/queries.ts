@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { catalogApi, type CatalogListInput } from './api'
 
 export const catalogKeys = {
@@ -20,4 +20,14 @@ export function productQuery(id: string) {
     queryKey: catalogKeys.detail(id),
     queryFn: () => catalogApi.get(id),
   })
+}
+
+export async function invalidateCatalog(client: QueryClient, productId?: string): Promise<void> {
+  const invalidations = [
+    client.invalidateQueries({ queryKey: catalogKeys.lists() }),
+    client.invalidateQueries({ queryKey: ['inventory'] }),
+  ]
+  if (productId) invalidations.push(client.invalidateQueries({ queryKey: catalogKeys.detail(productId) }))
+  else invalidations.push(client.invalidateQueries({ queryKey: catalogKeys.all }))
+  await Promise.all(invalidations)
 }
