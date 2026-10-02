@@ -12,6 +12,7 @@ bun --filter api lint
 bun --filter api auth:generate
 bun --filter api db:generate
 bun --filter api db:migrate
+bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL" --image-base-url "$DEMO_IMAGE_BASE_URL"
 ```
 
 ## Configuration
@@ -41,6 +42,32 @@ Apply migrations before starting the new API. In particular, apply `0008_adorabl
 Apply `0009_pale_typhoid_mary.sql` before deploying the inventory API. It creates the `MAIN` warehouse, inventory lots, immutable stock movements, reservations, idempotency records, and the variant shelf-life setting used by inventory reads.
 
 Apply the commerce migrations before deploying cart, checkout, order, or commerce-settings API code: `0010_glamorous_thor.sql` creates carts and the disabled commerce-settings row; `0011_brown_thunderbolt.sql` creates order, item, payment, event, operation, allocation, and outbox tables; `0012_tan_thunderbolt.sql` adds order/allocation consistency constraints; and `0013_guest_order_access_rotation.sql` supports guest-access rotation. Run `bun --filter api db:migrate` and verify it completes before starting the new API version. Keep `COMMERCE_SECRET` stable across deployments: it derives guest order access tokens used by checkout replay and the confirmation outbox.
+
+## Catalog and inventory demo seed
+
+The repeatable phase-one seed populates eight Thai sample products, twelve variants, sixteen stock lots, inventory operations and movements, and audit records for the admin catalog and inventory screens. Apply all migrations first; the seed does not migrate or reset the database. Set `NODE_ENV=development` in `.env.local` (or in the invoking environment) for a local development seed; the CLI also permits `test`. Use the exact PostgreSQL database name reported by `select current_database()`. The actor must be an existing active, non-banned owner created through normal staff onboarding.
+
+Set `DEMO_DATABASE_NAME`, `DEMO_OWNER_EMAIL`, and `DEMO_IMAGE_BASE_URL` to your local values, then run:
+
+```bash
+bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL" --image-base-url "$DEMO_IMAGE_BASE_URL"
+```
+
+The HTTPS image base is your own hosted copy of these existing storefront assets. It may include a path prefix, but must not contain credentials, a query, or a fragment. The seed appends these relative paths:
+
+| Seed asset path | Existing source under `apps/storefront/public/images/` |
+| --- | --- |
+| `mango.jpg` | `mango.jpg` |
+| `orange.jpg` | `orange.jpg` |
+| `avocado.jpg` | `avocado.jpg` |
+| `products/dried-mango/detail.webp` | `products/dried-mango/detail.webp` |
+| `products/orange-jam/ingredient.webp` | `products/orange-jam/ingredient.webp` |
+| `products/avocado-spread/ingredient.webp` | `products/avocado-spread/ingredient.webp` |
+| `fruit-hero.jpg` | `fruit-hero.jpg` |
+
+The seed validates HTTPS syntax without downloading images. It creates six published products, one draft, one archived product, and inventory with eligible, expired, quarantined, and depleted examples. All fixture IDs are deterministic. A complete rerun reports `already-seeded` and preserves edits and timestamps; partial fixtures or collisions in the reserved `DEMO-V1` slug, SKU, or lot-code namespace fail without repair. The transaction lock serializes simultaneous invocations.
+
+The seed does not create orders or reservations, enqueue outbox work, change settings, send email, call Stripe, or reset data. Use a fresh development database when you need a fresh relative-date dataset. A later order seed will extend this same demo dataset.
 
 ### Stripe one-time payments
 
