@@ -34,6 +34,10 @@ function bangkokToday() {
 
 export function Component() {
   const { lotId } = useParams()
+  return <LotDetailPage key={lotId ?? 'missing'} lotId={lotId} />
+}
+
+function LotDetailPage({ lotId }: { lotId: string | undefined }) {
   const queryClient = useQueryClient()
   const { cursor, limit, canPrevious, next, previous, first, setLimit } = useCursorPagination([])
   const lot = useQuery({ ...lotQuery(lotId ?? ''), enabled: Boolean(lotId) })
@@ -74,9 +78,13 @@ export function Component() {
     return command.isPending || command.uncertain
   })
   const hasOutstandingCommand = Boolean(outstandingKind)
+  const hasUnresolvedCommand = Object.values(commandByKind).some((command) => command.isPending || command.uncertain)
   const canAdjust = hasPermission(session.data, 'inventory:adjust')
   const unsavedConfirmation = useUnsavedChanges(
-    dialogDirty || Object.values(commandByKind).some((command) => command.isPending || command.uncertain),
+    dialogDirty || hasUnresolvedCommand,
+    hasUnresolvedCommand
+      ? 'มีคำสั่งที่ยังไม่ได้รับผลยืนยัน ซึ่งอาจดำเนินการบนเซิร์ฟเวอร์แล้ว หากออกจากหน้านี้จะสูญเสียรหัสคำขอเดิมและส่งซ้ำจากหน้านี้ไม่ได้'
+      : undefined,
   )
 
   if (!lotId) return <section className="px-4 lg:px-6"><QueryState kind="not-found" message="ไม่พบรหัสล็อต" /></section>

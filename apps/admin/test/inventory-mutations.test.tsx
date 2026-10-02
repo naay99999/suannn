@@ -11,6 +11,7 @@ import { Component as LotDetailPage } from '../src/pages/inventory/lot-detail-pa
 
 const commandModulePromise = import('../src/hooks/use-inventory-command').catch(() => null)
 const lotId = '00000000-0000-4000-8000-000000000030'
+const otherLotId = '00000000-0000-4000-8000-000000000031'
 const variantId = '00000000-0000-4000-8000-000000000020'
 const warehouseId = '00000000-0000-4000-8000-000000000001'
 const lot: Lot = {
@@ -42,13 +43,13 @@ function queryClient() {
   return client
 }
 
-function renderLotPage() {
+function renderLotPage(initialLotId = lotId) {
   const client = queryClient()
   const router = createMemoryRouter([{ path: '/inventory/lots/:lotId', element: <LotDetailPage /> }], {
-    initialEntries: [`/inventory/lots/${lotId}`],
+    initialEntries: [`/inventory/lots/${initialLotId}`],
   })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
-  return client
+  return { client, router }
 }
 
 function mockLotReads(currentLot: () => Lot = () => lot) {
@@ -170,6 +171,63 @@ test('retries a committed write-off with the same payload and key after closing 
   expect(requests[1]).toEqual(requests[0])
   expect(requests[0]?.input).toEqual({ quantity: 2, reason: 'damaged' })
   expect(serverLot.onHandQuantity).toBe(8)
+})
+
+test('does not carry an uncertain lot command key across an accepted lot route change', async () => {
+  const otherLot: Lot = { ...lot, id: otherLotId, lotCode: 'MANGO-LOT-2' }
+  const serverLots = new Map([[lotId, lot], [otherLotId, otherLot]])
+  const requests: Array<{ lotId: string; input: { quantity: number; reason: string }; key: string }> = []
+  const lotRead = spyOn(inventoryApi, 'lot').mockImplementation(async (requestedLotId) => {
+    const record = serverLots.get(requestedLotId)
+    if (!record) throw new ApiRequestError(404, 'LOT_NOT_FOUND', 'missing lot')
+    return record
+  })
+  const movementsRead = spyOn(inventoryApi, 'movements').mockResolvedValue({ items: movements, nextCursor: null })
+  const writeOff = spyOn(inventoryApi, 'writeOff').mockImplementation(async (requestedLotId, input, key) => {
+    requests.push({ lotId: requestedLotId, input, key })
+    if (requests.length === 1) {
+      serverLots.set(lotId, { ...lot, onHandQuantity: 8, sellableQuantity: 6 })
+      throw new ApiRequestError(0, 'NETWORK_ERROR', 'response dropped')
+    }
+    const record = serverLots.get(requestedLotId)
+    if (!record) throw new ApiRequestError(404, 'LOT_NOT_FOUND', 'missing lot')
+    return record
+  })
+  activeSpies.push(lotRead, movementsRead, writeOff)
+  const user = userEvent.setup()
+  const { router } = renderLotPage()
+
+  await screen.findByRole('heading', { name: /ล็อต MANGO-LOT-1/ })
+  await user.click(screen.getByRole('button', { name: 'ตัดสต็อก' }))
+  await user.clear(screen.getByLabelText('จำนวนที่ตัดออก'))
+  await user.type(screen.getByLabelText('จำนวนที่ตัดออก'), '2')
+  await user.click(screen.getByRole('combobox', { name: 'เหตุผลการตัดสต็อก' }))
+  await user.click(await screen.findByRole('option', { name: 'ชำรุด' }))
+  await user.click(screen.getByRole('button', { name: 'ยืนยันตัดสต็อก' }))
+  await screen.findByText(/ยังไม่ได้รับคำยืนยันจากเซิร์ฟเวอร์/)
+  const uncertainKey = requests[0]?.key
+  expect(uncertainKey).toBeTruthy()
+
+  await user.click(screen.getByRole('button', { name: 'ปิดหน้าต่าง' }))
+  await act(async () => { await router.navigate(`/inventory/lots/${otherLotId}`) })
+  expect(screen.getByRole('heading', { name: 'ยังไม่ได้บันทึกการเปลี่ยนแปลง' })).toBeTruthy()
+  expect(screen.getByText(/สูญเสียรหัสคำขอเดิม/)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'ทิ้งการเปลี่ยนแปลง' }))
+
+  await screen.findByRole('heading', { name: /ล็อต MANGO-LOT-2/ })
+  expect(screen.queryByRole('button', { name: 'เปิดคำสั่งเดิม' })).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'ตัดสต็อก' }))
+  await user.clear(screen.getByLabelText('จำนวนที่ตัดออก'))
+  await user.type(screen.getByLabelText('จำนวนที่ตัดออก'), '1')
+  await user.click(screen.getByRole('combobox', { name: 'เหตุผลการตัดสต็อก' }))
+  await user.click(await screen.findByRole('option', { name: 'ชำรุด' }))
+
+  await user.click(screen.getByRole('button', { name: 'ยืนยันตัดสต็อก' }))
+
+  await waitFor(() => expect(requests).toHaveLength(2))
+  expect(requests[0]?.lotId).toBe(lotId)
+  expect(requests[1]?.lotId).toBe(otherLotId)
+  expect(requests[1]?.key).not.toBe(uncertainKey)
 })
 
 test('quarantine command warns staff that reservations using the lot will be cancelled', async () => {

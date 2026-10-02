@@ -24,3 +24,14 @@ The response-loss UI test commits a write-off in its fake server, drops the firs
 - Retry checks permission again but replays the original resolved warehouse/variant or lot payload and key. New commands still check current permission and status before submission.
 - Retry keys and payloads live in page memory. Reload shows fresh server records, but the prior key is not recoverable after reload; no payload or key is persisted in local storage.
 - The UI test run emits React `act(...)` warnings around the existing Base UI Select behavior; the assertions pass. No repository-wide test suite was run.
+
+## Review fix round 1 (base `de57a44`)
+
+- Reproduced the route-identity issue with a real React Router test: after an uncertain write-off on one lot, closing the dialog and accepting the route guard to another lot kept the old command banner. The test failed at that assertion before the fix.
+- Keyed the lot detail controller by route `lotId`, so a changed lot gets fresh page-owned command state while closing/reopening the dialog for the same lot still preserves its attempt.
+- Extended the existing unsaved-change guard copy for pending or uncertain commands to explain that leaving loses the in-memory retry key and retry cannot continue from that page.
+- Added a route-change regression that accepts the guard, enters the new lot's command, and verifies the new request uses the new lot ID and a different key.
+- `bun test --preload ./apps/admin/test/setup.ts apps/admin/test/inventory-mutations.test.tsx` — 7 passed, 0 failed, 28 expects.
+- `bun test --preload ./apps/admin/test/setup.ts apps/admin/test/product-editor.test.tsx` — 19 passed, 0 failed, 54 expects; the shared guard's default behavior remains intact.
+- `bun --filter admin lint` — passed with the existing RHF React Compiler and `main.tsx` fast-refresh warnings.
+- `VITE_API_URL=http://localhost:6767 bun --filter admin build` — passed.

@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@workspace/ui/components/dialog'
 
-export function useUnsavedChanges(dirty: boolean) {
+export function useUnsavedChanges(dirty: boolean, description = 'หากออกจากหน้านี้ ข้อมูลที่แก้ไขจะหายไป') {
   const blocker = useBlocker(dirty)
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function useUnsavedChanges(dirty: boolean) {
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>ยังไม่ได้บันทึกการเปลี่ยนแปลง</DialogTitle>
-          <DialogDescription>หากออกจากหน้านี้ ข้อมูลที่แก้ไขจะหายไป</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button onClick={() => blocker.state === 'blocked' && blocker.reset()} variant="outline">อยู่หน้านี้ต่อ</Button>
@@ -41,5 +41,5 @@ export function useUnsavedChanges(dirty: boolean) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  ), [blocker])
+  ), [blocker, description])
 }
