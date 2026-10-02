@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router'
 import { AdminRouteError } from './pages/error-page'
 import { AdminLayout } from './pages/layout'
 import { ActiveStaffGate, OnboardingStaffGate } from './components/auth/auth-gate'
+import { PermissionGate } from './components/auth/permission-gate'
 
 export const router = createBrowserRouter([
   {
@@ -38,7 +39,14 @@ export const router = createBrowserRouter([
         errorElement: <AdminRouteError />,
         children: [
           { path: 'dashboard', lazy: () => import('./pages/dashboard/dashboard-page') },
-          { path: 'products', lazy: () => import('./pages/products/products-page') },
+          {
+            path: 'products',
+            element: <PermissionGate permission="catalog:read" />,
+            children: [
+              { index: true, lazy: () => import('./pages/products/products-page') },
+              { path: ':productId', lazy: () => import('./pages/products/product-detail-page') },
+            ],
+          },
           { path: 'orders', lazy: () => import('./pages/orders/orders-page') },
           { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
           { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },

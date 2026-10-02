@@ -29,7 +29,7 @@ import {
 const navigation = [
   { title: 'Dashboard', url: '/dashboard', icon: DashboardSquare01Icon },
   { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon },
-  { title: 'Products', url: '/products', icon: ShoppingBag01Icon },
+  { title: 'สินค้า', url: '/products', icon: ShoppingBag01Icon },
   { title: 'Customers', url: '/customers', icon: UserListIcon },
   { title: 'Settings', url: '/settings', icon: SettingsIcon },
 ]
