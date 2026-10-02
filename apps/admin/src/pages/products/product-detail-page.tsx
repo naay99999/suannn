@@ -49,6 +49,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const canUpdate = hasPermission(session, 'catalog:update')
   const canCreate = hasPermission(session, 'catalog:create')
   const canDelete = hasPermission(session, 'catalog:delete')
+  const canReadInventory = hasPermission(session, 'inventory:read')
   const [editing, setEditing] = useState(false)
   const [productDirty, setProductDirty] = useState(false)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
@@ -159,6 +160,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
                     <TableCell>{variant.displayOrder}</TableCell>
                     <TableCell>{variant.minRemainingShelfLifeDays} วัน</TableCell>
                     <TableCell>
+                      {canReadInventory && <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mb-2 w-fit')} to={`/inventory/variants/${variant.id}?productId=${product.id}`}>ดูสต็อก {variant.sku}</Link>}
                       {!variant.archivedAt && <div className="flex flex-wrap gap-2">
                         {canUpdate && product.status !== 'archived' && <Button onClick={() => {
                           setVariantBeingEdited(variant)

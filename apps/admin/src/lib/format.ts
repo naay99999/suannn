@@ -46,3 +46,7 @@ export function formatDateOnly(value: string): string {
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00.000Z` : value
   return dateFormatter.format(new Date(dateOnly))
 }
+
+export function formatQuantityDelta(value: number): string {
+  return value > 0 ? `+${value}` : String(value)
+}

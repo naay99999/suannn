@@ -52,6 +52,16 @@ export const router = createBrowserRouter([
               { path: ':productId', lazy: () => import('./pages/products/product-detail-page') },
             ],
           },
+          {
+            path: 'inventory',
+            element: <PermissionGate permission="inventory:read" />,
+            children: [
+              { index: true, lazy: () => import('./pages/inventory/inventory-page') },
+              { path: 'lots/:lotId', lazy: () => import('./pages/inventory/lot-detail-page') },
+              { path: 'variants/:variantId', lazy: () => import('./pages/inventory/variant-stock-page') },
+              { path: 'movements', lazy: () => import('./pages/inventory/movements-page') },
+            ],
+          },
           { path: 'orders', lazy: () => import('./pages/orders/orders-page') },
           { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
           { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },

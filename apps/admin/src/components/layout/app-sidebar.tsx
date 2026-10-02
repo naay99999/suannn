@@ -8,6 +8,7 @@ import {
   DashboardSquare01Icon,
   ShoppingBag01Icon,
   DeliveryBox01Icon,
+  WarehouseIcon,
   SettingsIcon,
   UserListIcon,
 } from '@hugeicons/core-free-icons'
@@ -15,6 +16,7 @@ import { NavMain } from '@/components/layout/nav-main'
 import { AnimatedThemeToggler } from '@/components/layout/animated-theme-toggler'
 import { SettingsDialog } from '@/pages/settings/_components/settings-dialog'
 import { authSessionQuery } from '@/lib/auth-session'
+import { hasPermission } from '@/lib/permissions'
 import { StaffAccountMenu } from './staff-account-menu'
 import {
   Sidebar,
@@ -30,12 +32,14 @@ const navigation = [
   { title: 'Dashboard', url: '/dashboard', icon: DashboardSquare01Icon },
   { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon },
   { title: 'สินค้า', url: '/products', icon: ShoppingBag01Icon },
+  { title: 'สต็อก', url: '/inventory', icon: WarehouseIcon, permission: 'inventory:read' },
   { title: 'Customers', url: '/customers', icon: UserListIcon },
   { title: 'Settings', url: '/settings', icon: SettingsIcon },
 ]
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const { data: session } = useQuery(authSessionQuery)
+  const visibleNavigation = navigation.filter((item) => !('permission' in item) || item.permission === undefined || hasPermission(session, item.permission))
   const { hash, pathname, search } = useLocation()
   const navigate = useNavigate()
   const settingsOpen = hash === '#settings' || hash.startsWith('#settings/')
@@ -60,7 +64,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavMain items={navigation} />
+          <NavMain items={visibleNavigation} />
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
