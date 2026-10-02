@@ -11,6 +11,7 @@ export class AuthRequestError extends Error {
 
 type JsonRecord = Record<string, unknown>
 type Fetcher = typeof fetch
+const currentFetch: Fetcher = (input, init) => globalThis.fetch(input, init)
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -66,7 +67,7 @@ function parseSession(value: unknown): AuthSession | null {
   return parsed
 }
 
-export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
+export function createAuthClient(baseUrl: string, fetcher: Fetcher = currentFetch) {
   const base = new URL('/api/v1/auth/', baseUrl)
 
   async function request(path: string, body?: JsonRecord): Promise<unknown> {

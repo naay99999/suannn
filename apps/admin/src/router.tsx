@@ -57,7 +57,7 @@ export const router = createBrowserRouter([
             element: <PermissionGate permission="inventory:read" />,
             children: [
               { index: true, lazy: () => import('./pages/inventory/inventory-page') },
-              { path: 'receive', lazy: () => import('./pages/inventory/receive-lot-page') },
+              { path: 'lots/new', lazy: () => import('./pages/inventory/receive-lot-page') },
               { path: 'reservations', lazy: () => import('./pages/inventory/reservation-lookup-page') },
               { path: 'reservations/new', lazy: () => import('./pages/inventory/reservation-create-page') },
               { path: 'reservations/:reservationId', lazy: () => import('./pages/inventory/reservation-detail-page') },

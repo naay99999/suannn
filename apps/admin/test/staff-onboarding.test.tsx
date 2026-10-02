@@ -1,8 +1,9 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { AuthRequestError } from '../src/lib/auth-client'
 
 let acceptedInput: unknown
 let acceptCount = 0
@@ -12,33 +13,59 @@ let beginResult: () => Promise<unknown> = async () => ({ totpURI: 'otpauth://tot
 let verifyResult: () => Promise<unknown> = async () => ({ verified: true })
 let refreshed = false
 let refreshResult: () => Promise<string> = async () => 'active'
+const activeSpies: Array<{ mockRestore: () => void }> = []
 
-class FakeAuthError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message) }
+class FakeAuthError extends AuthRequestError {}
+
+function authErrorResponse(error: unknown): Response {
+  const authError = error instanceof AuthRequestError ? error : new AuthRequestError(500, 'SERVER_ERROR', 'Request failed')
+  return Response.json({ code: authError.code, message: authError.message }, { status: authError.status || 500 })
 }
-
-mock.module('../src/lib/auth-client', () => ({
-  acceptInvitation: (input: unknown) => { acceptedInput = input; acceptCount++; return acceptResult() },
-  getOnboarding: () => onboardingResult(),
-  beginTotp: () => beginResult(),
-  verifyEnrollment: () => verifyResult(),
-  AuthRequestError: FakeAuthError,
-}))
-mock.module('../src/lib/auth-session', () => ({
-  authSessionQuery: {
-    queryKey: ['auth', 'session'],
-    queryFn: async () => ({
-      session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
-      user: { id: 'staff-1', name: 'Staff', email: 'staff@example.com', emailVerified: true, image: null, accountType: 'staff' },
-    }),
-  },
-  refreshAuthSession: async () => { refreshed = true; return refreshResult() },
-}))
 
 const { Component: InvitationPage } = await import('../src/pages/staff/invitation-page')
 const { Component: OnboardingPage } = await import('../src/pages/staff/onboarding-page')
 
 function renderPage(initialPath: string) {
+  let sessionRequests = 0
+  activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null
+    if (url.pathname.endsWith('/auth/get-session')) {
+      sessionRequests++
+      if (sessionRequests > 1) {
+        try {
+          const state = await refreshResult()
+          refreshed = true
+          return Response.json({
+            session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
+            user: { id: 'staff-1', name: 'Staff', email: 'staff@example.com', emailVerified: true, image: null, accountType: 'staff' },
+            ...(state === 'active' ? { staff: { role: 'owner', permissions: [] } } : {}),
+          })
+        } catch (error) {
+          return authErrorResponse(error)
+        }
+      }
+      return Response.json({
+        session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
+        user: { id: 'staff-1', name: 'Staff', email: 'staff@example.com', emailVerified: true, image: null, accountType: 'staff' },
+      })
+    }
+    if (url.pathname.endsWith('/auth/staff/invitations/accept')) {
+      acceptedInput = body
+      acceptCount++
+      try { return Response.json(await acceptResult()) } catch (error) { return authErrorResponse(error) }
+    }
+    if (url.pathname.endsWith('/auth/staff/onboarding')) {
+      try { return Response.json(await onboardingResult()) } catch (error) { return authErrorResponse(error) }
+    }
+    if (url.pathname.endsWith('/auth/staff/onboarding/totp/verify')) {
+      try { return Response.json(await verifyResult()) } catch (error) { return authErrorResponse(error) }
+    }
+    if (url.pathname.endsWith('/auth/staff/onboarding/totp')) {
+      try { return Response.json(await beginResult()) } catch (error) { return authErrorResponse(error) }
+    }
+    return Response.json({ code: 'NOT_FOUND', message: 'not found' }, { status: 404 })
+  }))
   const client = new QueryClient()
   const router = createMemoryRouter([
     { path: '/staff/invitations/accept', element: <InvitationPage /> },
@@ -51,6 +78,7 @@ function renderPage(initialPath: string) {
 
 afterEach(() => {
   cleanup()
+  activeSpies.splice(0).forEach((spy) => spy.mockRestore())
   acceptedInput = undefined
   acceptCount = 0
   refreshed = false

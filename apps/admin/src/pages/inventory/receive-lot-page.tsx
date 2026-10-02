@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,6 +34,7 @@ function bangkokToday() {
 export function Component() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [receivedLotId, setReceivedLotId] = useState<string | null>(null)
   const session = useQuery(authSessionQuery)
   const warehouse = useQuery(warehouseQuery())
   const [selection, setSelection] = useState<VariantSelection | null>(null)
@@ -59,6 +60,10 @@ export function Component() {
     form.formState.isDirty || selectionTouched || command.isPending || command.uncertain,
   )
   const expired = Boolean(form.watch('expiryDate') && form.watch('expiryDate') < bangkokToday())
+
+  useEffect(() => {
+    if (receivedLotId) navigate(`/inventory/lots/${receivedLotId}`)
+  }, [navigate, receivedLotId])
 
   if (warehouse.isPending || session.isPending) return <section className="px-4 lg:px-6"><QueryState kind="loading" /></section>
   if (warehouse.error) return <section className="px-4 lg:px-6"><QueryState kind="error" message={apiErrorMessage(warehouse.error)} onRetry={() => void warehouse.refetch()} /></section>
@@ -122,7 +127,7 @@ export function Component() {
     setSelection(null)
     setSelectionTouched(false)
     toast.add({ title: 'รับสินค้าเข้าสต็อกแล้ว', type: 'success' })
-    navigate(`/inventory/lots/${result.id}`)
+    setReceivedLotId(result.id)
   }
 
   const formErrors = form.formState.errors
@@ -146,7 +151,7 @@ export function Component() {
         <FieldGroup>
           {selection && <p className="rounded-md bg-muted/50 p-3 text-sm">รับเข้า {selection.productName} · {selection.variant.sku} · {selection.variant.name} ({selection.variant.unit})</p>}
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormInput error={formErrors.lotCode?.message} id="receive-lot-code" label="รหัสล็อต" disabled={command.isPending || command.uncertain} maxLength={102} {...form.register('lotCode')} required />
+            <FormInput error={formErrors.lotCode?.message} id="receive-lot-code" label="รหัสล็อต" disabled={command.isPending || command.uncertain} maxLength={100} {...form.register('lotCode')} required />
             <FormInput error={formErrors.quantity?.message} id="receive-quantity" label="จำนวนที่รับเข้า" disabled={command.isPending || command.uncertain} max={1_000_000_000} min={1} type="number" {...form.register('quantity', { valueAsNumber: true })} required />
             <FormInput error={formErrors.expiryDate?.message} id="receive-expiry-date" label="วันหมดอายุ" disabled={command.isPending || command.uncertain} type="date" {...form.register('expiryDate')} required />
             <FormInput error={formErrors.receivedAt?.message} id="receive-received-at" label="วันและเวลาที่รับเข้า (ไม่บังคับ)" disabled={command.isPending || command.uncertain} type="datetime-local" {...form.register('receivedAt')} />

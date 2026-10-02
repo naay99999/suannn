@@ -11,6 +11,7 @@ import { Component as ProductDetailPage } from '../src/pages/products/product-de
 import { authSessionQuery, type AuthSession } from '../src/lib/auth-session'
 import { catalogApi, type ProductDetail } from '../src/lib/catalog/api'
 import { inventoryApi, type Lot, type Movement, type StockSummary, type Warehouse } from '../src/lib/inventory/api'
+import { cachedVariantMetadataIndex } from '../src/pages/inventory/_components/variant-metadata'
 
 const warehouseId = '00000000-0000-4000-8000-000000000001'
 const productId = '00000000-0000-4000-8000-000000000010'
@@ -168,6 +169,16 @@ test('resolves MAIN and keeps zero-stock, expired, and quarantined lots visible'
   expect(screen.getByRole('link', { name: 'MANGO-Q-1' }).getAttribute('href')).toBe(`/inventory/lots/${lotId}`)
   await waitFor(() => expect(inventoryApi.lots).toHaveBeenCalledWith(expect.objectContaining({ warehouseId, limit: 25 })))
   expect(catalogApi.get).not.toHaveBeenCalled()
+})
+
+test('builds a reusable variant metadata index from cached product details', () => {
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(['catalog', 'detail', productId], productData())
+
+  const metadata = cachedVariantMetadataIndex(queryClient)
+
+  expect(metadata.get(variantId)).toEqual({ product: productData(), variant })
+  expect(metadata.get('00000000-0000-4000-8000-000000000099')).toBeUndefined()
 })
 
 test('shows server stock quantities and direct variant links without router state or cached product metadata', async () => {

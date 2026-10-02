@@ -4,6 +4,8 @@ import type { App } from 'api'
 import { resolveApiUrl } from './api-url'
 import { queryClient } from './query-client'
 
+const currentFetch: typeof fetch = (input, init) => globalThis.fetch(input, init)
+
 export async function handleApiAuthResponse(response: Response, client: QueryClient = queryClient) {
   if (response.status !== 401) return
   const body: unknown = await response.clone().json().catch(() => null)
@@ -15,7 +17,7 @@ export async function handleApiAuthResponse(response: Response, client: QueryCli
   }
 }
 
-export function createApiClient(baseUrl: string, fetcher: typeof fetch = fetch, client: QueryClient = queryClient) {
+export function createApiClient(baseUrl: string, fetcher: typeof fetch = currentFetch, client: QueryClient = queryClient) {
   return treaty<App>(baseUrl, {
     fetcher,
     fetch: { credentials: 'include' },

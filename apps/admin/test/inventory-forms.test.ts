@@ -55,6 +55,16 @@ test('requires quarantine reason only when receipt quarantine is enabled', () =>
   expect(formModule.quarantineSchema.safeParse({ reason: 'ตรวจสอบคุณภาพ' }).success).toBe(true)
 })
 
+test('validates lot codes against the normalized server limit and character set', () => {
+  expect(formModule).not.toBeNull()
+  if (!formModule) return
+  expect(formModule.receiveLotSchema.safeParse({ ...receipt, lotCode: ' lot-a/1._b ' }).success).toBe(true)
+  expect(formModule.receiveLotSchema.safeParse({ ...receipt, lotCode: 'A'.repeat(100) }).success).toBe(true)
+  expect(formModule.receiveLotSchema.safeParse({ ...receipt, lotCode: 'A'.repeat(101) }).success).toBe(false)
+  expect(formModule.receiveLotSchema.safeParse({ ...receipt, lotCode: 'LOT A' }).success).toBe(false)
+  expect(formModule.receiveLotSchema.safeParse({ ...receipt, lotCode: 'LOT?1' }).success).toBe(false)
+})
+
 test('accepts an absolute count of zero and enforces the API reason code format', () => {
   expect(formModule).not.toBeNull()
   if (!formModule) return

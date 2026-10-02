@@ -1,17 +1,15 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import * as authClient from '../src/lib/auth-client'
 
 let regenerateInput: string | undefined
 let regenerateResult: () => Promise<{ backupCodes: string[] }> = async () => ({ backupCodes: ['new-code-1', 'new-code-2'] })
 
-mock.module('../src/lib/auth-client', () => ({
-  regenerateBackupCodes: (password: string) => {
-    regenerateInput = password
-    return regenerateResult()
-  },
-  AuthRequestError: class extends Error {},
-}))
+const regenerateBackupCodes = spyOn(authClient, 'regenerateBackupCodes').mockImplementation((password) => {
+  regenerateInput = password
+  return regenerateResult()
+})
 
 const { SecuritySettings } = await import('../src/pages/settings/_components/security-settings')
 
@@ -20,6 +18,8 @@ afterEach(() => {
   regenerateInput = undefined
   regenerateResult = async () => ({ backupCodes: ['new-code-1', 'new-code-2'] })
 })
+
+afterAll(() => regenerateBackupCodes.mockRestore())
 
 test('requires confirmation and a password before replacing backup codes', async () => {
   render(<SecuritySettings />)

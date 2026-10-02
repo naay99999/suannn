@@ -1,8 +1,10 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import { AuthRequestError } from '../src/lib/auth-client'
+import type { AuthSession, AuthState } from '../src/lib/auth-session'
 
 let signInResult: () => Promise<'challenge' | 'session'> = async () => 'challenge'
 let refreshResult: () => Promise<string> = async () => 'active'
@@ -10,45 +12,65 @@ let initialAuthState: 'anonymous' | 'customer' | 'onboarding' | 'active' = 'anon
 let verifyResult: () => Promise<void> = async () => undefined
 let backupResult: () => Promise<void> = async () => undefined
 let backupCodesSubmitted: string[] = []
+const activeSpies: Array<{ mockRestore: () => void }> = []
 
-class FakeAuthError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message) }
-}
+class FakeAuthError extends AuthRequestError {}
 
-mock.module('../src/lib/auth-client', () => ({
-  signIn: () => signInResult(),
-  verifyTotp: () => verifyResult(),
-  verifyBackupCode: (code: string) => { backupCodesSubmitted.push(code); return backupResult() },
-  AuthRequestError: FakeAuthError,
-}))
-mock.module('../src/lib/auth-session', () => ({
-  authSessionQuery: {
-    queryKey: ['auth', 'session'],
-    queryFn: async () => {
-      if (initialAuthState === 'anonymous') return null
-      return {
-        session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
-        user: {
-          id: 'staff-1', name: 'Staff', email: 'sam@example.com', emailVerified: true,
-          image: null, accountType: initialAuthState === 'customer' ? 'customer' : 'staff',
-        },
-        ...(initialAuthState === 'active' ? { staff: { role: 'owner', permissions: [] } } : {}),
-      }
+function sessionForState(state: AuthState): AuthSession | null {
+  if (state === 'anonymous') return null
+  return {
+    session: { id: 'session-1', expiresAt: '2026-10-22T10:00:00Z' },
+    user: {
+      id: 'staff-1', name: 'Staff', email: 'sam@example.com', emailVerified: true,
+      image: null, accountType: state === 'customer' ? 'customer' : 'staff',
     },
-  },
-  classifySession: (session: { user: { accountType: string }; staff?: unknown } | null) => {
-    if (!session) return 'anonymous'
-    if (session.user.accountType !== 'staff') return 'customer'
-    return session.staff ? 'active' : 'onboarding'
-  },
-  refreshAuthSession: () => refreshResult(),
-}))
+    ...(state === 'active' ? { staff: { role: 'owner', permissions: [] } } : {}),
+  }
+}
 
 const { LoginForm } = await import('../src/pages/login/_components/login-form')
 const { Component: LoginPage } = await import('../src/pages/login/login-page')
 const { MfaForm } = await import('../src/pages/login/_components/mfa-form')
 
+function installAuthBoundary() {
+  let afterSignIn = false
+  activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null
+    if (url.pathname.endsWith('/auth/get-session')) {
+      return Response.json(sessionForState(afterSignIn ? await refreshResult() as AuthState : initialAuthState))
+    }
+    if (url.pathname.endsWith('/auth/sign-in/email')) {
+      afterSignIn = true
+      try {
+        return Response.json(await signInResult() === 'challenge' ? { twoFactorRedirect: true } : {})
+      } catch (error) {
+        return authErrorResponse(error)
+      }
+    }
+    if (url.pathname.endsWith('/auth/two-factor/verify-totp')) {
+      try {
+        await verifyResult()
+        return Response.json({})
+      } catch (error) {
+        return authErrorResponse(error)
+      }
+    }
+    if (url.pathname.endsWith('/auth/two-factor/verify-backup-code')) {
+      backupCodesSubmitted.push(String(body?.code ?? ''))
+      try {
+        await backupResult()
+        return Response.json({})
+      } catch (error) {
+        return authErrorResponse(error)
+      }
+    }
+    return Response.json({ code: 'NOT_FOUND', message: 'not found' }, { status: 404 })
+  }))
+}
+
 function renderFlow(from?: string) {
+  installAuthBoundary()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
     { path: '/login', element: <LoginForm /> },
@@ -63,10 +85,19 @@ function renderFlow(from?: string) {
 
 afterEach(() => {
   cleanup()
+  activeSpies.splice(0).forEach((spy) => spy.mockRestore())
+  signInResult = async () => 'challenge'
+  verifyResult = async () => undefined
+  backupResult = async () => undefined
   backupCodesSubmitted = []
   refreshResult = async () => 'active'
   initialAuthState = 'anonymous'
 })
+
+function authErrorResponse(error: unknown): Response {
+  const authError = error instanceof AuthRequestError ? error : new AuthRequestError(500, 'SERVER_ERROR', 'Request failed')
+  return Response.json({ code: authError.code, message: authError.message }, { status: authError.status || 500 })
+}
 
 async function enterPassword() {
   const user = userEvent.setup()
@@ -104,6 +135,7 @@ test('does not enter admin for a customer session', async () => {
 
 test('redirects an already signed-in staff member from login to the dashboard', async () => {
   initialAuthState = 'active'
+  installAuthBoundary()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
     { path: '/login', element: <LoginPage /> },
@@ -119,6 +151,7 @@ test('redirects an already signed-in staff member from login to the dashboard', 
 
 test('sends an already signed-in owner with incomplete onboarding to setup', async () => {
   initialAuthState = 'onboarding'
+  installAuthBoundary()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
     { path: '/login', element: <LoginPage /> },

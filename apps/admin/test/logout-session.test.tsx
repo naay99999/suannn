@@ -1,13 +1,14 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SidebarProvider } from '@workspace/ui/components/sidebar'
 import { createMemoryRouter, RouterProvider } from 'react-router'
+import * as authClient from '../src/lib/auth-client'
 import type { AuthSession } from '../src/lib/auth-session'
 
 let signOutResult: () => Promise<void> = async () => undefined
-mock.module('../src/lib/auth-client', () => ({ signOut: () => signOutResult() }))
+const signOut = spyOn(authClient, 'signOut').mockImplementation(() => signOutResult())
 
 const { StaffAccountMenu } = await import('../src/components/layout/staff-account-menu')
 const { handleApiAuthResponse } = await import('../src/lib/api')
@@ -30,6 +31,7 @@ function renderMenu() {
 }
 
 afterEach(() => cleanup())
+afterAll(() => signOut.mockRestore())
 
 test('shows the current staff identity and clears private cache on logout', async () => {
   signOutResult = async () => undefined

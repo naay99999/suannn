@@ -52,7 +52,10 @@ function validBangkokInput(value: string): boolean {
 }
 
 export const receiveLotSchema = z.object({
-  lotCode: z.string().trim().min(1, 'กรุณาระบุรหัสล็อต').max(102, 'รหัสล็อตต้องไม่เกิน 102 ตัวอักษร'),
+  lotCode: z.string().trim()
+    .min(1, 'กรุณาระบุรหัสล็อต')
+    .max(100, 'รหัสล็อตต้องไม่เกิน 100 ตัวอักษร')
+    .regex(/^[A-Za-z0-9._/-]+$/, 'รหัสล็อตใช้ได้เฉพาะตัวอักษรภาษาอังกฤษ ตัวเลข จุด ขีดล่าง ขีดกลาง และ /'),
   quantity: z.number().int('จำนวนต้องเป็นจำนวนเต็ม').min(1, 'จำนวนต้องไม่น้อยกว่า 1').max(1_000_000_000, 'จำนวนเกินขีดจำกัด'),
   expiryDate: z.string().refine(validDateOnly, 'กรุณาระบุวันหมดอายุที่ถูกต้อง'),
   receivedAt: z.string().refine(validBangkokInput, 'กรุณาระบุวันและเวลาที่ถูกต้อง'),

@@ -14,6 +14,22 @@ export function cachedVariantMetadata(queryClient: QueryClient, variantId: strin
   return undefined
 }
 
+export function cachedVariantMetadataIndex(queryClient: QueryClient): Map<string, { product: ProductDetail; variant: Variant }> {
+  const metadata = new Map<string, { product: ProductDetail; variant: Variant }>()
+  const details = queryClient.getQueryCache().findAll({ queryKey: catalogKeys.all })
+
+  for (const query of details) {
+    const data: unknown = query.state.data
+    if (!data || typeof data !== 'object' || !('variants' in data) || !Array.isArray(data.variants)) continue
+    const product = data as ProductDetail
+    for (const variant of product.variants) {
+      if (!metadata.has(variant.id)) metadata.set(variant.id, { product, variant })
+    }
+  }
+
+  return metadata
+}
+
 export function variantLabel(metadata: { product: ProductDetail; variant: Variant } | undefined): string | undefined {
   if (!metadata) return undefined
   return `${metadata.product.name} · ${metadata.variant.sku} · ${metadata.variant.name} (${metadata.variant.unit})`

@@ -64,7 +64,7 @@ export function Component() {
           <h1 className="text-3xl font-semibold tracking-tight">สต็อกสินค้า</h1>
           <p className="text-sm text-muted-foreground">คลังหลัก · {warehouse.data.name} ({warehouse.data.code})</p>
         </div>
-        {canAdjustInventory && <Link className={cn(buttonVariants(), 'w-fit')} to="/inventory/receive">รับสินค้าเข้าคลัง</Link>}
+        {canAdjustInventory && <Link className={cn(buttonVariants(), 'w-fit')} to="/inventory/lots/new">รับสินค้าเข้าคลัง</Link>}
       </div>
       <InventoryNavigation variantId={variantId} productId={productId} />
       {canReadCatalog && <ProductVariantPicker onChange={selectVariant} value={selection} />}

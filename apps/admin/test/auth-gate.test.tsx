@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -7,11 +7,7 @@ import type { AuthSession } from '../src/lib/auth-session'
 let sessionResult: () => Promise<AuthSession | null> = async () => null
 let onboardingResult: () => Promise<{ required: true; userId: string }> = async () => ({ required: true, userId: 'user-1' })
 let sessionRequests = 0
-
-mock.module('../src/lib/auth-client', () => ({
-  getSession: () => { sessionRequests++; return sessionResult() },
-  getOnboarding: () => onboardingResult(),
-}))
+const activeSpies: Array<{ mockRestore: () => void }> = []
 
 const { ActiveStaffGate, OnboardingStaffGate } = await import('../src/components/auth/auth-gate')
 
@@ -22,6 +18,24 @@ const staffSession: AuthSession = {
 }
 
 function renderRoute(path = '/dashboard') {
+  activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    if (url.pathname.endsWith('/auth/get-session')) {
+      sessionRequests++
+      return Response.json(await sessionResult())
+    }
+    if (url.pathname.endsWith('/auth/staff/onboarding')) {
+      try {
+        return Response.json(await onboardingResult())
+      } catch (error) {
+        const status = typeof error === 'object' && error !== null && 'status' in error
+          && typeof error.status === 'number' ? error.status : 0
+        if (status < 400) throw error
+        return Response.json({ code: status === 401 ? 'SESSION_EXPIRED' : 'FORBIDDEN', message: 'denied' }, { status })
+      }
+    }
+    return Response.json({ code: 'NOT_FOUND', message: 'not found' }, { status: 404 })
+  }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
     { path: '/login', element: <div>Login screen</div> },
@@ -35,7 +49,10 @@ function renderRoute(path = '/dashboard') {
   return { client, router }
 }
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  activeSpies.splice(0).forEach((spy) => spy.mockRestore())
+})
 
 test('waits for session result before showing admin content', async () => {
   sessionResult = () => new Promise(() => {})

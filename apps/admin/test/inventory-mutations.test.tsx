@@ -13,6 +13,7 @@ const commandModulePromise = import('../src/hooks/use-inventory-command').catch(
 const lotId = '00000000-0000-4000-8000-000000000030'
 const otherLotId = '00000000-0000-4000-8000-000000000031'
 const variantId = '00000000-0000-4000-8000-000000000020'
+const productId = '00000000-0000-4000-8000-000000000010'
 const warehouseId = '00000000-0000-4000-8000-000000000001'
 const lot: Lot = {
   id: lotId,
@@ -278,4 +279,66 @@ test('write-off requires one of the three supported reasons', async () => {
   expect(await screen.findByRole('option', { name: 'เน่าเสีย' })).toBeTruthy()
   expect(screen.getByRole('option', { name: 'หมดอายุ' })).toBeTruthy()
   expect(screen.getByRole('option', { name: 'ชำรุด' })).toBeTruthy()
+})
+
+test('invalidates inventory and catalog reads after a known command rejection', async () => {
+  const hookModule = await commandModulePromise
+  expect(hookModule).not.toBeNull()
+  if (!hookModule) return
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  client.setQueryData(authSessionQuery.queryKey, session, { updatedAt: Date.now() + 10_000 })
+  client.setQueryData(['inventory', 'lots'], { items: [lot] })
+  client.setQueryData(['catalog', 'detail', productId], { id: productId })
+
+  function RejectedCommand() {
+    const command = hookModule.useInventoryCommand<{ quantity: number }, Lot>({
+      command: 'inventory.write-off',
+      execute: async () => { throw new ApiRequestError(422, 'VALIDATION_ERROR', 'rejected') },
+    })
+    return <>
+      <button onClick={() => void command.submit({ quantity: 1 })}>ส่งคำสั่งที่ถูกปฏิเสธ</button>
+      <output>{command.error}</output>
+      <output>{command.uncertain ? 'uncertain' : 'certain'}</output>
+    </>
+  }
+
+  render(<QueryClientProvider client={client}><RejectedCommand /></QueryClientProvider>)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'ส่งคำสั่งที่ถูกปฏิเสธ' }))
+
+  await screen.findByText('ข้อมูลที่ส่งมาไม่ถูกต้อง')
+  await waitFor(() => {
+    expect(client.getQueryState(['inventory', 'lots'])?.isInvalidated).toBe(true)
+    expect(client.getQueryState(['catalog', 'detail', productId])?.isInvalidated).toBe(true)
+  })
+  expect(screen.getByText('certain')).toBeTruthy()
+})
+
+test('retains an uncertain inventory command after a server failure without invalidating reads', async () => {
+  const hookModule = await commandModulePromise
+  expect(hookModule).not.toBeNull()
+  if (!hookModule) return
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  client.setQueryData(authSessionQuery.queryKey, session, { updatedAt: Date.now() + 10_000 })
+  client.setQueryData(['inventory', 'lots'], { items: [lot] })
+
+  function UncertainCommand() {
+    const command = hookModule.useInventoryCommand<{ quantity: number }, Lot>({
+      command: 'inventory.write-off',
+      execute: async () => { throw new ApiRequestError(503, 'SERVER_ERROR', 'unavailable') },
+    })
+    return <>
+      <button onClick={() => void command.submit({ quantity: 1 })}>ส่งคำสั่งที่ไม่ทราบผล</button>
+      <output>{command.error}</output>
+      <output>{command.uncertain ? 'uncertain' : 'certain'}</output>
+    </>
+  }
+
+  render(<QueryClientProvider client={client}><UncertainCommand /></QueryClientProvider>)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'ส่งคำสั่งที่ไม่ทราบผล' }))
+
+  await screen.findByText('เซิร์ฟเวอร์ไม่สามารถดำเนินการได้ กรุณาลองอีกครั้ง')
+  expect(screen.getByText('uncertain')).toBeTruthy()
+  expect(client.getQueryState(['inventory', 'lots'])?.isInvalidated).toBe(false)
 })

@@ -6,7 +6,7 @@ import { ServerDataTable, type ServerDataTableFeatures } from '@/components/serv
 import { formatDateOnly, formatTimestamp } from '@/lib/format'
 import type { Lot } from '@/lib/inventory/api'
 import { CopyableId } from './copyable-id'
-import { cachedVariantMetadata, variantLabel } from './variant-metadata'
+import { cachedVariantMetadataIndex, variantLabel } from './variant-metadata'
 
 type LotRow = Lot & {
   metadata?: Parameters<typeof variantLabel>[0]
@@ -91,10 +91,11 @@ export function LotTable({
 }) {
   const queryClient = useQueryClient()
   const today = bangkokToday()
+  const metadataByVariant = showProductMetadata ? cachedVariantMetadataIndex(queryClient) : undefined
   const rows = lots.map((lot) => ({
     ...lot,
     expired: lot.expiryDate < today,
-    metadata: showProductMetadata ? cachedVariantMetadata(queryClient, lot.variantId) : undefined,
+    metadata: metadataByVariant?.get(lot.variantId),
   }))
   return <ServerDataTable
     columns={columns}
