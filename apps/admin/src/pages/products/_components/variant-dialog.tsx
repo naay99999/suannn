@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { InputHTMLAttributes } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -30,6 +30,7 @@ type VariantDialogProps = {
   open: boolean
   variant: Variant | null
   onOpenChange: (open: boolean) => void
+  onDirtyChange: (dirty: boolean) => void
   onSave: (input: ReturnType<typeof toVariantCreateInput> | ReturnType<typeof toVariantUpdateInput>, variantId?: string) => Promise<void>
 }
 
@@ -45,7 +46,7 @@ function defaultValues(variant: Variant | null): VariantCreateValues {
   }
 }
 
-export function VariantDialog({ open, variant, onOpenChange, onSave }: VariantDialogProps) {
+export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, onSave }: VariantDialogProps) {
   const isEdit = Boolean(variant)
   const form = useForm<VariantCreateValues | VariantEditValues>({
     resolver: zodResolver(isEdit ? variantEditSchema : variantCreateSchema),
@@ -54,6 +55,12 @@ export function VariantDialog({ open, variant, onOpenChange, onSave }: VariantDi
   const [serverError, setServerError] = useState<string | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    onDirtyChange(form.formState.isDirty)
+  }, [form.formState.isDirty, onDirtyChange])
+
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
   const requestClose = () => {
     if (form.formState.isDirty) setConfirmDiscard(true)
@@ -69,6 +76,7 @@ export function VariantDialog({ open, variant, onOpenChange, onSave }: VariantDi
         : toVariantCreateInput(values as VariantCreateValues)
       await onSave(input, variant?.id)
       form.reset(values)
+      onDirtyChange(false)
       onOpenChange(false)
     } catch (error) {
       const message = apiErrorMessage(error)
@@ -134,6 +142,7 @@ export function VariantDialog({ open, variant, onOpenChange, onSave }: VariantDi
         onConfirm={() => {
           setConfirmDiscard(false)
           form.reset(defaultValues(variant))
+          onDirtyChange(false)
           onOpenChange(false)
         }}
       />

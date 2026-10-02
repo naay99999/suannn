@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { buttonVariants } from '@workspace/ui/components/button'
 import { cn } from '@workspace/ui/lib/utils'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
 
 export function Component() {
   const navigate = useNavigate()
+  const [dirty, setDirty] = useState(false)
+  const confirmationDialog = useUnsavedChanges(dirty)
 
   return (
     <section className="flex flex-col gap-6 px-4 lg:px-6">
@@ -15,7 +19,8 @@ export function Component() {
           <p className="text-muted-foreground">สร้างสินค้าเป็นฉบับร่างก่อนเพิ่มรูปแบบและเผยแพร่</p>
         </div>
       </div>
-      <ProductForm mode="create" onCreated={(productId) => navigate(`/products/${productId}`, { replace: true })} />
+      <ProductForm mode="create" onCreated={(productId) => navigate(`/products/${productId}`, { replace: true })} onDirtyChange={setDirty} />
+      {confirmationDialog}
     </section>
   )
 }

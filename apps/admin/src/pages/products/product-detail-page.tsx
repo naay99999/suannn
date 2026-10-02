@@ -13,6 +13,7 @@ import { formatMoney, formatTimestamp } from '@/lib/format'
 import { hasPermission } from '@/lib/permissions'
 import { invalidateCatalog, productQuery } from '@/lib/catalog/queries'
 import { toast } from '@workspace/ui/components/toast'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
 import { ProductActions, ConfirmActionDialog } from './_components/product-actions'
 import { VariantDialog } from './_components/variant-dialog'
@@ -49,10 +50,13 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const canCreate = hasPermission(session, 'catalog:create')
   const canDelete = hasPermission(session, 'catalog:delete')
   const [editing, setEditing] = useState(false)
+  const [productDirty, setProductDirty] = useState(false)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
+  const [variantDirty, setVariantDirty] = useState(false)
   const [variantBeingEdited, setVariantBeingEdited] = useState<Variant | null>(null)
   const [variantBeingArchived, setVariantBeingArchived] = useState<Variant | null>(null)
   const [variantError, setVariantError] = useState<string | null>(null)
+  const unsavedConfirmation = useUnsavedChanges(productDirty || variantDirty)
   const activeVariants = product.variants.filter((variant) => !variant.archivedAt)
   const archiveVariantMutation = useMutation({
     mutationFn: (variant: Variant) => catalogApi.archiveVariant(product.id, variant.id),
@@ -94,7 +98,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
       </div>
 
       {editing
-        ? <ProductForm mode="edit" onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} product={product} />
+        ? <ProductForm mode="edit" onCancel={() => setEditing(false)} onDirtyChange={setProductDirty} onSaved={() => setEditing(false)} product={product} />
         : <div className="grid gap-6 lg:grid-cols-2">
           <section className="flex flex-col gap-3 rounded-lg border p-4">
             <h2 className="text-lg font-semibold">รายละเอียด</h2>
@@ -174,9 +178,13 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         </div>
       </section>
       {variantDialogOpen && <VariantDialog
+        onDirtyChange={setVariantDirty}
         onOpenChange={(open) => {
           setVariantDialogOpen(open)
-          if (!open) setVariantBeingEdited(null)
+          if (!open) {
+            setVariantDirty(false)
+            setVariantBeingEdited(null)
+          }
         }}
         onSave={saveVariant}
         open={variantDialogOpen}
@@ -191,6 +199,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         onOpenChange={(open) => !open && setVariantBeingArchived(null)}
         onConfirm={() => archiveVariantMutation.mutate(variantBeingArchived)}
       />}
+      {unsavedConfirmation}
     </section>
   )
 }

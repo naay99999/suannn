@@ -20,7 +20,6 @@ import {
   type ProductEditValues,
 } from '@/lib/catalog/forms'
 import { invalidateCatalog } from '@/lib/catalog/queries'
-import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ConfirmActionDialog } from './product-actions'
 
 const emptyValues: ProductCreateValues = {
@@ -36,8 +35,8 @@ const emptyValues: ProductCreateValues = {
 }
 
 type ProductFormProps =
-  | { mode: 'create'; onCreated: (productId: string) => void }
-  | { mode: 'edit'; product: ProductDetail; onCancel: () => void; onSaved: () => void }
+  | { mode: 'create'; onCreated: (productId: string) => void; onDirtyChange: (dirty: boolean) => void }
+  | { mode: 'edit'; product: ProductDetail; onCancel: () => void; onSaved: () => void; onDirtyChange: (dirty: boolean) => void }
 
 function errorForCreate(error: unknown): string {
   const message = apiErrorMessage(error)
@@ -74,13 +73,19 @@ export function ProductForm(props: ProductFormProps) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const onCreated = props.mode === 'create' ? props.onCreated : null
+  const onDirtyChange = props.onDirtyChange
   const watchedImageUrl = useWatch({ control: form.control, name: 'imageUrl' })
   const watchedImageAlt = useWatch({ control: form.control, name: 'imageAlt' })
-  const confirmationDialog = useUnsavedChanges(form.formState.isDirty)
 
   useEffect(() => {
     if (createdProductId) onCreated?.(createdProductId)
   }, [createdProductId, onCreated])
+
+  useEffect(() => {
+    onDirtyChange(form.formState.isDirty)
+  }, [form.formState.isDirty, onDirtyChange])
+
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
   const onSubmit = form.handleSubmit(async (values) => {
     setServerError(null)
@@ -90,12 +95,14 @@ export function ProductForm(props: ProductFormProps) {
         await invalidateCatalog(queryClient, created.id)
         toast.add({ title: 'สร้างสินค้าแล้ว', type: 'success' })
         form.reset(emptyValues)
+        onDirtyChange(false)
         setCreatedProductId(created.id)
       } else {
         await catalogApi.update(props.product.id, toProductUpdateInput(values as ProductEditValues))
         await invalidateCatalog(queryClient, props.product.id)
         toast.add({ title: 'บันทึกข้อมูลสินค้าแล้ว', type: 'success' })
         form.reset(values)
+        onDirtyChange(false)
         props.onSaved()
       }
     } catch (error) {
@@ -172,7 +179,6 @@ export function ProductForm(props: ProductFormProps) {
           {props.mode === 'edit' && <Button disabled={pending} onClick={() => form.formState.isDirty ? setConfirmCancel(true) : props.onCancel()} type="button" variant="outline">ยกเลิกการแก้ไข</Button>}
         </div>
       </form>
-      {confirmationDialog}
       {props.mode === 'edit' && <ConfirmActionDialog
         open={confirmCancel}
         title="ทิ้งการแก้ไขสินค้า?"

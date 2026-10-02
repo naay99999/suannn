@@ -33,3 +33,18 @@ Implemented the product and variant create/edit workflows, publication and archi
 ## Review notes
 
 The full-suite failures are unrelated to Task 3 and match the known auth-gate baseline. React `act(...)` warnings remain in the existing product-list tests; they do not fail the focused or full suite. No other concerns identified in self-review.
+
+## Review follow-up: variant dirty navigation
+
+The review found that variant dialog edits only had a local close confirmation. They did not block route navigation or browser unload. The route test and two before-unload/save tests failed before the fix: there was no route-warning dialog, and dirty `beforeunload` events were not prevented.
+
+Moved the detail page to one shared unsaved-change blocker that combines product and variant dirty state. Product and variant forms report dirty state to that owner, and report clean state after successful saves, confirmed discard, or unmount. The create page owns its own blocker. The variant dialog's local close confirmation remains in place. This keeps one `useBlocker` per route and avoids competing product and variant blockers.
+
+Follow-up verification:
+
+- **RED:** `bun test --preload ./apps/admin/test/setup.ts apps/admin/test/product-editor.test.tsx` — 15 passed, 3 failed on the missing variant route guard and missing before-unload protection.
+- **GREEN:** `bun test --preload ./apps/admin/test/setup.ts apps/admin/test/catalog-api.test.ts apps/admin/test/catalog-forms.test.ts apps/admin/test/product-editor.test.tsx apps/admin/test/products-list.test.tsx apps/admin/test/unsaved-changes.test.tsx` — 41 passed, 0 failed (140 assertions). Coverage includes route blocking, before-unload protection, clearing dirty state on discard and successful save, preserved variant close confirmation, and product edits using the shared detail-page blocker.
+- `bun --filter admin lint` — passed with only the existing `src/main.tsx` `react(only-export-components)` warning.
+- `VITE_API_URL=http://localhost:6767 bun --filter admin build` — passed.
+
+The full admin suite was not rerun for this scoped fix; its last run is recorded above.

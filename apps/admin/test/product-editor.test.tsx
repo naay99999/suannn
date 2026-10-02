@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from 'bun:test'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -182,6 +182,19 @@ test('edits every mutable product field while keeping slug read-only and out of 
   })
 })
 
+test('keeps product edits protected by the shared detail-page blocker', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  const { router } = renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'เพิ่มเติม')
+  await act(async () => { await router.navigate('/products') })
+
+  expect(screen.getByRole('heading', { name: 'ยังไม่ได้บันทึกการเปลี่ยนแปลง' })).toBeTruthy()
+  expect(router.state.location.pathname).toBe(`/products/${productId}`)
+})
+
 test('creates a variant with exact satang and keeps SKU immutable in edit mode', async () => {
   const user = userEvent.setup()
   const createVariantSpy = stub('createVariant', async () => variant)
@@ -197,6 +210,65 @@ test('creates a variant with exact satang and keeps SKU immutable in edit mode',
   await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
 
   await waitFor(() => expect(createVariantSpy).toHaveBeenCalledWith(productId, expect.objectContaining({ sku: 'MANGO-500G', priceSatang: 9990 })))
+})
+
+test('blocks route navigation while a variant has unsaved changes', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  const { router } = renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  await act(async () => { await router.navigate('/products') })
+
+  expect(screen.getByRole('heading', { name: 'ยังไม่ได้บันทึกการเปลี่ยนแปลง' })).toBeTruthy()
+  expect(router.state.location.pathname).toBe(`/products/${productId}`)
+  await user.click(screen.getByRole('button', { name: 'อยู่หน้านี้ต่อ' }))
+  await user.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+  expect(screen.getByRole('heading', { name: 'ทิ้งการเปลี่ยนแปลงรูปแบบสินค้า?' })).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'ทิ้งการเปลี่ยนแปลง', exact: true }))
+  expect(router.state.location.pathname).toBe(`/products/${productId}`)
+})
+
+test('protects dirty variant edits from beforeunload and clears protection on discard', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  const dirtyEvent = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(dirtyEvent)
+  expect(dirtyEvent.defaultPrevented).toBe(true)
+
+  await user.click(screen.getByRole('button', { name: 'ยกเลิก' }))
+  await user.click(await screen.findByRole('button', { name: 'ทิ้งการเปลี่ยนแปลง', exact: true }))
+  const cleanEvent = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(cleanEvent)
+  expect(cleanEvent.defaultPrevented).toBe(false)
+})
+
+test('clears variant dirty protection after a successful save', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  const createVariantSpy = stub('createVariant', async () => variant)
+  renderCatalog(`/products/${productId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'เพิ่มรูปแบบสินค้า' }))
+  await user.type(screen.getByRole('textbox', { name: 'SKU' }), 'MANGO-500G')
+  await user.type(screen.getByRole('textbox', { name: 'ชื่อรูปแบบ' }), 'ครึ่งกิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'หน่วย' }), 'กิโลกรัม')
+  await user.type(screen.getByRole('textbox', { name: 'ราคา (บาท)' }), '99.90')
+  const dirtyEvent = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(dirtyEvent)
+  expect(dirtyEvent.defaultPrevented).toBe(true)
+
+  await user.click(screen.getByRole('button', { name: 'บันทึกรูปแบบสินค้า' }))
+  await waitFor(() => expect(createVariantSpy).toHaveBeenCalled())
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'บันทึกรูปแบบสินค้า' })).toBeNull())
+  const cleanEvent = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(cleanEvent)
+  expect(cleanEvent.defaultPrevented).toBe(false)
 })
 
 test('prevents archiving the final active variant of a published product', async () => {
