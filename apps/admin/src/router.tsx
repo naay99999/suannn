@@ -66,7 +66,14 @@ export const router = createBrowserRouter([
               { path: 'movements', lazy: () => import('./pages/inventory/movements-page') },
             ],
           },
-          { path: 'orders', lazy: () => import('./pages/orders/orders-page') },
+          {
+            path: 'orders',
+            element: <PermissionGate permission="order:read" />,
+            children: [
+              { index: true, lazy: () => import('./pages/orders/orders-page') },
+              { path: ':orderId', lazy: () => import('./pages/orders/order-detail-page') },
+            ],
+          },
           { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
           { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },
         ],
