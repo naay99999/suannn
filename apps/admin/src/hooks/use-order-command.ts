@@ -11,6 +11,7 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
   const attemptRef = useRef<{ identity: string; attempt: OrderAttempt | null } | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [uncertain, setUncertain] = useState(false)
+  const [reviewRequired, setReviewRequired] = useState(false)
   const [storageAvailable, setStorageAvailable] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<OrderDetail | null>(null)
@@ -22,7 +23,16 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
     setUncertain(Boolean(attempt))
     setError(null)
     setResult(null)
+    setReviewRequired(false)
+    setStorageAvailable(true)
   }, [identity, orderId, staffId])
+
+  useEffect(() => {
+    if (!uncertain || storageAvailable) return
+    const preventLeave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', preventLeave)
+    return () => window.removeEventListener('beforeunload', preventLeave)
+  }, [storageAvailable, uncertain])
 
   const run = useCallback(async (attempt: OrderAttempt): Promise<OrderDetail | undefined> => {
     if (pendingRef.current) return undefined
@@ -38,12 +48,13 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
         clearOrderAttempt(staffId, orderId)
         attemptRef.current = { identity, attempt: null }
         setUncertain(false)
+        setReviewRequired(false)
         setResult(current ?? response)
         return current ?? response
       } catch (requestError) {
         const status = requestError instanceof ApiRequestError ? requestError.status : 0
         setError(status === 409 ? 'ข้อมูลคำสั่งซื้อเปลี่ยนแล้ว ตรวจสอบสถานะล่าสุดก่อนดำเนินการต่อ' : apiErrorMessage(requestError))
-        if (status === 0 || status === 409 || status >= 500) {
+        if (status === 0 || status >= 500) {
           attemptRef.current = { identity, attempt }
           setUncertain(true)
         } else {
@@ -51,6 +62,15 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
           attemptRef.current = { identity, attempt: null }
           setUncertain(false)
           await invalidateOrders(queryClient, orderId)
+          if (status === 409) {
+            try {
+              await queryClient.fetchQuery({ ...orderQuery(orderId), staleTime: 0 })
+              setReviewRequired(true)
+            } catch {
+              setReviewRequired(true)
+              setError('ข้อมูลเปลี่ยนแล้วและโหลดสถานะล่าสุดไม่ได้ กรุณารีเฟรชก่อนดำเนินการต่อ')
+            }
+          }
         }
         return undefined
       }
@@ -62,6 +82,10 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
 
   const submit = useCallback((command: OrderCommand): Promise<OrderDetail | undefined> => {
     if (pendingRef.current) return Promise.resolve(undefined)
+    if (reviewRequired) {
+      setError('ตรวจสอบสถานะคำสั่งซื้อปัจจุบันก่อนเริ่มคำสั่งใหม่')
+      return Promise.resolve(undefined)
+    }
     if (attemptRef.current?.identity !== identity) {
       const recovered = readOrderAttempt(staffId, orderId)
       attemptRef.current = { identity, attempt: recovered }
@@ -77,7 +101,7 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
     setStorageAvailable(persisted)
     attemptRef.current = { identity, attempt }
     return run(attempt)
-  }, [identity, orderId, run, staffId])
+  }, [identity, orderId, reviewRequired, run, staffId])
 
   const retry = useCallback((): Promise<OrderDetail | undefined> => {
     const attempt = attemptRef.current?.attempt
@@ -85,5 +109,7 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
     return run(attempt)
   }, [run])
 
-  return { submit, retry, isPending, uncertain, error, result, storageAvailable }
+  const acknowledgeReview = useCallback(() => { setReviewRequired(false); setError(null) }, [])
+
+  return { submit, retry, isPending, uncertain, error, result, storageAvailable, reviewRequired, acknowledgeReview, pendingCommand: uncertain ? attemptRef.current?.attempt?.command.kind ?? null : null }
 }
