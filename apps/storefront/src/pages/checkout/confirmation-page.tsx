@@ -13,8 +13,10 @@ export function Component() {
   const order = useQuery({ ...orderQuery(userId, orderId ?? ''), enabled: Boolean(userId && orderId) })
 
   if (!orderId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>ไม่พบคำสั่งซื้อ</EmptyTitle><EmptyDescription>กลับไปตรวจสอบรายการสินค้าและยืนยันคำสั่งซื้ออีกครั้ง</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link to="/checkout" />} nativeButton={false}>กลับไป checkout</Button></EmptyContent></Empty>
-  if (session.isPending || order.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>
+  if (session.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังตรวจสอบบัญชี...</p>
+  if (session.isError) return <div role="alert" className="py-16 text-center"><p>ตรวจสอบบัญชีไม่ได้</p><Button variant="outline" className="mt-4" onClick={() => void session.refetch()}>ลองอีกครั้ง</Button></div>
   if (!userId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>เข้าสู่ระบบเพื่อดูคำสั่งซื้อ</EmptyTitle><EmptyDescription>คำสั่งซื้อนี้ผูกกับบัญชีลูกค้าที่ใช้ยืนยันรายการ</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants()} to={`/sign-in?returnTo=${encodeURIComponent(`/checkout/confirmation/${orderId}`)}`}>เข้าสู่ระบบ</Link></EmptyContent></Empty>
+  if (order.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>
   if (order.isError || !order.data) return <div role="alert" className="py-16 text-center"><p>โหลดสถานะคำสั่งซื้อไม่ได้</p><Button variant="outline" className="mt-4" onClick={() => void order.refetch()}>ลองอีกครั้ง</Button></div>
 
   const snapshot = order.data

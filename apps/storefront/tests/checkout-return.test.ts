@@ -30,7 +30,7 @@ describe('checkout returns', () => {
   test('stores guest or customer checkout context before redirecting to Stripe', () => {
     const storage = createStorage()
     let savedBeforeRedirect = false
-    redirectToStripe({ orderId: 'order-1', paymentMethod: 'stripe', guestAccessToken: 'guest-secret', expiresAt: '2026-10-01T00:00:00.000Z' }, 'https://checkout.stripe.com/c/pay/session', url => {
+    redirectToStripe({ orderId: 'order-1', paymentMethod: 'stripe', guestAccessToken: 'guest-secret', expiresAt: new Date(Date.now() + 60_000).toISOString() }, 'https://checkout.stripe.com/c/pay/session', url => {
       savedBeforeRedirect = Boolean(readPendingCheckout(storage)?.guestAccessToken)
       expect(url).toContain('checkout.stripe.com')
     }, storage)
