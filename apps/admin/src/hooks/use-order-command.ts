@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
+import { authSessionQuery } from '@/lib/auth-session'
 import { clearOrderAttempt, readOrderAttempt, saveOrderAttempt, type OrderAttempt } from '@/lib/orders/attempt-storage'
 import { ordersApi, type OrderCommand, type OrderDetail } from '@/lib/orders/api'
 import { invalidateOrders, orderQuery } from '@/lib/orders/queries'
@@ -61,6 +62,9 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
           clearOrderAttempt(staffId, orderId)
           attemptRef.current = { identity, attempt: null }
           setUncertain(false)
+          if (status === 401) {
+            queryClient.setQueryData(authSessionQuery.queryKey, null)
+          }
           await invalidateOrders(queryClient, orderId)
           if (status === 409) {
             try {

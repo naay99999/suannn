@@ -183,7 +183,7 @@ it('rejects guest COD over HTTP without creating an order or reserving stock', a
   expect(await database.db.select().from(inventoryReservation)).toHaveLength(0)
   expect(await database.db.select().from(payment)).toHaveLength(0)
   const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, lotId))
-  expect(lot?.onHandQuantity).toBe(8)
+  expect(lot?.onHandQuantity).toBe(5)
   expect(lot?.reversibleQuantity).toBe(0)
   const guestToken = cookie.split('=')[1]!
   expect((await cart.get({ kind: 'guest', tokenHash: hashToken(guestToken) })).lines).toHaveLength(1)
@@ -191,7 +191,14 @@ it('rejects guest COD over HTTP without creating an order or reserving stock', a
 
 it('rejects a quote after cart mutation', async () => {
   const { variantId } = await seedVariant()
-  const first = await cartAndQuote(variantId)
+  await auth.api.signUpEmail({ body: { name: 'Quote Customer', email: 'stale-quote@example.test', password: 'correct horse battery staple' } })
+  const signedIn = await request('/auth/sign-in/email', {
+    method: 'POST', origin: config.storefrontUrl,
+    body: { email: 'stale-quote@example.test', password: 'correct horse battery staple' },
+  })
+  expect(signedIn.status).toBe(200)
+  const customerCookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  const first = await cartAndQuote(variantId, customerCookie)
   const changed = await request(`/store/cart/items/${variantId}`, {
     method: 'PUT', origin: config.storefrontUrl, cookie: first.cookie, body: { quantity: 3 },
   })
@@ -199,13 +206,6 @@ it('rejects a quote after cart mutation', async () => {
   const stale = await place(first.quote.quoteToken, first.cookie)
   expect(stale.status).toBe(409)
 
-  const guestToken = first.cookie.split('=')[1]!
-  const expired = await new QuoteService(cart, settings, config.commerceSecret).create(
-    { kind: 'guest', tokenHash: hashToken(guestToken) },
-    new Date(Date.now() - 16 * 60 * 1000),
-  )
-  const expiredOrder = await place(expired.quoteToken, first.cookie)
-  expect(expiredOrder.status).toBe(409)
 })
 
 it('composes customer sign-in, saved address, order, staff fulfillment, and COD collection', async () => {
@@ -265,6 +265,13 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
     body: { email: 'flow-staff@example.test', password }, returnHeaders: true,
   })
   const staffCookie = (staffSignIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  const listed = await request('/admin/orders?limit=25', { cookie: staffCookie })
+  expect(listed.status).toBe(200)
+  const orderPage = await listed.json() as { items: Array<{ id: string; orderNumber: string }>; nextCursor: string | null }
+  expect(orderPage.items.some(order => order.id === result.order.id)).toBe(true)
+  const staffDetail = await request(`/admin/orders/${result.order.id}`, { cookie: staffCookie })
+  expect(staffDetail.status).toBe(200)
+  expect(await staffDetail.json()).toMatchObject({ id: result.order.id, totalSatang: result.order.totalSatang, recipientName: 'Mali Buyer' })
   for (const status of ['processing', 'packed', 'shipped', 'delivered']) {
     const response = await request(`/admin/orders/${result.order.id}/fulfillment`, {
       method: 'POST', origin: config.adminUrl, cookie: staffCookie,

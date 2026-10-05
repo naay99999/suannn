@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useOrderCommand } from '../src/hooks/use-order-command'
+import { authSessionQuery, type AuthSession } from '../src/lib/auth-session'
 
 afterEach(() => { cleanup(); localStorage.clear() })
 
@@ -34,5 +35,28 @@ test('retries the same order command key and payload after response loss', async
   expect(requests[1]!.key).toBe(requests[0]!.key)
   expect(requests[1]!.body).toEqual(requests[0]!.body)
   expect(hook.result.current.uncertain).toBe(false)
+  globalThis.fetch = previousFetch
+})
+
+test('clears the cached staff session after an expired-session rejection', async () => {
+  const orderId = '00000000-0000-4000-8000-000000000012'
+  const staffId = '00000000-0000-4000-8000-000000000011'
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = (async () => Response.json({ code: 'SESSION_EXPIRED', message: 'Session expired' }, { status: 401 })) as typeof fetch
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const session: AuthSession = {
+    session: { id: 'staff-session', expiresAt: '2027-01-01T00:00:00.000Z' },
+    user: { id: staffId, name: 'Staff', email: 'staff@example.test', emailVerified: true, image: null, accountType: 'staff' },
+    staff: { role: 'admin', permissions: ['order:write'] },
+  }
+  client.setQueryData(authSessionQuery.queryKey, session)
+  const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const hook = renderHook(() => useOrderCommand({ staffId, orderId }), { wrapper })
+
+  await act(async () => { await hook.result.current.submit({ kind: 'cancel', reason: 'customer_request' }) })
+
+  expect(client.getQueryData(authSessionQuery.queryKey)).toBeNull()
+  expect(hook.result.current.uncertain).toBe(false)
+  expect(hook.result.current.error).toBe('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง')
   globalThis.fetch = previousFetch
 })
