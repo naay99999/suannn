@@ -332,7 +332,7 @@ export class StripeEventService {
     eventSession: SessionEvidence,
     currentState: SessionEvidence | null,
   ) {
-    await this.db.transaction(async (tx) => {
+    const manualReview = await this.db.transaction(async (tx) => {
       const possibleOrderId = eventSession.orderId ?? currentState?.orderId
       let attempt = await this.repository.lockAttemptBySession(tx, eventSession.sessionId)
       if (!attempt && possibleOrderId) attempt = await this.repository.lockAttemptByOrder(tx, possibleOrderId)
@@ -384,13 +384,17 @@ export class StripeEventService {
         || eventType === 'reconciliation'
       if (paid && (successfulSignal || eventType === 'checkout.session.async_payment_failed'
         || eventType === 'checkout.session.expired')) {
-        await settleStripeOrderInTransaction(tx, {
+        const settled = await settleStripeOrderInTransaction(tx, {
           order,
           payment: savedPayment,
           eventId,
           sessionId: candidate.sessionId,
           paymentIntentId: candidate.paymentIntentId,
         })
+        if (!settled && order.status === 'pending_payment') {
+          await this.repository.markAttemptManualReview(tx, attempt.id)
+          return { attemptId: attempt.id, orderId: order.id }
+        }
         await this.repository.markAttemptStatus(tx, attempt.id, 'completed')
         return
       }
@@ -418,5 +422,6 @@ export class StripeEventService {
       }
 
     })
+    if (manualReview) this.logManualReview(manualReview.attemptId, manualReview.orderId)
   }
 }

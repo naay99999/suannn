@@ -238,6 +238,24 @@ describe('Stripe payment lifecycle', () => {
     expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
   })
 
+  it('sends a paid signal with a contradictory pending payment to manual review without releasing stock', async () => {
+    const fixture = await preparePendingOrder()
+    await database.db.update(payment).set({ status: 'void' }).where(eq(payment.orderId, fixture.orderId))
+
+    await sendEvent(makeGateway(), 'evt_payconflict', 'checkout.session.completed', sessionFor(fixture))
+
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, fixture.orderId))
+    const [savedPayment] = await database.db.select().from(payment).where(eq(payment.orderId, fixture.orderId))
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
+      .where(eq(stripeCheckoutAttempt.orderId, fixture.orderId))
+    const [lot] = await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, fixture.lotId))
+    expect(order?.status).toBe('pending_payment')
+    expect(savedPayment?.status).toBe('void')
+    expect(attempt?.status).toBe('manual_review')
+    expect(lot).toMatchObject({ onHandQuantity: 4, reversibleQuantity: 1 })
+    expect(await database.db.select().from(orderOutbox).where(eq(orderOutbox.orderId, fixture.orderId))).toHaveLength(0)
+  })
+
   it('places an asynchronously paid order', async () => {
     const fixture = await preparePendingOrder()
     await sendEvent(makeGateway(), 'evt_asyncpaid', 'checkout.session.async_payment_succeeded', sessionFor(fixture))

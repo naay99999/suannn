@@ -30,7 +30,7 @@ import {
 
 const navigation = [
   { title: 'Dashboard', url: '/dashboard', icon: DashboardSquare01Icon },
-  { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon },
+  { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon, permission: 'order:read' },
   { title: 'สินค้า', url: '/products', icon: ShoppingBag01Icon, permission: 'catalog:read' },
   { title: 'สต็อก', url: '/inventory', icon: WarehouseIcon, permission: 'inventory:read' },
   { title: 'Customers', url: '/customers', icon: UserListIcon },

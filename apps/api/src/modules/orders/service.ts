@@ -499,6 +499,12 @@ export class OrderService {
       const order = await lockOrder(tx, orderId)
       if (order.status === 'cancelled') throw new DomainError('INVALID_ORDER_TRANSITION')
       const savedPayment = await lockOrderPayment(tx, orderId)
+      if (order.paymentMethod !== 'cod'
+        || savedPayment.method !== 'cod'
+        || savedPayment.provider !== 'cod'
+        || savedPayment.amountSatang !== order.totalSatang) {
+        throw new DomainError('ORDER_PAYMENT_CONFLICT')
+      }
       const collection = this.codPayment.recordCollection(amountSatang, order.totalSatang)
       if (savedPayment.status === 'void') throw new DomainError('ORDER_PAYMENT_CONFLICT')
       if (savedPayment.status === 'awaiting_collection') {

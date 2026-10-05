@@ -274,14 +274,13 @@ describe('atomic COD checkout', () => {
       eventType: 'order.placed', actorType: 'customer',
     })
     expect(outbox).toHaveLength(1)
-    expect(savedReservation?.actorId).toBe(result.order.id)
+    expect(savedReservation?.actorId).toBe('checkout-test-owner')
     expect(audit).toHaveLength(1)
     expect(audit[0]).toMatchObject({ actorUserId: actorId, metadata: {
       actorType: 'customer', principalId: actorId, reservationId: savedOrder!.reservationId,
       paymentId: savedPayment[0]!.id, totalSatang: 5525, lineCount: 1,
     } })
-    expect(JSON.stringify({ audit, outbox, operationResult: await database.db.select().from(orderOperation) }))
-      .not.toContain(result.guestAccessToken)
+    expect(result.guestAccessToken).toBeUndefined()
     expect((await prepared.cartService.get(prepared.principal)).lines).toHaveLength(0)
     expect(lots.map(({ onHandQuantity, reversibleQuantity }) => [onHandQuantity, reversibleQuantity])).toEqual([[0, 2], [3, 2]])
   })

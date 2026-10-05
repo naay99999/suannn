@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/suannn_test
+      VITE_API_URL: http://localhost:6767
     services:
       postgres:
         image: postgres:16

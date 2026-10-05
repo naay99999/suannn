@@ -11,7 +11,7 @@ import { Input } from '@workspace/ui/components/input'
 import { ThaiAddressCascadeSelect } from '@workspace/ui/components/thai-address-cascade-select'
 import { useCart } from '@/components/cart/cart-context'
 import { authSessionQuery } from '@/lib/auth-session'
-import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, isStaleCheckoutQuoteError, placeStoreOrder, refreshAfterStaleQuote } from '@/lib/store-checkout'
+import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, placeStoreOrder, refreshAfterStaleQuote } from '@/lib/store-checkout'
 import { getCartSummary } from '@/lib/cart'
 import { addressesQuery } from '@/pages/account/account-queries'
 import type { CustomerAddress } from '@/pages/account/account-api'
@@ -84,6 +84,7 @@ export function Component() {
   const session = useQuery(authSessionQuery)
   const customerSession = session.data?.user.accountType === 'customer' ? session.data : null
   const isCustomer = Boolean(customerSession)
+  const sessionResolved = !session.isPending && !session.isError
   const userId = customerSession?.user.id ?? ''
   const addresses = useQuery({ ...addressesQuery(userId), enabled: Boolean(userId) })
   const serverCart = cart ?? { cartVersion: 0, lines: [] }
@@ -112,6 +113,7 @@ export function Component() {
   const effectiveAddressChoice = addressChoice === 'default' ? defaultShippingAddress?.id ?? 'manual' : addressChoice
   const selectedSavedAddress = addresses.data?.items.find(address => address.id === effectiveAddressChoice)
   const availableMethods = availablePaymentMethods(isCustomer)
+  const selectedPaymentMethod = effectivePaymentMethod(isCustomer, paymentMethod)
 
   const handleAddressError = useCallback(() => setManualAddress(true), [])
 
@@ -124,7 +126,11 @@ export function Component() {
 
   async function submit(values: CheckoutForm) {
     setSubmitError('')
-    if (!availableMethods.includes(paymentMethod) || (paymentMethod === 'cod' && !isCustomer)) {
+    if (!sessionResolved) {
+      setSubmitError('ตรวจสอบสถานะบัญชีก่อนสั่งซื้อ กรุณาลองโหลดอีกครั้ง')
+      return
+    }
+    if (!availableMethods.includes(selectedPaymentMethod) || (selectedPaymentMethod === 'cod' && !isCustomer)) {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
@@ -158,14 +164,14 @@ export function Component() {
       currentQuote = refreshed.data
     }
 
-    const input = buildCheckoutOrderBody(currentQuote, paymentMethod, { email: values.email.trim(), phone: values.phone.trim() }, selectedAddress)
+    const input = buildCheckoutOrderBody(currentQuote, selectedPaymentMethod, { email: values.email.trim(), phone: values.phone.trim() }, selectedAddress)
     const fingerprint = await fingerprintCheckoutInput(input)
     const key = getOrCreateSubmissionKey(currentQuote.quoteToken, fingerprint)
     try {
       const result = await orderMutation.mutateAsync({ input, key })
       if (!('order' in result)) throw new StoreCheckoutRequestError(502, 'INVALID_ORDER_RESPONSE')
       await queryClient.invalidateQueries({ queryKey: ['store-cart'] })
-      if (paymentMethod === 'stripe') {
+      if (selectedPaymentMethod === 'stripe') {
         if (!('checkout' in result) || !result.checkout?.url) throw new StoreCheckoutRequestError(502, 'STRIPE_CHECKOUT_URL_MISSING')
         redirectToStripe({
           orderId: result.order.id,
@@ -198,6 +204,8 @@ export function Component() {
         <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">ตรวจสอบสินค้า ที่อยู่จัดส่ง และยอดจากราคาปัจจุบันของร้าน</p>
       </div>
       {cartError && <p role="alert" className="mb-5 text-sm text-destructive">{cartError}</p>}
+      {session.isError && <div role="alert" className="mb-5 flex items-center gap-3"><p>ตรวจสอบสถานะบัญชีไม่ได้ กรุณาลองอีกครั้งก่อนสั่งซื้อ</p><Button variant="outline" onClick={() => void session.refetch()}>ลองอีกครั้ง</Button></div>}
+      {session.isPending && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังตรวจสอบสถานะบัญชี...</p>}
       {hasUnavailable && <p role="alert" className="mb-5 text-sm text-destructive">มีสินค้าไม่พร้อมสั่งซื้อ กรุณากลับไปแก้ไขตะกร้าก่อน</p>}
       {quote.isPending && !quote.data && !hasUnavailable && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังคำนวณยอดและค่าจัดส่ง...</p>}
       {quote.isError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3"><p>ขอราคาสำหรับคำสั่งซื้อไม่ได้</p><Button variant="outline" onClick={() => void quote.refetch()}>คำนวณใหม่</Button></div>}
@@ -243,8 +251,8 @@ export function Component() {
           <section aria-labelledby="payment-heading" className="mt-6 rounded-3xl border bg-card p-5 md:p-8">
             <h2 id="payment-heading" className="text-2xl font-semibold">วิธีชำระเงิน</h2>
             <div className="mt-5 grid gap-3">
-              {availableMethods.map(method => <label key={method} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 ${method === (isCustomer ? paymentMethod : 'stripe') ? 'border-primary bg-accent' : ''}`}>
-                <input type="radio" name="paymentMethod" value={method} checked={method === (isCustomer ? paymentMethod : 'stripe')} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
+              {availableMethods.map(method => <label key={method} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 ${method === selectedPaymentMethod ? 'border-primary bg-accent' : ''}`}>
+                <input type="radio" name="paymentMethod" value={method} checked={method === selectedPaymentMethod} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
                 <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'สำหรับบัญชีลูกค้าที่เข้าสู่ระบบแล้ว' : 'ชำระผ่าน Stripe Checkout'}</span></span>
               </label>)}
               {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
@@ -252,7 +260,7 @@ export function Component() {
           </section>
           <div className="mt-8 flex flex-col items-start gap-4">
             {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-            <Button type="submit" size="storefront" className="w-full sm:w-auto" disabled={orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(paymentMethod)}>{orderMutation.isPending ? 'กำลังส่งคำสั่งซื้อ...' : paymentMethod === 'stripe' ? 'ไปชำระเงินด้วย Stripe' : 'ยืนยันคำสั่งซื้อ'}</Button>
+            <Button type="submit" size="storefront" className="w-full sm:w-auto" disabled={!sessionResolved || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)}>{orderMutation.isPending ? 'กำลังส่งคำสั่งซื้อ...' : selectedPaymentMethod === 'stripe' ? 'ไปชำระเงินด้วย Stripe' : 'ยืนยันคำสั่งซื้อ'}</Button>
             <Link to="/products" className="text-sm font-medium text-primary-ink underline underline-offset-4 hover:text-foreground">เลือกสินค้าต่อ</Link>
           </div>
         </form>

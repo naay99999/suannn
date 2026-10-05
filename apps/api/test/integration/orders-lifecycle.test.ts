@@ -24,6 +24,7 @@ import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
 import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
+import { StripeEventService } from '../../src/modules/payments/stripe/events'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -120,6 +121,29 @@ function testStripeGateway(): StripeGateway {
     retrieveRefund: async () => { throw new Error('not used') },
     constructEvent: () => { throw new Error('not used') },
   }
+}
+
+async function confirmGuestStripePayment(order: { id: string; totalSatang: number }) {
+  const gateway: StripeGateway = {
+    ...testStripeGateway(),
+    constructEvent: () => ({
+      id: `evt_guestpaid${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`,
+      type: 'checkout.session.completed',
+      data: { object: {
+        id: `cs_test_${order.id}`,
+        object: 'checkout.session',
+        client_reference_id: order.id,
+        metadata: { orderId: order.id },
+        amount_total: order.totalSatang,
+        currency: 'thb',
+        status: 'complete',
+        payment_status: 'paid',
+        payment_intent: `pi_guestpaid${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`,
+        expires_at: Math.floor(Date.now() / 1000) + 1800,
+      } },
+    }) as unknown as ReturnType<StripeGateway['constructEvent']>,
+  }
+  await new StripeEventService(database.db, gateway).handle('{}', 'valid-signature')
 }
 
 async function seedVariant(quantity: number | number[] = 8) {
@@ -221,6 +245,7 @@ describe('COD order lifecycle', () => {
 
   it('allows the guest access token and staff identity to cancel an order before shipment', async () => {
     const guestOrder = await placeOrder({ principal: guestPrincipal() })
+    await confirmGuestStripePayment(guestOrder.result.order)
     const guestCancelled = await guestOrder.orders.cancel(guestOrder.result.order.id, guestOrder.orderPrincipal, 'cancel-guest-1')
 
     const staffOrder = await placeOrder()
@@ -246,6 +271,7 @@ describe('COD order lifecycle', () => {
     const placed = await placeOrder({ principal: guestPrincipal() })
     const orderId = placed.result.order.id
     const key = 'cancel-guest-expiry-replay-1'
+    await confirmGuestStripePayment(placed.result.order)
     await placed.orders.cancel(orderId, placed.orderPrincipal, key)
     await database.db.update(commerceOrder).set({
       terminalAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
@@ -396,6 +422,53 @@ describe('COD order lifecycle', () => {
     expect(operations.filter(({ command }) => command === 'collect-cod')).toHaveLength(2)
     await expect(placed.orders.collectCod(placed.result.order.id, placed.result.order.totalSatang - 1, staffActor, 'collect-cod-wrong-1'))
       .rejects.toMatchObject({ code: 'COD_AMOUNT_MISMATCH' })
+  })
+
+  it('rejects COD collection for pending and collected Stripe payments without writes', async () => {
+    const placed = await placeOrder({ principal: guestPrincipal() })
+    const orderId = placed.result.order.id
+    const amountSatang = placed.result.order.totalSatang
+    const beforeRejectedCollection = async () => ({
+      order: (await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)))[0],
+      payment: (await database.db.select().from(payment).where(eq(payment.orderId, orderId)))[0],
+      allocations: await database.db.select().from(orderItemAllocation).where(eq(orderItemAllocation.orderId, orderId)),
+      events: await database.db.select().from(orderEvent).where(eq(orderEvent.orderId, orderId)),
+      audits: await database.db.select().from(auditLog).where(eq(auditLog.targetId, orderId)),
+      operations: await database.db.select().from(orderOperation).where(eq(orderOperation.orderId, orderId)),
+    })
+    const pendingSnapshot = await beforeRejectedCollection()
+
+    await expect(placed.orders.collectCod(orderId, amountSatang, staffActor, 'reject-pending-stripe-cod'))
+      .rejects.toMatchObject({ code: 'ORDER_PAYMENT_CONFLICT' })
+    expect(await beforeRejectedCollection()).toEqual(pendingSnapshot)
+
+    const gateway: StripeGateway = {
+      ...testStripeGateway(),
+      constructEvent: () => ({
+        id: 'evt_afterrejectedcod',
+        type: 'checkout.session.completed',
+        data: { object: {
+          id: `cs_test_${orderId}`,
+          object: 'checkout.session',
+          client_reference_id: orderId,
+          metadata: { orderId },
+          amount_total: amountSatang,
+          currency: 'thb',
+          status: 'complete',
+          payment_status: 'paid',
+          payment_intent: 'pi_after_rejected_cod',
+          expires_at: Math.floor(Date.now() / 1000) + 1800,
+        } },
+      }) as unknown as ReturnType<StripeGateway['constructEvent']>,
+    }
+    await new StripeEventService(database.db, gateway).handle('{}', 'valid-signature')
+    const paidSnapshot = await beforeRejectedCollection()
+    expect(paidSnapshot.order?.status).toBe('placed')
+    expect(paidSnapshot.payment?.status).toBe('collected')
+
+    await expect(placed.orders.collectCod(orderId, amountSatang, staffActor, 'reject-collected-stripe-cod'))
+      .rejects.toMatchObject({ code: 'ORDER_PAYMENT_CONFLICT' })
+    expect(await beforeRejectedCollection()).toEqual(paidSnapshot)
   })
 
   it('preserves a collected COD payment when an order is cancelled before shipment', async () => {

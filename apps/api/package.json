@@ -13,7 +13,7 @@
     "lint": "oxlint src test",
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun test test/unit",
-    "test:integration": "bun test/require-test-database.ts && bun test test/integration",
+    "test:integration": "bun test/require-test-database.ts && bun test --parallel=1 test/integration",
     "db:seed:demo": "bun --env-file=.env.local src/cli/seed-demo.ts"
   },
   "dependencies": {

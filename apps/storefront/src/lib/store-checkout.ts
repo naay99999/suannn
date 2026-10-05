@@ -69,6 +69,10 @@ export function availablePaymentMethods(isCustomer: boolean): CheckoutPaymentMet
   return isCustomer ? ['cod', 'stripe'] : ['stripe']
 }
 
+export function effectivePaymentMethod(isCustomer: boolean, selected: CheckoutPaymentMethod): CheckoutPaymentMethod {
+  return isCustomer ? selected : 'stripe'
+}
+
 export async function refreshAfterStaleQuote(queryClient: QueryClient, quoteKey: readonly unknown[]) {
   await queryClient.invalidateQueries({ queryKey: storeCartQueryKey })
   await queryClient.invalidateQueries({ queryKey: quoteKey })

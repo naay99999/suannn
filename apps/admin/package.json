@@ -8,6 +8,7 @@
     "typecheck": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "bun test --preload ./test/setup.ts test",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -168,7 +168,7 @@ async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
 
   if (stripeGateway && stripeCheckout) {
     await new StripeEventService(database.db, stripeGateway).handle(JSON.stringify({
-      id: `evt_paid_${result.order.id}`,
+      id: `evt_paid${result.order.id.replaceAll('-', '')}`,
       type: 'checkout.session.completed',
       data: { object: {
         id: `cs_test_${result.order.id}`,
@@ -322,7 +322,7 @@ describe('guest order access and confirmation outbox', () => {
       messages.push(message)
       return { id: 'reissued-token-message' }
     })).processBatch(10)
-    const deliveredToken = guest.result.guestAccessToken
+    const deliveredToken = messages[1]?.text.split('\n').at(-1)
 
     expect(first).toEqual(replay)
     expect(events.filter(({ eventType }) => eventType === 'order.guest-access-reissued')).toHaveLength(1)
@@ -335,10 +335,10 @@ describe('guest order access and confirmation outbox', () => {
     expect(delivered).toBe(2)
     expect(deliveredToken).toBeString()
     expect(deliveredToken).not.toBe(previousToken)
-    expect(messages.every(({ text }) => text.includes(deliveredToken!))).toBe(true)
-    expect(messages[0]?.text).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
-    expect(messages[0]?.html).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
-    expect(messages[0]?.html).not.toContain(`href="https://shop.example.test/orders/guest/${guest.result.order.id}?token=`)
+    expect(messages[1]?.text).toContain(deliveredToken!)
+    expect(messages[1]?.text).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[1]?.html).toContain(`https://shop.example.test/orders/guest/${guest.result.order.id}`)
+    expect(messages[1]?.html).not.toContain(`href="https://shop.example.test/orders/guest/${guest.result.order.id}?token=`)
     await makeAccess().verify(guest.result.order.id, deliveredToken, new Date())
     expect(JSON.stringify({ first, replay, audits, operations })).not.toContain(deliveredToken!)
     await expect((async () => {
