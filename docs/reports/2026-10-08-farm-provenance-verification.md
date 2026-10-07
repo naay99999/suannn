@@ -16,13 +16,14 @@ The farm provenance feature is implemented across the API, demo seed, and storef
 | Full storefront test suite | 111 passed, 1 failed. The failure is in the existing uncommitted catalog/cart work: `tests/catalog-pages.test.tsx` expects a quick-add button that the current catalog page does not render. |
 | Admin production build | Passed with `VITE_API_URL=http://localhost:6767` |
 | Admin lint | Passed with existing warnings |
+| Local runtime smoke check | Passed after migration and seed: `/farms` lists 3 farms; a farm profile lists linked products; mango detail shows its 2 source farms |
 
 ## Database and seed status
 
-No local `apps/api/.env.local`, `DATABASE_URL`, or `NODE_ENV` was available. The new migration was not applied and the demo seed was not run. The active owner, `MAIN` warehouse, and database name could not be checked. Run the new migration first, then the documented repeatable seed command with an explicitly verified development database name, active owner email, and HTTPS asset base URL.
+The local runtime initially returned HTTP 500 for `/api/v1/store/farms` and product detail because the farm schema migration had not been applied. I verified the API's local PostgreSQL target as database `suannn`, confirmed one active owner and the active `MAIN` warehouse without printing credentials or email, then applied the migration. The legacy demo catalog was already present (8 products and 16 lots), so the seed extended it without recreating commerce data: 3 farms and 6 product links. A second seed run returned `already-seeded` with the same counts.
 
-The farm integration files cover schema constraints, lifecycle and audit behavior, ordered product associations, and seed upgrades, but none were executed without the dedicated test database. No browser screenshots or live seeded-data navigation checks were captured for the same reason.
+The API integration suite remains unrun because `TEST_DATABASE_URL` is unset; its guard requires a database ending in `_test`. Browser smoke checks confirmed the farm list, one farm profile and its linked products, and the mango product page with both source farms. Mobile, reduced-motion, private-profile, and cart-navigation checks were not part of this runtime repair.
 
 ## Seeded demonstration content
 
-The extension adds three fictional, explicitly marked demo farm profiles and six ordered product links. Mango is connected to two farms. The seed extension preserves existing commerce records and staff edits on reruns. Its current count and status are covered by unit tests; database-level idempotence remains to be verified with the guarded integration suite and a configured development database.
+The extension adds three fictional, explicitly marked demo farm profiles and six ordered product links. Mango is connected to two farms. The seed extension preserves existing commerce records and staff edits on reruns. Its database-level rerun was verified in local development; the guarded integration suite still requires a separate `_test` database.

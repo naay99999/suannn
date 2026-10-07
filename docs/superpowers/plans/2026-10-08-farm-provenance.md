@@ -168,10 +168,10 @@ expect((await products.getAdminById(productId)).farms.map(farm => farm.id)).toEq
 **Interfaces:** Completed API, generated migration, seed CLI, and storefront routes from Tasks 1–7.
 
 - [x] Run API typecheck/lint/unit, storefront build/lint/tests, and admin build/lint; record outcomes in the verification report. The API integration suite is blocked by the absent guarded test database. The full storefront suite has one unrelated failure in existing uncommitted catalog/cart work. Admin build passed with `VITE_API_URL=http://localhost:6767`; shared UI was unchanged.
-- [x] Check for a configured development database and record that none is available (`TEST_DATABASE_URL`, `DATABASE_URL`, `NODE_ENV`, and `apps/api/.env.local` are absent). Migration and seed were therefore not run; see verification report for the required next step.
+- [x] Verify the local API target is PostgreSQL database `suannn`, confirm the active owner and `MAIN` warehouse, apply the farm migration, and run the demo seed twice. The first run created 3 farms/6 links and the second returned `already-seeded`; see verification report.
 - [ ] Start/reuse API and storefront dev servers; inspect API farms and product detail against seeded data. Navigate product → both source farms → products and add to cart. Confirm empty/private profiles using test fixtures, not destructive modifications to unrelated development records.
 - [ ] Inspect 390px and 1440px layouts, long Thai names, no portrait, fallback image, focus order, reduced motion, and navigation after scrolling. Capture screenshots of list/profile/product sources and record locations in verification report.
-- [x] Review final feature scope and record remaining limits. Native execution was selected, but no independent reviewer was available; the report does not claim independent review or live browser validation.
+- [x] Review final feature scope and record remaining limits. Native execution was selected, but no independent reviewer was available. A live local smoke check covered the list, one profile, and one product detail; responsive and full interaction checks remain open.
 - [ ] Commit only feature verification/documentation and reviewed corrections with `Verify farm provenance flows`. Report changed behavior, validation, actual seed outcome, and any deployment prerequisite to the user.
 
 ## Self-review and execution handoff
