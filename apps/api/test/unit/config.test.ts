@@ -3,10 +3,18 @@ import { developmentCorsOrigins, loadConfig } from '../../src/config/env'
 import { testEnv } from '../fixtures'
 
 describe('API configuration', () => {
+  it('validates the total shutdown budget', () => {
+    expect(loadConfig(testEnv).shutdownTimeoutMs).toBe(30_000)
+    expect(loadConfig({ ...testEnv, SHUTDOWN_TIMEOUT_MS: '60000' }).shutdownTimeoutMs).toBe(60_000)
+    for (const value of ['0', '-1', '1.5', 'NaN', '300001']) {
+      expect(() => loadConfig({ ...testEnv, SHUTDOWN_TIMEOUT_MS: value })).toThrow('SHUTDOWN_TIMEOUT_MS')
+    }
+  })
   it('uses safe local defaults outside production', () => {
     expect(loadConfig(testEnv)).toEqual({
       host: '0.0.0.0',
       port: 6767,
+      shutdownTimeoutMs: 30_000,
       corsOrigins: developmentCorsOrigins,
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,
@@ -148,6 +156,7 @@ describe('API configuration', () => {
     })).toEqual({
       host: '127.0.0.1',
       port: 8080,
+      shutdownTimeoutMs: 30_000,
       corsOrigins: ['https://store.example.com', 'https://admin.example.com'],
       databaseUrl: testEnv.DATABASE_URL,
       betterAuthSecret: testEnv.BETTER_AUTH_SECRET,

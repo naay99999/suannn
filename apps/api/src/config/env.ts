@@ -16,6 +16,7 @@ export const guestCartCookieMaxAgeSeconds = 60 * 60 * 24 * 30
 export interface AppConfig {
   host: string
   port: number
+  shutdownTimeoutMs: number
   corsOrigins: string[]
   databaseUrl: string
   betterAuthSecret: string
@@ -39,6 +40,14 @@ export interface StripeConfig {
 }
 
 type Environment = Record<string, string | undefined>
+
+function parseShutdownTimeout(value: string | undefined) {
+  const milliseconds = value === undefined ? 30_000 : Number(value)
+  if (!Number.isInteger(milliseconds) || milliseconds < 1 || milliseconds > 300_000) {
+    throw new Error('SHUTDOWN_TIMEOUT_MS must be an integer between 1 and 300000')
+  }
+  return milliseconds
+}
 
 function parsePort(value: string | undefined) {
   if (!value) {
@@ -250,6 +259,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
   return {
     host: env.HOST?.trim() || '0.0.0.0',
     port: parsePort(env.PORT),
+    shutdownTimeoutMs: parseShutdownTimeout(env.SHUTDOWN_TIMEOUT_MS),
     corsOrigins: corsOrigins.length > 0 ? corsOrigins : developmentCorsOrigins,
     databaseUrl,
     betterAuthSecret,

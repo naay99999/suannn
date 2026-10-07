@@ -46,6 +46,7 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { drainShutdown } from './shared/shutdown'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
@@ -154,16 +155,18 @@ const app = await createApp(config, {
 app.listen({ hostname: config.host, port: config.port })
 
 const maintenanceTimer = setInterval(() => {
-  void Promise.all([
+  runInBackground(Promise.allSettled([
     rateLimitRepository.purgeExpired(),
     claims.reconcilePendingCustomers(audit),
-  ]).catch((error: unknown) => {
-    console.error(JSON.stringify({
-      level: 'error',
-      code: 'API_MAINTENANCE_FAILED',
-      errorCategory: error instanceof Error ? error.name : 'UnknownError',
-    }))
-  })
+  ]).then(results => {
+    for (const result of results) {
+      if (result.status === 'rejected') console.error(JSON.stringify({
+        level: 'error',
+        code: 'API_MAINTENANCE_FAILED',
+        errorCategory: result.reason instanceof Error ? result.reason.name : 'UnknownError',
+      }))
+    }
+  }))
 }, 60 * 60 * 1000)
 maintenanceTimer.unref()
 
@@ -222,29 +225,27 @@ async function shutdown(signal: string) {
   isShuttingDown = true
   console.info(JSON.stringify({ level: 'info', event: 'shutdown', signal }))
   clearInterval(maintenanceTimer)
-  const inventoryMaintenanceDrained = stopInventoryMaintenance()
-  const commerceMaintenanceDrained = Promise.all([
-    stopOrderOutboxMaintenance(),
-    stopGuestCartCleanup(),
-    stopStripeAttemptReconciliation(),
-    stopStripeRefundReconciliation(),
-  ])
-  await app.stop()
-  await inventoryMaintenanceDrained
-  await commerceMaintenanceDrained
-  const drained = await emailQueue.drain(15_000)
-  if (!drained) console.error(JSON.stringify({ level: 'error', code: 'EMAIL_SHUTDOWN_TIMEOUT' }))
-  const backgroundDrained = await Promise.race([
-    Promise.allSettled(backgroundTasks).then(() => true),
-    new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => resolve(false), 15_000)
-      timeout.unref()
-    }),
-  ])
-  if (!backgroundDrained) console.error(JSON.stringify({ level: 'error', code: 'BACKGROUND_SHUTDOWN_TIMEOUT' }))
-  await identityLockPool.end({ timeout: 15 })
-  await database.client.end({ timeout: 15 })
-  process.exit(0)
+  const drained = await drainShutdown({
+    timeoutMs: config.shutdownTimeoutMs,
+    producers: [
+      { name: 'listener', run: async () => { await app.stop() } },
+      { name: 'inventory', run: stopInventoryMaintenance },
+      { name: 'order-outbox', run: stopOrderOutboxMaintenance },
+      { name: 'guest-cart-cleanup', run: stopGuestCartCleanup },
+      { name: 'stripe-attempts', run: stopStripeAttemptReconciliation },
+      { name: 'stripe-refunds', run: stopStripeRefundReconciliation },
+    ],
+    consumers: [
+      { name: 'email', run: remainingMs => emailQueue.drain(remainingMs) },
+      { name: 'background', run: async () => { await Promise.allSettled(backgroundTasks) } },
+    ],
+    pools: [
+      { name: 'identity-pool', run: remainingMs => identityLockPool.end({ timeout: remainingMs / 1000 }) },
+      { name: 'database-pool', run: remainingMs => database.client.end({ timeout: remainingMs / 1000 }) },
+    ],
+    onIssue: issue => console.error(JSON.stringify({ level: 'error', code: 'API_SHUTDOWN_INCOMPLETE', ...issue })),
+  })
+  process.exit(drained ? 0 : 1)
 }
 
 process.once('SIGINT', () => void shutdown('SIGINT'))
