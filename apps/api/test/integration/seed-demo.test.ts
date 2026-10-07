@@ -109,8 +109,8 @@ describe('catalog and stock demo seed', () => {
     }
     const result = await seedDemo(database.db, await seedOptions(), now)
 
-    expect(result).toEqual({ status: 'created', products: 8, variants: 12, lots: 16, movements: 18 })
-    expect(await rowCounts()).toEqual({ products: 8, variants: 12, lots: 16, operations: 18, movements: 18, audits: 48 })
+    expect(result).toEqual({ status: 'created', products: 8, variants: 12, lots: 16, movements: 18, farms: 3, farmLinks: 6 })
+    expect(await rowCounts()).toEqual({ products: 8, variants: 12, lots: 16, operations: 18, movements: 18, audits: 52 })
     expect(await database.db.select().from(inventoryReservation)).toHaveLength(0)
     expect(await database.db.select().from(commerceOrder)).toHaveLength(0)
     expect(await database.db.select().from(orderOutbox)).toHaveLength(0)

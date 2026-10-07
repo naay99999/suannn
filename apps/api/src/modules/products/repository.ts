@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
-import { product, productVariant } from '../../database/schema'
+import { farm, product, productFarm, productVariant } from '../../database/schema'
 import type { InventoryReadRepository } from '../inventory/read-repository'
 import type { AuditService } from '../audit/service'
+import { readProductFarms, replaceProductFarms } from './farm-associations'
+import { normalizeFarmIds } from '../farms/policy'
 import { DomainError } from '../../shared/domain-error'
 import { decodeCursor, encodeCursor } from '../../shared/cursor'
 import { assertPublishable, assertVariantArchivable } from './policy'
@@ -206,6 +208,14 @@ export class ProductRepository {
   ) {}
 
   async listStore(input: StoreProductQuery): Promise<CursorPage<StoreProductSummary>> {
+    return this.listStoreScoped(input)
+  }
+
+  async listStoreForFarm(farmId: string, input: Pick<StoreProductQuery, 'limit' | 'cursor'>): Promise<CursorPage<StoreProductSummary>> {
+    return this.listStoreScoped({ ...input, sort: 'newest' }, farmId)
+  }
+
+  private async listStoreScoped(input: StoreProductQuery, farmId?: string): Promise<CursorPage<StoreProductSummary>> {
     const query = normalizedStoreQuery(input)
     const activeMinimums = this.db.select({
       productId: productVariant.productId,
@@ -218,6 +228,7 @@ export class ProductRepository {
       q: query.q ?? null,
       category: query.category ?? null,
       sort: query.sort,
+      farmId: farmId ?? null,
     })
     const cursor = decodeCursor(query.cursor, ['sortKey', 'id', 'fingerprint'])
     let cursorCondition
@@ -253,6 +264,9 @@ export class ProductRepository {
       .innerJoin(activeMinimums, eq(activeMinimums.productId, product.id))
       .where(and(
         eq(product.status, 'published'),
+        farmId ? inArray(product.id, this.db.select({ productId: productFarm.productId }).from(productFarm)
+          .innerJoin(farm, eq(productFarm.farmId, farm.id))
+          .where(and(eq(productFarm.farmId, farmId), eq(farm.status, 'published')))) : undefined,
         query.category ? eq(product.category, query.category) : undefined,
         searchProducts(query.q),
         cursorCondition,
@@ -313,11 +327,13 @@ export class ProductRepository {
       ...variant,
       canPurchase: sellableVariantIds.has(id),
     }))
+    const linkedFarms = await readProductFarms(this.db, row.id, true)
     return {
       ...row,
       minPriceSatang: Math.min(...variants.map(({ priceSatang }) => priceSatang)),
       canPurchase: variants.some(({ canPurchase }) => canPurchase),
       variants,
+      farms: linkedFarms.map(({ status: _status, displayOrder, ...summary }) => ({ ...summary, displayOrder })),
     }
   }
 
@@ -361,14 +377,20 @@ export class ProductRepository {
     }
   }
 
-  async getAdminById(id: string): Promise<AdminProduct> {
+  async getAdminById(id: string): Promise<AdminProduct & { farms: import('../farms/types').AdminProductFarm[]; variants: AdminVariant[] }> {
     const [row] = await this.db.select(productProjection).from(product)
       .where(eq(product.id, id)).limit(1)
     if (!row) throw new DomainError('PRODUCT_NOT_FOUND')
     const variants = await this.db.select(variantProjection).from(productVariant)
       .where(eq(productVariant.productId, id))
       .orderBy(asc(productVariant.displayOrder), asc(productVariant.id))
-    return { ...row, variants }
+    const farms = await readProductFarms(this.db, id)
+    return { ...row, variants, farms }
+  }
+
+  replaceFarms(id: string, farmIds: string[], actor: ProductActor) {
+    const normalizedIds = normalizeFarmIds(farmIds)
+    return this.transaction(tx => replaceProductFarms(tx, id, normalizedIds, actor, this.audit))
   }
 
   private async transaction<T>(callback: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {

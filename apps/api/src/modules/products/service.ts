@@ -36,7 +36,7 @@ export class ProductService {
     return this.repository.listAdmin(query)
   }
 
-  async getAdminById(id: string): Promise<AdminProduct> {
+  async getAdminById(id: string): Promise<AdminProduct & { farms: import('../farms/types').AdminProductFarm[]; variants: AdminVariant[] }> {
     return this.repository.getAdminById(id)
   }
 
@@ -58,6 +58,10 @@ export class ProductService {
 
   async archiveProduct(id: string, actor: ProductActor): Promise<void> {
     return this.repository.archiveProduct(id, actor)
+  }
+
+  replaceFarms(id: string, farmIds: string[], actor: ProductActor) {
+    return this.repository.replaceFarms(id, farmIds, actor)
   }
 
   async createVariant(productId: string, input: CreateVariantInput, actor: ProductActor): Promise<AdminVariant> {

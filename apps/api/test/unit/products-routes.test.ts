@@ -41,6 +41,7 @@ const adminProduct = {
   updatedAt: new Date('2026-09-26T00:00:00.000Z'),
   publishedAt: null,
   archivedAt: null,
+  farms: [],
   variants: [],
 }
 
@@ -51,7 +52,7 @@ function createService(overrides: Record<string, (...args: never[]) => unknown> 
     getStoreBySlug: async (slug: string) => {
       calls.push('getStoreBySlug')
       if (slug !== storeProduct.slug) throw new DomainError('PRODUCT_NOT_FOUND')
-      return { ...storeProduct, description: 'Fresh coconut water', originStory: null, storageInstructions: null, variants: [
+      return { ...storeProduct, description: 'Fresh coconut water', originStory: null, storageInstructions: null, farms: [], variants: [
         { id: variantId, name: '1 litre', unit: 'bottle', priceSatang: 2500, displayOrder: 0, canPurchase: true },
       ] }
     },

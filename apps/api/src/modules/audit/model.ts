@@ -38,6 +38,7 @@ export const auditMetadataKeys = {
   'farm.unpublished': [],
   'farm.archived': [],
   'product.farms-replaced': ['farmIds'],
+  'seed.farm-provenance-applied': ['version', 'farmIds', 'farmLinks'],
   'inventory.received': ['variantId', 'warehouseId', 'quantity'],
   'inventory.written-off': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],
   'inventory.count-adjusted': ['variantId', 'warehouseId', 'quantityDelta', 'reasonCode'],

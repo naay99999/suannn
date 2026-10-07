@@ -1,4 +1,5 @@
 import type { AuditContext } from '../audit/model'
+import type { AdminProductFarm, StoreProductFarm } from '../farms/types'
 
 export type ProductCategory = 'fresh' | 'processed'
 export type ProductStatus = 'draft' | 'published' | 'archived'
@@ -50,6 +51,7 @@ export interface AdminProduct {
   updatedAt: Date
   publishedAt: Date | null
   archivedAt: Date | null
+  farms?: AdminProductFarm[]
   variants?: AdminVariant[]
 }
 
@@ -115,6 +117,7 @@ export interface StoreProductDetail extends StoreProductSummary {
   description: string | null
   originStory: string | null
   storageInstructions: string | null
+  farms: StoreProductFarm[]
   variants: StoreProductVariant[]
 }
 

@@ -1,11 +1,13 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
-import type { Database } from '../../database/types'
+import { and, count, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import type { Database, DatabaseTransaction } from '../../database/types'
 import {
   applicationSetting,
   auditLog,
   inventoryLot,
   inventoryOperation,
+  farm,
   product,
+  productFarm,
   productVariant,
   stockMovement,
   user,
@@ -13,6 +15,7 @@ import {
 } from '../../database/schema'
 import type { DemoSeedOptions } from '../seed-demo'
 import { buildDemoFixtures } from './fixtures'
+import { buildFarmDemoFixtures } from './farm-fixtures'
 
 export type DemoSeedResult = {
   status: 'created' | 'already-seeded'
@@ -20,6 +23,32 @@ export type DemoSeedResult = {
   variants: number
   lots: number
   movements: number
+  farms: number
+  farmLinks: number
+}
+
+async function seedFarmExtension(tx: DatabaseTransaction, actorId: string, now: Date) {
+  const fixture = buildFarmDemoFixtures(actorId, now)
+  const [marker] = await tx.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, fixture.markerId)).limit(1)
+  const farmRows = await tx.select({ id: farm.id }).from(farm).where(inArray(farm.id, fixture.farmIds))
+  if (marker) {
+    if (farmRows.length !== fixture.farmIds.length) throw new Error('DEMO_SEED_FARM_EXTENSION_CORRUPT')
+    const [linkCount] = await tx.select({ count: count() }).from(productFarm).where(inArray(productFarm.farmId, fixture.farmIds))
+    return { status: 'already-seeded' as const, farms: fixture.farmIds.length, farmLinks: Number(linkCount?.count ?? 0) }
+  }
+  if (farmRows.length > 0) throw new Error('DEMO_SEED_PARTIAL_FARM_EXTENSION')
+  const [idCollision] = await tx.select({ id: farm.id }).from(farm).where(inArray(farm.id, fixture.farmIds)).limit(1)
+  if (idCollision) throw new Error('DEMO_SEED_FARM_ID_COLLISION')
+  const [slugCollision] = await tx.select({ id: farm.id }).from(farm)
+    .where(inArray(farm.slug, fixture.farms.map(row => row.slug!))).limit(1)
+  if (slugCollision) throw new Error('DEMO_SEED_FARM_SLUG_COLLISION')
+  const [linkCollision] = await tx.select({ productId: productFarm.productId }).from(productFarm)
+    .where(inArray(productFarm.productId, fixture.productIds)).limit(1)
+  if (linkCollision) throw new Error('DEMO_SEED_FARM_LINK_COLLISION')
+  await tx.insert(farm).values(fixture.farms)
+  await tx.insert(productFarm).values(fixture.links)
+  await tx.insert(auditLog).values(fixture.audits)
+  return { status: 'created' as const, farms: fixture.farms.length, farmLinks: fixture.links.length }
 }
 
 export async function seedDemo(
@@ -80,8 +109,10 @@ export async function seedDemo(
     const expected = manifest.productIds.length + manifest.variantIds.length + manifest.lotIds.length
       + manifest.operationIds.length + manifest.movementIds.length + manifest.auditIds.length
 
-    if (found === expected) {
-      return { status: 'already-seeded', products: 8, variants: 12, lots: 16, movements: 18 }
+    const baseAlreadySeeded = found === expected
+    if (baseAlreadySeeded) {
+      const extension = await seedFarmExtension(tx, actor.id, now)
+      return { status: extension.status === 'created' ? 'created' : 'already-seeded', products: 8, variants: 12, lots: 16, movements: 18, farms: extension.farms, farmLinks: extension.farmLinks }
     }
     if (found > 0) throw new Error('DEMO_SEED_PARTIAL_FIXTURE')
 
@@ -101,7 +132,7 @@ export async function seedDemo(
     await tx.insert(inventoryOperation).values(fixtures.operations)
     await tx.insert(stockMovement).values(fixtures.movements)
     await tx.insert(auditLog).values(fixtures.audits)
-
-    return { status: 'created', products: 8, variants: 12, lots: 16, movements: 18 }
+    const extension = await seedFarmExtension(tx, actor.id, now)
+    return { status: 'created', products: 8, variants: 12, lots: 16, movements: 18, farms: extension.farms, farmLinks: extension.farmLinks }
   })
 }

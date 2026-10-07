@@ -5,6 +5,7 @@ const nullableString = t.Union([t.String(), t.Null()])
 const nullableDate = t.Union([t.Date(), t.Null()])
 const category = t.Union([t.Literal('fresh'), t.Literal('processed')])
 const status = t.Union([t.Literal('draft'), t.Literal('published'), t.Literal('archived')])
+const farmStatus = status
 const productSlug = t.String({ minLength: 1, maxLength: 100, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' })
 const sku = t.String({ minLength: 1, maxLength: 64, pattern: '^[A-Z0-9._-]+$' })
 const inputSlug = t.String({ minLength: 1, maxLength: 100 })
@@ -39,11 +40,20 @@ const storeVariant = t.Object({
   canPurchase: t.Boolean({ description: 'True when this variant has eligible unreserved inventory in the default warehouse; reservation confirms availability.' }),
 }, { additionalProperties: false })
 
+const productFarmRecord = t.Object({
+  id: uuid, slug: t.String({ maxLength: 100 }), name: t.String({ maxLength: 160 }),
+  farmerName: nullableString, province: nullableString, district: nullableString,
+  summary: t.Union([t.String({ maxLength: 300 }), t.Null()]),
+  coverImageUrl: imageUrl, coverImageAlt: t.Union([t.String({ maxLength: 200 }), t.Null()]),
+  isDemo: t.Boolean(), displayOrder: t.Integer({ minimum: 0, maximum: 19 }),
+}, { additionalProperties: false })
+
 const storeProductDetail = t.Object({
   ...storeProductSummary.properties,
   description: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   originStory: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   storageInstructions: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
+  farms: t.Array(t.Object({ ...productFarmRecord.properties }, { additionalProperties: false })),
   variants: t.Array(storeVariant),
 }, { additionalProperties: false })
 
@@ -85,6 +95,7 @@ const adminProductFields = {
 
 const adminProduct = t.Object({
   ...adminProductFields,
+  farms: t.Array(t.Object({ ...productFarmRecord.properties, status: farmStatus }, { additionalProperties: false })),
   variants: t.Array(adminVariant),
 }, { additionalProperties: false })
 
@@ -155,6 +166,8 @@ const updateVariantBody = t.Object({
   displayOrder: t.Optional(t.Integer({ minimum: 0, maximum: 1_000_000 })),
   minRemainingShelfLifeDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
 }, { additionalProperties: false, minProperties: 1 })
+const productFarmBody = t.Object({ farmIds: t.Array(uuid, { maxItems: 20 }) }, { additionalProperties: false })
+const adminProductFarm = t.Object({ ...productFarmRecord.properties, status: farmStatus }, { additionalProperties: false })
 
 export const productModels = {
   'product.storeSummary': storeProductSummary,
@@ -174,4 +187,6 @@ export const productModels = {
   'product.updateBody': updateProductBody,
   'product.createVariantBody': createVariantBody,
   'product.updateVariantBody': updateVariantBody,
+  'product.farmsBody': productFarmBody,
+  'product.adminFarms': t.Array(adminProductFarm),
 }
