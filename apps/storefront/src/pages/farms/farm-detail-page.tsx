@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
@@ -7,9 +8,12 @@ import { FarmImage } from '@/components/farms/farm-image'
 import { ProductCard } from '@/components/product-card'
 import { getStoreFarm, getStoreFarmProducts, StoreFarmRequestError, storeFarmDetailQueryKey, storeFarmProductsQueryKey } from '@/lib/store-farms'
 import { FarmStory } from './_components/farm-story'
+import { useFarmMotion } from './_components/use-farm-motion'
 
 export function Component() {
   const { slug = '' } = useParams()
+  const scope = useRef<HTMLDivElement>(null)
+  useFarmMotion(scope, slug)
   const farm = useQuery({ queryKey: storeFarmDetailQueryKey(slug), queryFn: () => getStoreFarm(slug), enabled: Boolean(slug) })
   const products = useInfiniteQuery({
     queryKey: storeFarmProductsQueryKey(slug, { limit: 12 }),
@@ -20,19 +24,19 @@ export function Component() {
   })
   const items = products.data?.pages.flatMap(page => page.items) ?? []
 
-  if (farm.isPending) return <p role="status" className="py-20 text-center text-muted-foreground">กำลังโหลดข้อมูลสวน...</p>
+  if (farm.isPending) return <div ref={scope} className="w-full max-w-full overflow-x-clip"><p role="status" className="py-20 text-center text-muted-foreground">กำลังโหลดข้อมูลสวน...</p></div>
   if (farm.isError && farm.error instanceof StoreFarmRequestError && farm.error.status === 404) return (
-    <Empty className="min-h-[50svh]">
+    <div ref={scope} className="w-full max-w-full overflow-x-clip"><Empty className="min-h-[50svh]">
       <EmptyHeader><EmptyTitle><h1>ไม่พบโปรไฟล์สวนนี้</h1></EmptyTitle><EmptyDescription>สวนนี้อาจยังไม่เปิดเผยข้อมูลหรือไม่มีอยู่ในร้าน</EmptyDescription></EmptyHeader>
       <EmptyContent><Link className={buttonVariants()} to="/farms">กลับไปดูสวนทั้งหมด</Link></EmptyContent>
-    </Empty>
+    </Empty></div>
   )
-  if (farm.isError || !farm.data) return <div role="alert" className="flex flex-wrap items-center justify-center gap-3 py-20"><p>โหลดข้อมูลสวนไม่ได้</p><Button variant="outline" onClick={() => void farm.refetch()}>ลองอีกครั้ง</Button></div>
+  if (farm.isError || !farm.data) return <div ref={scope} className="w-full max-w-full overflow-x-clip"><div role="alert" className="flex flex-wrap items-center justify-center gap-3 py-20"><p>โหลดข้อมูลสวนไม่ได้</p><Button variant="outline" onClick={() => void farm.refetch()}>ลองอีกครั้ง</Button></div></div>
 
   const profile = farm.data
   const location = [profile.district, profile.province].filter(Boolean).join(' · ')
   return (
-    <div className="w-full max-w-full overflow-x-clip">
+    <div ref={scope} className="w-full max-w-full overflow-x-clip">
       <title>{`${profile.name} | suannn`}</title>
       <div className="page-width">
         <Breadcrumb aria-label="เส้นทางหน้าโปรไฟล์สวน">

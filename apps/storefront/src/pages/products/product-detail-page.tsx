@@ -11,6 +11,7 @@ import { getStoreProduct, getStoreProducts, formatStorePrice, storeCategoryLabel
 import { ProductGallery } from './_components/product-gallery'
 import { AddToCart } from './_components/add-to-cart'
 import { ProductInformation } from './_components/product-information'
+import { ProductFarms } from '@/components/farms/product-farms'
 import { RelatedProductsCarousel } from './_components/related-products-carousel'
 import { useProductMotion } from './_components/use-product-motion'
 
@@ -85,6 +86,7 @@ export function Component() {
             <dt className="text-muted-foreground">สถานะ</dt><dd>{item.canPurchase ? 'พร้อมสั่งซื้อ' : 'ขณะนี้ยังสั่งซื้อไม่ได้'}</dd>
           </dl>
           <ProductInformation product={item} />
+          <ProductFarms farms={item.farms} />
         </div>
       </section>
       {related.isError ? <p role="status" className="mt-16 text-sm text-muted-foreground">โหลดสินค้าอื่นที่เกี่ยวข้องไม่ได้</p> : null}

@@ -20,6 +20,7 @@ import { ToggleGroup, ToggleGroupItem } from '@workspace/ui/components/toggle-gr
 import { cn } from '@workspace/ui/lib/utils'
 import { principles } from './home-data'
 import { getStoreProducts, storeProductQueryKey } from '@/lib/store-products'
+import { FeaturedFarms } from '@/components/farms/featured-farms'
 import { ProductCard } from '@/components/product-card'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
@@ -378,6 +379,7 @@ export function Component() {
             ))}
           </div>
         </div>
+        <FeaturedFarms />
       </section>
 
       <section

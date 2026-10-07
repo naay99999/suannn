@@ -138,6 +138,7 @@ function StorefrontShell() {
               <Link className="nav-link" to="/#from-the-farm">
                 ความโปร่งใสของสินค้า
               </Link>
+              <Link className="nav-link" to="/farms">สวนและคนปลูก</Link>
             </div>
           </div>
         </div>
