@@ -84,3 +84,10 @@ export function normalizeFarmIds(ids: string[]): string[] {
     || new Set(ids).size !== ids.length) throw new DomainError('INVALID_FARM_ASSOCIATION')
   return ids
 }
+
+export function assertFarmCanTransition(from: string, to: 'published' | 'draft' | 'archived') {
+  const allowed = (to === 'published' && from === 'draft')
+    || (to === 'draft' && from === 'published')
+    || (to === 'archived' && (from === 'draft' || from === 'published'))
+  if (!allowed) throw new DomainError('FARM_STATE_CONFLICT')
+}
