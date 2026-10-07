@@ -66,6 +66,7 @@ function createService(overrides: Record<string, (...args: never[]) => unknown> 
     createVariant: async () => { calls.push('createVariant'); return { id: variantId, productId, sku: 'COCO-1L', name: '1 litre', unit: 'bottle', priceSatang: 2500, salesEnabled: true, displayOrder: 0, createdAt: adminProduct.createdAt, updatedAt: adminProduct.updatedAt, archivedAt: null } },
     updateVariant: async () => { calls.push('updateVariant'); return { id: variantId, productId, sku: 'COCO-1L', name: '1 litre', unit: 'bottle', priceSatang: 2500, salesEnabled: true, displayOrder: 0, createdAt: adminProduct.createdAt, updatedAt: adminProduct.updatedAt, archivedAt: null } },
     archiveVariant: async () => { calls.push('archiveVariant') },
+    replaceFarms: async () => { calls.push('replaceFarms'); return [] },
     ...overrides,
   }
   return { service: service as unknown as ProductService, calls }
@@ -184,6 +185,15 @@ describe('products HTTP contracts', () => {
     expect(await response.json()).toMatchObject({ id: productId, variants: [] })
   })
 
+  it('replaces an ordered product farm list through a guarded catalog update', async () => {
+    const { app, calls } = createApp()
+    const response = await app.handle(request(`/api/v1/admin/products/${productId}/farms`, {
+      method: 'PUT', body: JSON.stringify({ farmIds: [productId] }),
+    }, 'catalog_manager'))
+    expect(response.status).toBe(200)
+    expect(calls).toEqual(['replaceFarms'])
+  })
+
   it('rejects customer and support product writes', async () => {
     const { app, calls } = createApp()
     const body = JSON.stringify({ slug: 'coconut', name: 'Coconut', category: 'fresh' })
@@ -285,6 +295,7 @@ describe('products HTTP contracts', () => {
       ['/api/v1/admin/products/{id}/variants', 'post'],
       ['/api/v1/admin/products/{id}/variants/{variantId}', 'patch'],
       ['/api/v1/admin/products/{id}/variants/{variantId}', 'delete'],
+      ['/api/v1/admin/products/{id}/farms', 'put'],
     ]
 
     expect(response.status).toBe(200)

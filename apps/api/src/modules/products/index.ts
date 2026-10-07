@@ -10,8 +10,6 @@ import type { ProductService } from './service'
 import type {
   CreateProductInput,
   CreateVariantInput,
-  AdminProduct,
-  AdminVariant,
   ProductActor,
   StoreProductQuery,
   AdminProductQuery,
@@ -103,7 +101,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
         tags: ['Admin Products'], security: staffSecurity,
       },
     })
-    .get('/:id', ({ params }) => service.getAdminById(params.id) as Promise<AdminProduct & { variants: AdminVariant[] }>, {
+    .get('/:id', ({ params }) => service.getAdminById(params.id), {
       permission: { catalog: ['read'] },
       params: 'product.idParams',
       response: { 200: 'product.adminProduct', ...errors },
@@ -233,6 +231,21 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       detail: {
         summary: 'Archive a product variant',
         description: 'Archives an active variant while preserving its SKU and stable ID. Requires catalog:delete permission.',
+        tags: ['Admin Products'], security: staffSecurity,
+      },
+    })
+    .put('/:id/farms', ({ params, body, user, requestContext }) => service.replaceFarms(
+      params.id, (body as { farmIds: string[] }).farmIds, productActor(user.id, requestContext),
+    ), {
+      parse: [parseStrictJsonBody(['farmIds']), 'json'],
+      browserMutation: 'admin',
+      permission: { catalog: ['update'] },
+      params: 'product.idParams',
+      body: 'product.farmsBody',
+      response: { 200: 'product.adminFarms', ...errors },
+      detail: {
+        summary: 'Replace a product’s farm sources',
+        description: 'Atomically replaces the ordered list of farm sources. Requires catalog:update permission.',
         tags: ['Admin Products'], security: staffSecurity,
       },
     })

@@ -18,6 +18,7 @@ import { createStoreCheckoutModule } from './modules/checkout'
 import { createStripeWebhookModule } from './modules/payments/stripe'
 import { createAdminOrdersModule, createStoreOrdersModule } from './modules/orders'
 import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
+import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
 import type { CustomerProfileService } from './modules/customer/profile/service'
@@ -37,6 +38,7 @@ import type { StripeEventService } from './modules/payments/stripe/events'
 import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
+import type { FarmService } from './modules/farms/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
@@ -59,6 +61,7 @@ export interface AppDependencies {
   staff: StaffService
   systemSettings: SystemSettingsService
   products: ProductService
+  farms: FarmService
   inventory: InventoryService
   cart: CartService
   quote: QuoteService
@@ -121,6 +124,8 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createAuditModule(dependencies.auth, dependencies.audit))
     .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
+    .use(createStoreFarmsModule(dependencies.farms))
+    .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))

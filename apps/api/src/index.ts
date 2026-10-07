@@ -26,6 +26,7 @@ import { DatabaseStaffMfaStore } from './modules/auth/mfa/repository'
 import { SystemSettingsRepository } from './modules/settings/repository'
 import { SystemSettingsService } from './modules/settings/service'
 import { ProductRepository } from './modules/products/repository'
+import { FarmRepository, FarmService } from './modules/farms'
 import { ProductService } from './modules/products/service'
 import { InventoryReadRepository } from './modules/inventory/read-repository'
 import { InventoryStockRepository } from './modules/inventory/stock-repository'
@@ -74,7 +75,9 @@ const inventory = new InventoryService(
   inventoryReadRepository,
   inventoryReservations,
 )
-const products = new ProductService(new ProductRepository(database.db, audit, inventoryReadRepository))
+const productRepository = new ProductRepository(database.db, audit, inventoryReadRepository)
+const products = new ProductService(productRepository)
+const farms = new FarmService(new FarmRepository(database.db, audit), productRepository)
 const cartRepository = new CartRepository(database.db, inventoryReadRepository)
 const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
@@ -133,6 +136,7 @@ const app = await createApp(config, {
   staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
   systemSettings,
   products,
+  farms,
   inventory,
   cart,
   quote,

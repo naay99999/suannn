@@ -32,6 +32,7 @@ export interface AdminFarm extends FarmDetail {
   publishedAt: Date | null; archivedAt: Date | null
 }
 export type AdminProductFarm = FarmSummary & { status: FarmStatus; displayOrder: number }
+export type StoreProductFarm = FarmSummary & { displayOrder: number }
 export interface FarmListQuery { limit?: number; cursor?: string }
 export interface AdminFarmQuery { status?: FarmStatus; limit?: number; cursor?: string }
 export type FarmPage<T> = CursorPage<T>

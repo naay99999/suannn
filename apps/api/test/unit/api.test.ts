@@ -88,6 +88,7 @@ const app = await createApp(config, {
     setStaffMfaRequired: async (staffMfaRequired: boolean) => ({ staffMfaRequired }),
   } as never,
   products: {} as ProductService,
+  farms: {} as never,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit),
     inventoryReadRepository,

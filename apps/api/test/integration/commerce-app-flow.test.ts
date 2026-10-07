@@ -28,6 +28,7 @@ import { SystemSettingsRepository } from '../../src/modules/settings/repository'
 import { SystemSettingsService } from '../../src/modules/settings/service'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
+import { FarmRepository, FarmService } from '../../src/modules/farms'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { InventoryReservationRepository } from '../../src/modules/inventory/reservation-repository'
 import { InventoryService } from '../../src/modules/inventory/service'
@@ -76,6 +77,7 @@ const app = await createApp(config, {
   staff: new StaffService(new StaffRepository(database.db, audit, async () => false)),
   systemSettings: new SystemSettingsService(new SystemSettingsRepository(database.db, audit)),
   products: new ProductService(new ProductRepository(database.db, audit, inventoryRead)),
+  farms: new FarmService(new FarmRepository(database.db, audit), new ProductRepository(database.db, audit, inventoryRead)),
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit), inventoryRead,
     new InventoryReservationRepository(database.db),

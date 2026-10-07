@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import { Elysia } from 'elysia'
-import { createStoreFarmsModule } from '../../src/modules/farms'
+import { createAdminFarmsModule, createStoreFarmsModule } from '../../src/modules/farms'
 import type { FarmService } from '../../src/modules/farms/service'
+import { loadConfig } from '../../src/config/env'
+import type { Auth } from '../../src/plugins/auth/auth'
 import { DomainError } from '../../src/shared/domain-error'
 import { createErrorHandlingPlugin } from '../../src/plugins/error-handling'
+import { testEnv } from '../fixtures'
 
 const farmDetail = {
   id: '00000000-0000-4000-8000-000000000001', slug: 'suan-som', name: 'สวนส้ม', farmerName: 'คุณสม',
@@ -16,6 +19,7 @@ const page = { items: [{
   province: farmDetail.province, district: null, summary: farmDetail.summary,
   coverImageUrl: farmDetail.coverImageUrl, coverImageAlt: farmDetail.coverImageAlt, isDemo: true,
 }], nextCursor: null }
+const config = loadConfig(testEnv)
 
 function createApp(overrides: Record<string, (...args: never[]) => unknown> = {}) {
   const service = {
@@ -56,5 +60,25 @@ describe('store farm HTTP contracts', () => {
     const response = await app.handle(new Request('http://localhost/api/v1/store/farms/suan-som/products?limit=5'))
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ items: [], nextCursor: null })
+  })
+
+  it('protects staff farm reads with the catalog permission', async () => {
+    const auth = {
+      api: {
+        getSession: async ({ headers }: { headers: Headers }) => {
+          const role = headers.get('cookie')?.replace('session=', '')
+          if (!role) return null
+          if (role === 'customer') return { user: { id: 'customer', accountType: 'customer' }, session: { id: 'session' } }
+          return { user: { id: 'staff', accountType: 'staff' }, staff: { role, permissions: [] }, session: { id: 'session' } }
+        },
+        generateOpenAPISchema: async () => ({ components: {}, paths: {} }),
+      },
+      handler: async () => new Response(),
+    } as unknown as Auth
+    const service = { listAdmin: async () => ({ items: [], nextCursor: null }) } as unknown as FarmService
+    const app = new Elysia().use(createErrorHandlingPlugin()).use(createAdminFarmsModule(config, auth, service))
+    const request = (role: string) => new Request('http://localhost/api/v1/admin/farms', { headers: { cookie: `session=${role}` } })
+    expect((await app.handle(request('catalog_manager'))).status).toBe(200)
+    expect((await app.handle(request('customer'))).status).toBe(403)
   })
 })
