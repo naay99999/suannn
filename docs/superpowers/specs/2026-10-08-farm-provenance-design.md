@@ -2,7 +2,7 @@
 
 Date: 2026-10-08
 
-Status: Conversational design approved. Written spec awaiting human review.
+Status: Written spec approved by the human on 2026-10-08. Implementation plan awaiting review and execution-method selection.
 
 ## 1. Intent and approved scope
 
