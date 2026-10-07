@@ -12,7 +12,7 @@ import { ProductGallery } from './_components/product-gallery'
 import { AddToCart } from './_components/add-to-cart'
 import { ProductInformation } from './_components/product-information'
 import { ProductFarms } from '@/components/farms/product-farms'
-import { RelatedProductsCarousel } from './_components/related-products-carousel'
+import { RelatedProductsCarousel, relatedProductLimit } from './_components/related-products-carousel'
 import { useProductMotion } from './_components/use-product-motion'
 
 export function Component() {
@@ -25,8 +25,8 @@ export function Component() {
   })
   const [selectedVariantId, setSelectedVariantId] = useState('')
   const related = useQuery({
-    queryKey: storeProductQueryKey({ category: product.data?.category, limit: 5 }),
-    queryFn: () => getStoreProducts({ category: product.data!.category, limit: 5 }),
+    queryKey: storeProductQueryKey({ category: product.data?.category, limit: relatedProductLimit + 1 }),
+    queryFn: () => getStoreProducts({ category: product.data!.category, limit: relatedProductLimit + 1 }),
     enabled: Boolean(product.data),
   })
 
@@ -45,7 +45,7 @@ export function Component() {
 
   const item = product.data
   const selectedVariant = item.variants.find(variant => variant.id === selectedVariantId) ?? item.variants.find(variant => variant.canPurchase) ?? item.variants[0]
-  const relatedProducts = related.data?.items.filter(candidate => candidate.slug !== item.slug) ?? []
+  const relatedProducts = related.data?.items.filter(candidate => candidate.slug !== item.slug).slice(0, relatedProductLimit) ?? []
 
   return (
     <div ref={scope}>

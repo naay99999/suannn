@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ShoppingBag01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
-import { Button } from '@workspace/ui/components/button'
+import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '@workspace/ui/components/sheet'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@workspace/ui/components/empty'
 import { formatStorePrice } from '@/lib/store-products'
@@ -40,7 +40,7 @@ export function SideCart() {
         {lines.length === 0 ? (
           <Empty className="h-full px-0">
             <EmptyHeader><EmptyTitle>ตะกร้ายังว่างอยู่</EmptyTitle><EmptyDescription>เลือกสินค้าจากร้านแล้วเพิ่มลงตะกร้าได้เลย</EmptyDescription></EmptyHeader>
-            <EmptyContent><Button render={<Link to="/products" />} onClick={() => setOpen(false)}>ไปเลือกสินค้า</Button></EmptyContent>
+            <EmptyContent><Link className={buttonVariants()} to="/products" onClick={() => setOpen(false)}>ไปเลือกสินค้า</Link></EmptyContent>
           </Empty>
         ) : (
           <ul className="flex flex-col gap-6">

@@ -10,8 +10,8 @@ import { AuthRequestError, signIn } from '@/lib/auth-client'
 import { safeCustomerReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
 import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
 import { mergeCustomerCartOnce } from '@/lib/store-cart'
-import { AuthPageFrame } from './auth-layout'
 import { signInSchema, type SignInValues } from './auth-schemas'
+import { AuthPageFrame } from './auth-layout'
 
 export function Component() {
   const [searchParams] = useSearchParams()
@@ -56,27 +56,29 @@ export function Component() {
   }
 
   return (
-    <AuthPageFrame title="กลับมาเลือกสิ่งดี ๆ จากสวน" description="เข้าสู่ระบบเพื่อดูบัญชี ที่อยู่ และคำสั่งซื้อของคุณ">
+    <AuthPageFrame title="เข้าสู่ระบบ" description="ดูคำสั่งซื้อและจัดการบัญชีของคุณ">
       <title>เข้าสู่ระบบ | suannn</title>
-      <form noValidate onSubmit={handleSubmit(submit)} className="max-w-md">
+      <form noValidate onSubmit={handleSubmit(submit)} aria-busy={pending}>
         <FieldGroup className="gap-5">
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="sign-in-email">อีเมล</FieldLabel>
-            <Input id="sign-in-email" type="email" autoComplete="email" aria-invalid={Boolean(errors.email)} {...register('email')} />
-            <FieldError>{errors.email?.message}</FieldError>
+            <Input id="sign-in-email" className="h-12 text-base md:text-base" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'sign-in-email-error' : undefined} {...register('email')} />
+            <FieldError id="sign-in-email-error">{errors.email?.message}</FieldError>
           </Field>
           <Field data-invalid={Boolean(errors.password)}>
-            <FieldLabel htmlFor="sign-in-password">รหัสผ่าน</FieldLabel>
-            <Input id="sign-in-password" type="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} {...register('password')} />
-            <FieldError>{errors.password?.message}</FieldError>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <FieldLabel htmlFor="sign-in-password">รหัสผ่าน</FieldLabel>
+              <Link className="inline-flex min-h-11 items-center text-sm font-medium text-primary-ink underline underline-offset-4 transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" to="/forgot-password">ลืมรหัสผ่าน?</Link>
+            </div>
+            <Input id="sign-in-password" className="h-12 text-base md:text-base" type="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'sign-in-password-error' : undefined} {...register('password')} />
+            <FieldError id="sign-in-password-error">{errors.password?.message}</FieldError>
           </Field>
-          <div className="flex justify-end"><Link className="text-sm font-medium text-primary-ink underline underline-offset-4" to="/forgot-password">ลืมรหัสผ่าน?</Link></div>
           {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
           {staffFlow && <a className="text-sm font-semibold text-primary-ink underline underline-offset-4" href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')}>ไปหน้าเข้าสู่ระบบผู้ดูแล</a>}
           <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Button>
         </FieldGroup>
       </form>
-      <p className="mt-6 text-sm text-muted-foreground">ยังไม่มีบัญชี? <Link className="font-semibold text-primary-ink underline underline-offset-4" to="/sign-up">สมัครสมาชิก</Link></p>
+      <p className="mt-5 flex flex-wrap items-center justify-center gap-x-2 text-sm text-muted-foreground">ยังไม่มีบัญชี? <Link className="inline-flex min-h-11 items-center font-semibold text-primary-ink underline underline-offset-4 transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" to="/sign-up">สมัครสมาชิก</Link></p>
     </AuthPageFrame>
   )
 }

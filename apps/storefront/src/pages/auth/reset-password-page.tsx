@@ -41,18 +41,18 @@ export function Component() {
     <AuthPageFrame title="ตั้งรหัสผ่านใหม่" description="เลือกรหัสผ่านใหม่ที่มีอย่างน้อย 12 ตัวอักษร">
       <title>ตั้งรหัสผ่านใหม่ | suannn</title>
       {!token ? <p role="alert" className="text-destructive">ไม่พบรหัสสำหรับตั้งรหัสผ่านใหม่</p> : completed ? (
-        <div role="status" className="max-w-md rounded-3xl bg-accent p-7"><p>ตั้งรหัสผ่านใหม่แล้ว</p><Button render={<Link to="/sign-in" />} nativeButton={false} size="storefront" className="mt-5">เข้าสู่ระบบ</Button></div>
+        <div role="status"><p className="leading-7">ตั้งรหัสผ่านใหม่แล้ว</p><Button render={<Link to="/sign-in" />} nativeButton={false} size="storefront" className="mt-5 w-full">เข้าสู่ระบบ</Button></div>
       ) : (
-        <form noValidate onSubmit={handleSubmit(submit)} className="max-w-md">
+        <form noValidate onSubmit={handleSubmit(submit)} aria-busy={pending}>
           <FieldGroup className="gap-5">
-            <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="reset-password">รหัสผ่านใหม่</FieldLabel><Input id="reset-password" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} {...register('password')} /><FieldError>{errors.password?.message}</FieldError></Field>
-            <Field data-invalid={Boolean(errors.confirmPassword)}><FieldLabel htmlFor="reset-confirm">ยืนยันรหัสผ่านใหม่</FieldLabel><Input id="reset-confirm" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} {...register('confirmPassword')} /><FieldError>{errors.confirmPassword?.message}</FieldError></Field>
+            <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="reset-password">รหัสผ่านใหม่</FieldLabel><Input id="reset-password" className="h-12 text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'reset-password-error' : undefined} {...register('password')} /><FieldError id="reset-password-error">{errors.password?.message}</FieldError></Field>
+            <Field data-invalid={Boolean(errors.confirmPassword)}><FieldLabel htmlFor="reset-confirm">ยืนยันรหัสผ่านใหม่</FieldLabel><Input id="reset-confirm" className="h-12 text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} aria-describedby={errors.confirmPassword ? 'reset-confirm-error' : undefined} {...register('confirmPassword')} /><FieldError id="reset-confirm-error">{errors.confirmPassword?.message}</FieldError></Field>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" size="storefront" disabled={pending}>{pending ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}</Button>
+            <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}</Button>
           </FieldGroup>
         </form>
       )}
-      <p className="mt-6 text-sm"><Link className="font-semibold text-primary-ink underline underline-offset-4" to="/forgot-password">ขอลิงก์ใหม่</Link></p>
+      {!completed && <p className="mt-5 text-center text-sm"><Link className="inline-flex min-h-11 items-center font-semibold text-primary-ink underline underline-offset-4 transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" to="/forgot-password">ขอลิงก์ใหม่</Link></p>}
     </AuthPageFrame>
   )
 }

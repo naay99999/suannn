@@ -20,8 +20,8 @@ import { ToggleGroup, ToggleGroupItem } from '@workspace/ui/components/toggle-gr
 import { cn } from '@workspace/ui/lib/utils'
 import { principles } from './home-data'
 import { getStoreProducts, storeProductQueryKey } from '@/lib/store-products'
+import { ProductRecommendations, recommendationLimit } from '@/components/product-recommendations'
 import { FeaturedFarms } from '@/components/farms/featured-farms'
-import { ProductCard } from '@/components/product-card'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
@@ -57,8 +57,8 @@ export function Component() {
   const [paused, setPaused] = useState(false)
   const { hash, key } = useLocation()
   const featured = useQuery({
-    queryKey: storeProductQueryKey({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: 4 }),
-    queryFn: () => getStoreProducts({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: 4 }),
+    queryKey: storeProductQueryKey({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: recommendationLimit }),
+    queryFn: () => getStoreProducts({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: recommendationLimit }),
   })
   const visibleProducts = featured.data?.items ?? []
 
@@ -269,15 +269,9 @@ export function Component() {
             <EmptyContent><Button variant="outline" onClick={() => setCategory('all')}>ดูสินค้าทั้งหมด</Button></EmptyContent>
           </Empty>
         ) : null}
-        {visibleProducts.length > 0 ? <div className={cn(
-          'mt-10 grid grid-flow-dense gap-x-5 gap-y-10',
-          category === 'all' && 'grid-cols-2 lg:grid-cols-4',
-          category === 'fresh' && 'grid-cols-1 sm:grid-cols-3',
-          category === 'processed' && 'max-w-sm grid-cols-1',
-        )}>
-          {visibleProducts.map(product => <ProductCard key={product.id} product={product} />)}
+        {visibleProducts.length > 0 ? <div className="mt-10">
+          <ProductRecommendations key={category} products={visibleProducts} label="สินค้าแนะนำ" />
         </div> : null}
-        {featured.data ? <p role="status" className="mt-7 text-xs leading-6 text-muted-foreground">แสดง {visibleProducts.length} รายการ</p> : null}
       </section>
 
       <section
@@ -361,7 +355,7 @@ export function Component() {
               จากคนปลูก ผ่านสวน ถึงคุณ
             </div>
           </div>
-          <div className="farm-cards flex flex-col gap-6">
+        <div className="farm-cards flex flex-col gap-6">
             {principles.map((principle) => (
               <article key={principle.number} className="farm-card">
                 <div className="farm-card-inner">

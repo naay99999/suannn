@@ -2,12 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
+import { Skeleton } from '@workspace/ui/components/skeleton'
 import { ProductCard } from '@/components/product-card'
 import { getStoreProducts, readCatalogFilters, storeProductQueryKey, type StoreProductQuery } from '@/lib/store-products'
-import { CatalogFilters } from './_components/catalog-filters'
+import { CatalogFilters, CatalogToolbar } from './_components/catalog-filters'
 import { useProductMotion } from './_components/use-product-motion'
 
 const pageSize = 24
+const gridClassName = 'grid grid-flow-dense grid-cols-1 gap-x-3 gap-y-7 @min-[320px]/catalog:grid-cols-2 @min-[640px]/catalog:grid-cols-3 @min-[640px]/catalog:gap-x-5 @min-[950px]/catalog:grid-cols-4'
 
 export function ProductCatalog({ fixedCategory, title = 'สินค้าจากสวน' }: { fixedCategory?: StoreProductQuery['category']; title?: string }) {
   const [params, setParams] = useSearchParams()
@@ -33,45 +35,50 @@ export function ProductCatalog({ fixedCategory, title = 'สินค้าจ�
   }
 
   return (
-    <div ref={scope} className="w-full max-w-full overflow-x-hidden">
+    <div ref={scope} className="@container/catalog w-full max-w-full">
       <title>{`${title} | suannn`}</title>
       <section aria-labelledby="catalog-list-title">
-        <div className="mb-6">
-          <h1 id="catalog-list-title" className="section-heading">{title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">ดูราคาและสถานะซื้อได้จากข้อมูลสินค้าปัจจุบัน</p>
+        <header className="catalog-reveal mb-6 border-b pb-6">
+          <h1 id="catalog-list-title" className="section-heading max-w-5xl">{title}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">ผลไม้สดและของอร่อย เลือกที่ถูกใจได้เลย</p>
+        </header>
+        <div className="grid gap-5 @min-[900px]/catalog:grid-cols-[176px_minmax(0,1fr)] @min-[900px]/catalog:gap-8">
+          <CatalogFilters fixedCategory={fixedCategory} />
+          <section aria-label="รายการสินค้า" className="min-w-0">
+            <CatalogToolbar count={products.data?.items.length ?? 0} pending={products.isPending} fetching={products.isFetching} failed={products.isError} />
+            {products.isPending && <div aria-busy="true" aria-label="กำลังโหลดรายการสินค้า" className={gridClassName}>
+              {Array.from({ length: 8 }, (_, index) => <div key={index} aria-hidden="true" className="flex flex-col gap-3 rounded-2xl border p-3">
+                <Skeleton className="aspect-square w-full rounded-xl" />
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="h-11 w-full" />
+              </div>)}
+            </div>}
+            {products.isError && <div role="alert" className="flex flex-col items-start gap-3 py-8">
+              <p className="font-medium">โหลดรายการสินค้าไม่ได้ กรุณาลองอีกครั้ง</p>
+              <Button variant="outline" className="min-h-11" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button>
+            </div>}
+            {products.data && !products.data.items.length && <Empty className="py-16">
+              <EmptyHeader><EmptyTitle>ไม่พบสินค้า</EmptyTitle><EmptyDescription>ลองเปลี่ยนคำค้นหาหรือกลับไปดูสินค้าทั้งหมด</EmptyDescription></EmptyHeader>
+              <EmptyContent>
+                {fixedCategory
+                  ? <Link className={buttonVariants({ variant: 'outline', className: 'min-h-11' })} to="/products">ดูสินค้าทั้งหมด</Link>
+                  : <Button variant="outline" className="min-h-11" onClick={resetFilters}>ล้างตัวกรอง</Button>}
+              </EmptyContent>
+            </Empty>}
+            {products.data?.items.length ? <div className={gridClassName}>
+              {products.data.items.map(product => <ProductCard key={product.id} product={product} appearance="catalog" />)}
+            </div> : null}
+            {products.data?.nextCursor && <div className="mt-8 flex justify-center">
+              <Button variant="outline" className="min-h-11 px-6" disabled={products.isFetching} onClick={loadNextPage}>ดูสินค้าเพิ่มเติม</Button>
+            </div>}
+          </section>
         </div>
-        <CatalogFilters count={products.data?.items.length ?? 0} fixedCategory={fixedCategory} />
-        {products.isPending ? <p className="mt-8 text-muted-foreground" role="status">กำลังโหลดสินค้า...</p> : null}
-        {products.isError ? (
-          <div role="alert" className="mt-8 flex flex-wrap items-center gap-3">
-            <p>โหลดรายการสินค้าไม่ได้ กรุณาลองอีกครั้ง</p>
-            <Button variant="outline" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button>
-          </div>
-        ) : null}
-        {products.data && !products.data.items.length ? (
-          <Empty className="my-12 border py-20">
-            <EmptyHeader><EmptyTitle>ไม่พบสินค้า</EmptyTitle><EmptyDescription>ลองเปลี่ยนคำค้นหาหรือกลับไปดูสินค้าทั้งหมด</EmptyDescription></EmptyHeader>
-            <EmptyContent>
-              {fixedCategory
-                ? <Link className={buttonVariants({ variant: 'outline' })} to="/products">ดูสินค้าทั้งหมด</Link>
-                : <Button variant="outline" onClick={resetFilters}>ล้างตัวกรอง</Button>}
-            </EmptyContent>
-          </Empty>
-        ) : null}
-        {products.data?.items.length ? (
-          <div className="catalog-grid mt-8 grid grid-flow-dense gap-x-5 gap-y-12 lg:gap-x-7">
-            {products.data.items.map(product => <ProductCard key={product.id} product={product} />)}
-          </div>
-        ) : null}
-        {products.data?.nextCursor ? (
-          <div className="mt-10 flex justify-center">
-            <Button variant="outline" size="lg" onClick={loadNextPage}>ดูสินค้าเพิ่มเติม</Button>
-          </div>
-        ) : null}
       </section>
-      {!fixedCategory && <section className="catalog-closing mt-24 flex flex-col items-start justify-between gap-6 rounded-[2rem] bg-accent p-8 md:mt-32 md:flex-row md:items-center md:p-12">
-        <div><h2 className="section-heading">อร่อยขึ้น เมื่อรู้จักที่มา</h2><p className="mt-3 text-sm leading-7 text-muted-foreground">ทำความรู้จักความตั้งใจที่เชื่อมคนกินกับคนปลูก</p></div>
-        <Link className={buttonVariants({ variant: 'outline', size: 'lg' })} to="/#from-the-farm">จากสวนถึงคุณ</Link>
+      {!fixedCategory && <section className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t py-8">
+        <div><h2 className="text-lg font-semibold">อร่อยขึ้น เมื่อรู้จักที่มา</h2><p className="mt-2 text-sm text-muted-foreground">ทำความรู้จักความตั้งใจที่เชื่อมคนกินกับคนปลูก</p></div>
+        <Link className={buttonVariants({ variant: 'link', className: 'min-h-11 px-0' })} to="/#from-the-farm">จากสวนถึงคุณ</Link>
       </section>}
     </div>
   )
