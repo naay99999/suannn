@@ -71,6 +71,7 @@ const demoIdOffsets = {
   operation: 0x4000,
   movement: 0x5000,
   audit: 0x6000,
+  farm: 0x7000,
 } as const
 
 export function demoId(kind: keyof typeof demoIdOffsets, index: number): string {
