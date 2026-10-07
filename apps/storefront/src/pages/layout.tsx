@@ -11,6 +11,7 @@ import { CartTrigger, SideCart } from '@/components/cart/side-cart'
 const navigation = [
   { label: 'เลือกซื้อสินค้า', to: '/products' },
   { label: 'จากสวนถึงคุณ', to: '/#from-the-farm' },
+  { label: 'สวนและคนปลูก', to: '/farms' },
   { label: 'รู้จัก suannn', to: '/#our-story' },
 ]
 
