@@ -22,7 +22,7 @@ export function Component() {
       <section className="page-width grid items-center gap-8 pb-16 pt-4 md:grid-cols-[1.1fr_0.9fr] md:gap-14 md:pb-24 md:pt-10" aria-labelledby="farms-title">
         <div>
           <p className="mb-5 text-sm font-medium text-primary-ink">คนปลูก · สถานที่ · เรื่องราว</p>
-          <h1 id="farms-title" className="max-w-6xl text-[clamp(2.6rem,6vw,5.4rem)] font-semibold leading-[1.3] tracking-tight" style={{ fontFamily: "'Cabinet Grotesk', 'Noto Sans Thai Variable', var(--font-family-brand), sans-serif" }}>
+          <h1 id="farms-title" className="max-w-6xl text-[clamp(2.6rem,6vw,5.4rem)] font-semibold leading-[1.3] tracking-tight" style={{ fontFamily: "'Cabinet Grotesk', 'Satoshi', 'Noto Sans Thai Variable', var(--font-family-brand), sans-serif" }}>
             รู้จักสวนที่อยู่เบื้องหลังผลผลิต
           </h1>
           <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground md:text-lg">

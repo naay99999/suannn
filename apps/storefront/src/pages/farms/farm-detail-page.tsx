@@ -48,7 +48,7 @@ export function Component() {
           </div>
           <div className="farm-reveal md:order-1">
             <p className="mb-4 text-sm font-medium text-primary-ink">{location || 'แหล่งผลิตของ suannn'}</p>
-            <h1 id="farm-title" className="max-w-6xl text-[clamp(2.4rem,5.5vw,4.8rem)] font-semibold leading-[1.35] tracking-tight" style={{ fontFamily: "'Cabinet Grotesk', 'Noto Sans Thai Variable', var(--font-family-brand), sans-serif" }}>{profile.name}</h1>
+            <h1 id="farm-title" className="max-w-6xl text-[clamp(2.4rem,5.5vw,4.8rem)] font-semibold leading-[1.35] tracking-tight" style={{ fontFamily: "'Cabinet Grotesk', 'Satoshi', 'Noto Sans Thai Variable', var(--font-family-brand), sans-serif" }}>{profile.name}</h1>
             {profile.farmerName && <p className="mt-5 text-lg text-muted-foreground">ดูแลโดย {profile.farmerName}</p>}
             {profile.summary && <p className="farm-reveal mt-6 max-w-2xl text-base leading-8 text-muted-foreground">{profile.summary}</p>}
             <p className="mt-7 max-w-2xl border-l-2 border-primary pl-4 text-sm leading-7 text-muted-foreground">สวนที่แสดงคือแหล่งผลิตที่เชื่อมกับสินค้าในระดับสินค้า รายการนี้ยังไม่ระบุว่าสินค้าแต่ละล็อตที่จัดส่งมาจากสวนใด</p>
