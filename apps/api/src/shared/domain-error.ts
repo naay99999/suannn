@@ -9,6 +9,11 @@ export type DomainErrorCode =
   | 'SKU_CONFLICT'
   | 'PRODUCT_STATE_CONFLICT'
   | 'INVALID_PRODUCT'
+  | 'FARM_NOT_FOUND'
+  | 'FARM_SLUG_CONFLICT'
+  | 'FARM_STATE_CONFLICT'
+  | 'INVALID_FARM'
+  | 'INVALID_FARM_ASSOCIATION'
   | 'LOT_NOT_FOUND'
   | 'RESERVATION_NOT_FOUND'
   | 'WAREHOUSE_NOT_FOUND'
@@ -59,6 +64,11 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   SKU_CONFLICT: { status: 409, message: 'Variant SKU is already in use' },
   PRODUCT_STATE_CONFLICT: { status: 409, message: 'Product state does not allow this action' },
   INVALID_PRODUCT: { status: 422, message: 'Product data is invalid' },
+  FARM_NOT_FOUND: { status: 404, message: 'Farm not found' },
+  FARM_SLUG_CONFLICT: { status: 409, message: 'Farm slug is already in use' },
+  FARM_STATE_CONFLICT: { status: 409, message: 'Farm state does not allow this action' },
+  INVALID_FARM: { status: 422, message: 'Farm data is invalid' },
+  INVALID_FARM_ASSOCIATION: { status: 422, message: 'Product farm associations are invalid' },
   LOT_NOT_FOUND: { status: 404, message: 'Inventory lot not found' },
   RESERVATION_NOT_FOUND: { status: 404, message: 'Inventory reservation not found' },
   WAREHOUSE_NOT_FOUND: { status: 404, message: 'Warehouse not found' },
