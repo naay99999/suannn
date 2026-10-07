@@ -30,6 +30,8 @@ export const router = createBrowserRouter([
         path: 'products/:slug',
         lazy: () => import('./pages/products/product-detail-page'),
       },
+      { path: 'farms', lazy: () => import('./pages/farms/farm-list-page') },
+      { path: 'farms/:slug', lazy: () => import('./pages/farms/farm-detail-page') },
       {
         path: 'categories/:slug',
         lazy: () => import('./pages/categories/category-page'),
