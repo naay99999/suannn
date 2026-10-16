@@ -9,6 +9,9 @@ export type EmailTemplate =
   | 'staff-mfa-recovery'
   | 'change-email'
   | 'order-confirmation'
+  | 'order-shipped'
+  | 'order-cancelled'
+  | 'order-refunded'
 
 export interface EmailMessage extends EmailContent {
   to: string

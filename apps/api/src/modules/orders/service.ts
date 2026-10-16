@@ -20,6 +20,7 @@ import {
   isGuestOrderAccessExpired,
 } from './access'
 import { listOrderDetails, lockOrder, readOrderDetail } from './repository'
+import { enqueueOrderEmail } from './outbox'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
 import type {
@@ -408,8 +409,9 @@ export class OrderService {
 
       const type = actorType(principal)
       const id = principalId(principal, orderId)
+      const cancelledEventId = crypto.randomUUID()
       await tx.insert(orderEvent).values({
-        id: crypto.randomUUID(),
+        id: cancelledEventId,
         orderId,
         paymentId: savedPayment.id,
         eventType: 'order.cancelled',
@@ -420,6 +422,7 @@ export class OrderService {
         reasonCode: `cancelled_by_${type}`,
         metadata: { operationId, restoredQuantity, totalSatang: order.totalSatang },
       })
+      await enqueueOrderEmail(tx, { orderId, orderEventId: cancelledEventId, eventType: 'order.cancelled', templateId: 'order_cancelled' })
       const auditContext = auditContextFor(principal, orderId)
       await recordOrderAudit(tx, {
         id: crypto.randomUUID(),
@@ -477,8 +480,9 @@ export class OrderService {
       }).where(eq(commerceOrder.id, orderId)).returning({ status: commerceOrder.status })
       if (updatedOrder?.status !== nextStatus) throw new DomainError('INVALID_ORDER_TRANSITION')
 
+      const fulfillmentEventId = crypto.randomUUID()
       await tx.insert(orderEvent).values({
-        id: crypto.randomUUID(),
+        id: fulfillmentEventId,
         orderId,
         eventType: 'order.fulfillment-advanced',
         fromStatus: order.status,
@@ -487,6 +491,9 @@ export class OrderService {
         actorId: staffActor.userId,
         metadata: shipment ? { operationId, shipment } : { operationId },
       })
+      if (shipment) {
+        await enqueueOrderEmail(tx, { orderId, orderEventId: fulfillmentEventId, eventType: 'order.fulfillment-advanced', templateId: 'order_shipped' })
+      }
       const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
       await recordOrderAudit(tx, {
         id: crypto.randomUUID(),
