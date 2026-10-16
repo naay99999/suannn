@@ -123,3 +123,41 @@ Revision: `50ba456` + working tree ที่ยังไม่ commit (ไฟล
 2. **SF-02**: เพิ่มปุ่มยกเลิกใน `/account/orders/:orderId` และ `/orders/guest/:orderId` ใช้ Eden (`api.store.orders({ orderId }).cancel.post`) ส่ง `idempotency-key` สำหรับ guest ต้องส่ง `X-Order-Access-Token` แบบ `credentials: 'omit'` เหมือน `getGuestOrder`
 3. ตัดสินใจเรื่อง BE-06 (บังคับยืนยันอีเมลก่อน COD หรือไม่) และ BE-01/BE-02 (tracking + อีเมลแจ้งสถานะ) ว่าต้องมีใน MVP หรือไม่
 4. SF-03/SF-04/SF-05 และ BE-03/BE-04 ทำหลังเปิด MVP ได้
+
+---
+
+## F. อัปเดตหลังแก้ไข (16 ตุลาคม 2026)
+
+แก้บน branch `feat/close-storefront-api-gaps` (จาก `50ba456`) ทีละ commit ตามลำดับ phase
+
+| ID | สถานะ | สิ่งที่ทำ | Commit |
+| --- | --- | --- | --- |
+| SF-01 | ✅ ปิด | header แสดงลิงก์ "เข้าสู่ระบบ" → `/sign-in` อีกครั้ง (ปุ่ม outline มีไอคอนบัญชี) และตัด CTA "เลือกซื้อสินค้า" ที่ซ้ำกับเมนู "สินค้าทั้งหมด" ออก | `f6c1b35` |
+| SF-02 | ✅ ปิด (เฉพาะ COD ของสมาชิก) | ปุ่มยกเลิกพร้อม dialog ยืนยันใน `/account/orders/:orderId` ใช้ idempotency key เดิมเมื่อกดซ้ำ guest ไม่มีปุ่มนี้เพราะ guest จ่ายได้แค่ Stripe และ API ยกเลิกได้เฉพาะ COD | `e289ac9` |
+| SF-03 | ✅ ปิด | แสดงสถานะและยอดคืนเงินในหน้าคำสั่งซื้อของสมาชิกและ guest | `e289ac9` |
+| SF-04 / BE-04 | ✅ ปิด | `GET /store/orders/:orderId` ส่ง `checkout { url, expiresAt }` เมื่อ order ยังรอจ่ายและ Stripe session ยังไม่หมดอายุ storefront มีปุ่ม "ชำระเงินต่อ" และสำหรับ order ที่ถูกยกเลิกมีปุ่ม "สั่งซื้ออีกครั้ง" ที่ใส่สินค้าเดิมกลับลงตะกร้า ไม่ได้แก้ schema ของ payment | `b97171f` |
+| SF-05 | ✅ ปิด | หน้า guest ใช้คำว่า "รหัสเข้าดูคำสั่งซื้อ" และแสดงสถานะคำสั่งซื้อเป็นภาษาไทย | `e289ac9` |
+| BE-06 | ✅ ปิด | COD ต้องยืนยันอีเมลก่อน (`403 EMAIL_VERIFICATION_REQUIRED`) storefront ซ่อน COD และลิงก์ไปหน้าส่งอีเมลยืนยัน | `8872c4d` |
+| BE-01 | ✅ ปิด | migration `0022_order_shipment.sql` เพิ่ม carrier (`thailand_post/kerry/flash/jt/other`), ชื่อขนส่ง, เลขพัสดุ และ `shipped_at` การเปลี่ยนเป็น shipped ต้องมีข้อมูลพัสดุ (`422 SHIPMENT_REQUIRED` / `INVALID_SHIPMENT`) admin มีช่องกรอกใน dialog จัดส่ง storefront แสดงเลขพัสดุพร้อมลิงก์ติดตาม | `55cf15d` |
+| BE-02 / BE-03 | ✅ ปิด | อีเมลลูกค้าเป็นภาษาไทยทั้งหมด เพิ่มอีเมลตอนจัดส่ง ยกเลิก และคืนเงินสำเร็จ ส่งผ่าน outbox ใน transaction เดียวกับ event ไม่ส่งอีเมลยกเลิกเมื่อ Stripe session หมดอายุ อีเมลสถานะของ guest ไม่ใส่รหัสเข้าดูซ้ำ | `8aa8529` |
+| BE-07 | ✅ ปิด | `POST /customer/account/deletion` ต้องกรอกรหัสผ่าน และปฏิเสธเมื่อยังมี order ค้าง (`409 ACCOUNT_HAS_OPEN_ORDERS`) จากนั้นลบที่อยู่ ตะกร้า session และ credential แทนชื่อ/อีเมลด้วยค่า anonymized แบนบัญชี และปล่อยอีเมลให้สมัครใหม่ได้ ส่วน order เก็บไว้ หน้า security มีปุ่ม "ลบบัญชีของฉัน" | `c749d86` |
+| BE-05, BE-08 | ⏸️ ไม่ได้ทำ | อยู่นอก MVP ตามรายงานเดิม | – |
+
+### ผลการตรวจหลังแก้
+
+| คำสั่ง | ผล |
+| --- | --- |
+| `bun --filter api typecheck` / `lint` | ✅ |
+| `bun --filter api test:unit` | ✅ 260 pass / 0 fail |
+| `bun --filter api test:integration` (DB `suannn_test` ในเครื่อง) | ⚠️ 267 pass / 15 fail ทุกตัวที่ล้มเป็นของเดิม: farm lifecycle, farm schema, product farm associations, demo seed และ migration upgrade 0009→0020 ที่ revision `50ba456` ก็ล้ม 15 ตัวเดียวกัน (263 pass) เทสใหม่ทั้งหมดผ่าน |
+| `bun --filter storefront build` / `lint` | ✅ (lint warning เดิม 1 จุด) |
+| `bun --filter storefront test` | ✅ 141 pass รัน 4 ครั้ง มี 1 ครั้งที่ `tests/auth-pages.test.tsx` 2 ตัว timeout 1 วินาทีระหว่างที่เครื่องโหลดหนัก ควรเพิ่ม timeout ของเทสชุดนี้ |
+| `bun --filter admin build` / `lint` / `test` | ✅ 195 pass (build ต้องตั้ง `VITE_API_URL`) |
+| `bun --filter @workspace/ui typecheck` | ✅ |
+
+### สิ่งที่ต้องทำก่อน deploy
+
+1. รัน `bun --filter api db:migrate` เพื่อใช้ migration `0022_order_shipment.sql` ก่อนเปิด API เวอร์ชันนี้
+2. ลิงก์ติดตามพัสดุของ Kerry, Flash และ J&T ใน `apps/storefront/src/lib/shipment-tracking.ts` ยังไม่ได้ทดสอบกับเว็บจริง ควรเปิดดูทีละขนส่ง
+3. ยังไม่ได้ทดสอบ E2E ผ่าน browser, Stripe test mode หรือการส่งอีเมลจริง
+4. ลูกค้าที่ยังไม่ยืนยันอีเมลจะสั่ง COD ไม่ได้แล้ว ควรแจ้งลูกค้าเดิมที่ยังไม่ยืนยัน
