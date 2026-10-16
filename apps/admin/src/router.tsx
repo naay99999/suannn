@@ -53,6 +53,19 @@ export const router = createBrowserRouter([
             ],
           },
           {
+            path: 'farms',
+            element: <PermissionGate permission="catalog:read" />,
+            children: [
+              { index: true, lazy: () => import('./pages/farms/farms-page') },
+              {
+                path: 'new',
+                element: <PermissionGate permission="catalog:create" />,
+                children: [{ index: true, lazy: () => import('./pages/farms/farm-create-page') }],
+              },
+              { path: ':farmId', lazy: () => import('./pages/farms/farm-detail-page') },
+            ],
+          },
+          {
             path: 'inventory',
             element: <PermissionGate permission="inventory:read" />,
             children: [

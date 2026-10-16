@@ -16,7 +16,8 @@ type CatalogSuccess<T> = Exclude<NonNullable<T>, { code: string; message: string
 
 export type ProductSummary = CatalogSuccess<ProductListResponse['data']>['items'][number]
 export type ProductDetail = CatalogSuccess<ProductDetailResponse['data']>
-export type ProductCreated = CatalogSuccess<ProductCreateResponse['data']>
+export type ProductFarm = ProductDetail['farms'][number]
+export type ProductCreated =CatalogSuccess<ProductCreateResponse['data']>
 export type ProductUpdated = CatalogSuccess<ProductUpdateResponse['data']>
 export type Variant = CatalogSuccess<VariantResponse['data']>
 export type VariantUpdated = CatalogSuccess<VariantUpdateResponse['data']>
@@ -52,6 +53,8 @@ export function createCatalogApi(client: ApiClient = api) {
     archiveVariant: (productId: string, variantId: string) => apiRequest(async () => {
       apiEmpty(await client.admin.products({ id: productId }).variants({ variantId }).delete())
     }),
+    replaceFarms: (productId: string, farmIds: string[]) => apiRequest(async () =>
+      apiData(await client.admin.products({ id: productId }).farms.put({ farmIds })) as ProductFarm[]),
   }
 }
 

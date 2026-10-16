@@ -93,6 +93,7 @@ function productData(variants: ProductDetail['variants'] = [variant]) : ProductD
     description: null,
     originStory: null,
     storageInstructions: null,
+    farms: [],
     variants,
   }
 }

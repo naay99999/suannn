@@ -18,6 +18,7 @@ import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
 import { ProductActions, ConfirmActionDialog } from './_components/product-actions'
 import { VariantDialog } from './_components/variant-dialog'
+import { ProductFarms } from './_components/product-farms'
 import { cn } from '@workspace/ui/lib/utils'
 
 function categoryLabel(category: ProductDetail['category']) {
@@ -139,6 +140,8 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         </div>}
 
       {!editing && <ProductActions product={product} />}
+
+      {!editing && <ProductFarms product={product} />}
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
