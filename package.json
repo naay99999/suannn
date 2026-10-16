@@ -7,10 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun --filter './apps/*' --parallel dev",
+    "dev": "bun run --parallel --no-exit-on-error dev:apps dev:stripe",
+    "dev:apps": "bun --filter './apps/*' --parallel dev",
     "dev:storefront": "bun --filter storefront dev",
     "dev:admin": "bun --filter admin dev",
     "dev:api": "bun --filter api dev",
+    "dev:stripe": "command -v stripe >/dev/null || { echo 'Stripe CLI not found; skipping webhook forwarding'; exit 0; }; stripe listen --forward-to localhost:6767/api/v1/webhooks/stripe --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,refund.created,refund.updated,refund.failed",
     "lint": "bun --filter storefront lint && bun --filter admin lint && bun --filter api lint && bun --filter @workspace/ui lint",
     "typecheck": "bun --filter storefront typecheck && bun --filter admin typecheck && bun --filter api typecheck && bun --filter @workspace/ui typecheck",
     "test": "bun --filter api test && bun --filter storefront test && bun --filter admin test",
