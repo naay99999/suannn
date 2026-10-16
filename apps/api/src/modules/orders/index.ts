@@ -172,7 +172,7 @@ async function rateLimitGuestOrderAccess(
 export function createStoreOrdersModule(
   config: AppConfig,
   auth: Auth,
-  service: Pick<OrderService, 'listCustomer' | 'getForPrincipal' | 'cancel'>,
+  service: Pick<OrderService, 'listCustomer' | 'getStoreOrder' | 'cancel'>,
   limiter: Pick<RateLimiter, 'consume'>,
 ) {
   const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error' } as const
@@ -202,13 +202,13 @@ export function createStoreOrdersModule(
         const limited = await rateLimitGuestOrderAccess(request, limiter, requestContext, set)
         if (limited) return limited
       }
-      return service.getForPrincipal(params.orderId, principal)
+      return service.getStoreOrder(params.orderId, principal)
     }, {
       params: 'orders.idParams',
-      response: { 200: 'orders.detail', ...errors, 429: 'http.error' },
+      response: { 200: 'orders.storeDetail', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Get an owned store order',
-        description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response.',
+        description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response. Unpaid Stripe orders include checkout with the hosted Checkout URL while that session is still open.',
         tags: ['Store Orders'],
         security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
       },

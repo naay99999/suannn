@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, lt, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, isNotNull, lt, or, sql } from 'drizzle-orm'
 import type { DatabaseTransaction } from '../../database/types'
-import { commerceOrder, orderItem, payment, stripeRefund } from '../../database/schema'
+import { commerceOrder, orderItem, payment, stripeCheckoutAttempt, stripeRefund } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
 import { encodeCursor, decodeCursor } from '../../shared/cursor'
 import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderShipment, OrderSnapshot } from './types'
@@ -113,6 +113,20 @@ export async function readOrderDetail(tx: DatabaseTransaction, orderId: string):
       } : {}),
     },
   }
+}
+
+// Returns the hosted Stripe Checkout session a customer can still return to, if any.
+export async function readOpenStripeCheckout(tx: DatabaseTransaction, orderId: string) {
+  const [attempt] = await tx.select({ url: stripeCheckoutAttempt.checkoutUrl, expiresAt: stripeCheckoutAttempt.expiresAt })
+    .from(stripeCheckoutAttempt)
+    .where(and(
+      eq(stripeCheckoutAttempt.orderId, orderId),
+      eq(stripeCheckoutAttempt.status, 'open'),
+      isNotNull(stripeCheckoutAttempt.checkoutUrl),
+      gt(stripeCheckoutAttempt.expiresAt, sql`transaction_timestamp()`),
+    )).limit(1)
+  if (!attempt?.url || !attempt.expiresAt) return null
+  return { url: attempt.url, expiresAt: attempt.expiresAt.toISOString() }
 }
 
 export async function listOrderDetails(

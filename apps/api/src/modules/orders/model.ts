@@ -90,6 +90,12 @@ const shipment = t.Object({
 }, { additionalProperties: false })
 
 const detail = t.Composite([snapshot, t.Object({ payment, shipment: t.Optional(shipment) })], { additionalProperties: false })
+const storeDetail = t.Composite([detail, t.Object({
+  checkout: t.Optional(t.Object({
+    url: t.String({ format: 'uri' }),
+    expiresAt: t.String({ format: 'date-time' }),
+  }, { additionalProperties: false })),
+})], { additionalProperties: false })
 const page = t.Object({ items: t.Array(detail), nextCursor: t.Union([t.String(), t.Null()]) }, { additionalProperties: false })
 const createResponse = t.Object({
   order: snapshot,
@@ -128,6 +134,7 @@ const guestAccessBody = t.Object({
 export const ordersModels = {
   'orders.snapshot': snapshot,
   'orders.detail': detail,
+  'orders.storeDetail': storeDetail,
   'orders.page': page,
   'orders.createResponse': createResponse,
   'orders.idParams': idParams,

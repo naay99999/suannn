@@ -19,7 +19,7 @@ import {
   hashGuestOrderToken,
   isGuestOrderAccessExpired,
 } from './access'
-import { listOrderDetails, lockOrder, readOrderDetail } from './repository'
+import { listOrderDetails, lockOrder, readOpenStripeCheckout, readOrderDetail } from './repository'
 import { enqueueOrderEmail } from './outbox'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
@@ -30,6 +30,7 @@ import type {
   OrderStaffActor,
   OrderStatus,
   ShipmentInput,
+  StoreOrderDetail,
 } from './types'
 
 const orderIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -337,6 +338,19 @@ export class OrderService {
       if (!order) throw new DomainError('ORDER_NOT_FOUND')
       assertCanAccess(order, principal)
       return readOrderDetail(tx, orderId)
+    })
+  }
+
+  async getStoreOrder(orderId: string, principal: OrderPrincipal): Promise<StoreOrderDetail> {
+    assertOrderId(orderId)
+    assertPrincipal(principal)
+    return this.db.transaction(async (tx) => {
+      const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
+      if (!order) throw new DomainError('ORDER_NOT_FOUND')
+      assertCanAccess(order, principal)
+      const detail = await readOrderDetail(tx, orderId)
+      const checkout = order.status === 'pending_payment' ? await readOpenStripeCheckout(tx, orderId) : null
+      return checkout ? { ...detail, checkout } : detail
     })
   }
 

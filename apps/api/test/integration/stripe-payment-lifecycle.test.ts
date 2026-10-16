@@ -22,6 +22,7 @@ import { CartService } from '../../src/modules/cart/service'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service'
+import { OrderService } from '../../src/modules/orders/service'
 import type { CheckoutSessionState, StripeGateway, StripeRefundState } from '../../src/modules/payments/stripe/gateway'
 import { StripeEventService } from '../../src/modules/payments/stripe/events'
 import { StripeRefundService } from '../../src/modules/payments/stripe/refunds'
@@ -203,6 +204,22 @@ async function sendEvent(gateway: StripeGateway, eventId: string, type: string, 
 }
 
 describe('Stripe payment lifecycle', () => {
+  it('offers the open Checkout URL on an unpaid order and drops it once paid', async () => {
+    const fixture = await preparePendingOrder()
+    const orders = new OrderService(database.db)
+    const staff = { kind: 'staff' as const, userId: 'stripe-lifecycle-staff' }
+
+    const pending = await orders.getStoreOrder(fixture.orderId, staff)
+    expect(pending.status).toBe('pending_payment')
+    expect(pending.checkout?.url).toMatch(/^https:\/\//)
+    expect(Date.parse(pending.checkout?.expiresAt ?? '')).toBeGreaterThan(Date.now())
+
+    await sendEvent(makeGateway(), 'evt_paidresume', 'checkout.session.completed', sessionFor(fixture))
+    const paid = await orders.getStoreOrder(fixture.orderId, staff)
+    expect(paid.status).toBe('placed')
+    expect(paid.checkout).toBeUndefined()
+  })
+
   it('collects payment and queues one confirmation across duplicate event delivery', async () => {
     const fixture = await preparePendingOrder()
     const gateway = makeGateway()

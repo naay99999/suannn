@@ -148,8 +148,8 @@ function createHarness(options: {
       calls.push({ method: 'orders.listCustomer', args })
       return { items: [customerDetail], nextCursor: null }
     },
-    getForPrincipal: async (...args: unknown[]) => {
-      calls.push({ method: 'orders.getForPrincipal', args })
+    getStoreOrder: async (...args: unknown[]) => {
+      calls.push({ method: 'orders.getStoreOrder', args })
       const [orderId, principal] = args as [string, { kind: string; userId?: string; accessToken?: string }]
       if (orderId === customerOrderId && principal.kind === 'customer' && principal.userId === 'customer-1') {
         return customerDetail
@@ -466,7 +466,7 @@ describe('store checkout and order HTTP contracts', () => {
     expect(await invalidToken.json()).toEqual(await unknownOrder.json())
     expect(ownedCustomerOrder.status).toBe(200)
     expect(invalidCustomerSession.status).toBe(401)
-    const customerCall = calls.find((call) => call.method === 'orders.getForPrincipal' && call.args[0] === guestOrderId)
+    const customerCall = calls.find((call) => call.method === 'orders.getStoreOrder' && call.args[0] === guestOrderId)
     expect(customerCall?.args[1]).toEqual({ kind: 'customer', userId: 'customer-1' })
   })
 

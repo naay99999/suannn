@@ -7,6 +7,7 @@ import { authSessionQuery } from '@/lib/auth-session'
 import { canCancelOrder, cancelCustomerOrder, refundStatusLabel } from '@/lib/store-orders'
 import { CancelOrderDialog } from '@/components/orders/cancel-order-dialog'
 import { ShipmentDetails } from '@/components/orders/shipment-details'
+import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 import { orderQuery, orderQueryKey, ordersQueryKey } from './account-queries'
 import { AccountQueryFeedback } from './account-query-feedback'
 import { AccountPageHeading, AddressText, OrderItems, OrderStatus } from './account-ui'
@@ -32,6 +33,7 @@ export function Component() {
       <title>{detail.orderNumber} | คำสั่งซื้อ | suannn</title>
       <Link to="/account/orders" className="mb-5 inline-flex text-sm font-medium text-primary-ink underline underline-offset-4">กลับไปคำสั่งซื้อทั้งหมด</Link>
       <AccountPageHeading title={detail.orderNumber} description={`สั่งซื้อเมื่อ ${formatOrderDate(detail.createdAt)}`} action={<OrderStatus status={detail.status} />} />
+      <div className="mb-6 empty:hidden"><OrderPaymentActions order={detail} /></div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
         <Card><CardHeader><CardTitle className="text-lg">สินค้าในคำสั่งซื้อ</CardTitle></CardHeader><CardContent className="gap-6"><OrderItems order={detail} /><dl className="flex flex-col gap-3 border-t pt-5 text-sm"><div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatSatang(detail.subtotalSatang)}</dd></div><div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatSatang(detail.shippingSatang)}</dd></div><div className="flex justify-between gap-4 border-t pt-4 font-semibold"><dt>ยอดรวมทั้งหมด</dt><dd className="tabular-nums text-primary-ink">{formatSatang(detail.totalSatang)}</dd></div></dl></CardContent></Card>
         <div className="flex flex-col gap-6">

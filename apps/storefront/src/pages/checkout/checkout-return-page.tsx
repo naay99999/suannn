@@ -6,6 +6,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { authSessionQuery } from '@/lib/auth-session'
 import { formatStorePrice } from '@/lib/store-products'
 import { checkoutReturnMessage, missingCheckoutContextMessage, type ReturnMode } from '@/lib/checkout-return'
+import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 import { getCustomerOrder, getGuestOrder, guestOrderQueryKey, readPendingCheckout, storeOrderQueryKey, type PendingCheckout } from '@/lib/store-orders'
 
 export function Component() {
@@ -59,6 +60,7 @@ export function Component() {
         <ul className="mt-5 divide-y">{snapshot.items.map(item => <li key={item.id} className="flex justify-between gap-4 py-3"><span>{item.productName} · {item.variantName} × {item.quantity}</span><span className="shrink-0 tabular-nums">{formatStorePrice(item.lineTotalSatang)}</span></li>)}</ul>
         <dl className="mt-4 border-t pt-4"><div className="flex justify-between gap-4 font-semibold"><dt>ยอดคำสั่งซื้อ</dt><dd>{formatStorePrice(snapshot.totalSatang)}</dd></div></dl>
       </section>
+      <div className="mt-6 empty:hidden"><OrderPaymentActions order={snapshot} {...(pending.guestAccessToken ? { guestAccessToken: pending.guestAccessToken } : {})} /></div>
       <div className="mt-6 flex flex-wrap gap-3">
         {pending.guestAccessToken
           ? <Link className={buttonVariants()} to={`/orders/guest/${snapshot.id}`}>ดูคำสั่งซื้อ</Link>

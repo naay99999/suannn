@@ -118,6 +118,10 @@ export interface OrderDetail extends OrderSnapshot {
   shipment?: OrderShipment
 }
 
+export interface StoreOrderDetail extends OrderDetail {
+  checkout?: { url: string; expiresAt: string }
+}
+
 export interface OrderPage {
   items: OrderDetail[]
   nextCursor: string | null
