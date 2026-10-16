@@ -33,24 +33,24 @@ Approved on 2026-10-08. Use a cardless page and sidebar; reserve card surfaces f
 
 ## Implementation
 
-- [x] `product-list-page.tsx`: plain heading, responsive sidebar/list composition, skeleton loading and inline retry/empty states.
-- [x] `catalog-filters.tsx`: sidebar search/category navigation, mobile category disclosure, result count and sorting above products. Filter changes clear the pagination cursor.
+- [x] `product-list-page.tsx`: no visible heading or introduction, responsive sidebar/list composition, skeleton loading and inline retry/empty states.
+- [x] `catalog-filters.tsx`: category-only sidebar with all categories always visible on mobile. Mobile search sits above a compact row containing the result count and sort control. Desktop uses one toolbar row for search (maximum 24rem wide), count, sorting and reset. Filter changes clear the pagination cursor.
 - [x] `product-card.tsx`: optional catalog appearance with square image, readable category/name/status/price, bottom-aligned 44px action and a single product-detail link. Other consumers use the default appearance.
 - [x] Use 1 column on very narrow screens, 2 on mobile, 3 on tablet and 4 on desktop. Sidebar begins at a 900px content width; grids respond to the actual catalog container.
-- [x] Replace the closing promotional card with a plain divider and text link.
+- [x] Remove the closing “อร่อยขึ้น เมื่อรู้จักที่มา” section.
 - [x] Remove this task's temporary design lab, preview routes and briefs.
 
 ## Component and state contract
 
 - `ProductCard`: `product: StoreProductSummary`, `appearance?: 'default' | 'catalog'`.
-- `CatalogFilters`: optional fixed category; local disclosure state only. Search/category/sort/paging stay in the URL.
+- `CatalogFilters`: optional fixed category; no disclosure state. Search/category/sort/paging stay in the URL.
 - Loading uses product-shaped skeletons; empty and error states provide relevant recovery actions; unavailable products retain a detail link and do not imply a cart mutation.
 - Semantic shared tokens, existing Satoshi/Thai fonts, Hugeicons and shared controls. No new design tokens or dependencies.
-- Keyboard-operable filter disclosure and visible focus rings; controls are at least 44px; motion respects reduced-motion preferences.
+- Keyboard-operable category controls and visible focus rings; controls are at least 44px; motion respects reduced-motion preferences.
 
 ## Validation
 
-- Existing catalog and product flow tests plus keyboard category-disclosure regression test.
+- Existing catalog and product flow tests plus direct keyboard category-filter regression test.
 - Storefront build, lint and test suite; browser checks for responsive layout, filters and product navigation.
 
 Validation results: storefront build and lint passed (existing `main.tsx` Fast Refresh warning). Catalog/product-flow tests: 12 passed. Full storefront suite: 108 passed, 1 failed in `header.test.tsx` (`anonymous visitors can sign in from desktop and mobile navigation`) because the test expects the old origin navigation link while this workspace uses the farms link. Browser checks at 320/390/768/1440px showed 1/2/3/4 columns respectively, 44px product actions and no horizontal overflow. Mobile category selection updated URL and returned three fresh products. Product-detail navigation reached the correct URL, but the local API stopped responding on port 6767 during that check, so its live loading could not be verified.

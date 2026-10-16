@@ -107,15 +107,10 @@ test('quick detail link preserves keyboard navigation without Base UI warnings',
   } finally { errors.mockRestore() }
 })
 
-test('catalog category disclosure supports keyboard filtering and clears the paging cursor', async () => {
+test('catalog categories support direct keyboard filtering and clear the paging cursor', async () => {
   const router = mount(<CatalogPage />, '/products?cursor=old')
   await screen.findByRole('heading', { name: mango.name })
   const user = userEvent.setup()
-  const disclosure = screen.getByRole('button', { name: 'หมวดหมู่: ทั้งหมด' })
-  expect(disclosure.getAttribute('aria-expanded')).toBe('false')
-  disclosure.focus()
-  await user.keyboard('{Enter}')
-  expect(screen.getByRole('button', { name: 'ซ่อนหมวดหมู่' }).getAttribute('aria-expanded')).toBe('true')
   const category = within(screen.getByRole('group', { name: 'หมวดหมู่สินค้า' })).getByRole('button', { name: 'แปรรูป' })
   category.focus()
   await user.keyboard('{Enter}')
