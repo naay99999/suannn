@@ -142,6 +142,30 @@ export function clearPendingCheckout(target?: PendingCheckoutStorage): void {
   try { sessionStorageOrThrow(target).removeItem(pendingCheckoutKey) } catch { /* Storage may be disabled or already cleared. */ }
 }
 
+const guestOrderTokenKeyPrefix = 'suannn-guest-order-token-v1:'
+
+// Tab-scoped so a reload keeps access while closing the tab forgets the token.
+export function saveGuestOrderToken(orderId: string, token: string, target?: PendingCheckoutStorage): void {
+  try { sessionStorageOrThrow(target).setItem(guestOrderTokenKeyPrefix + orderId, token) } catch { /* Storage is best-effort. */ }
+}
+
+export function forgetGuestOrderToken(orderId: string, target?: PendingCheckoutStorage): void {
+  try { sessionStorageOrThrow(target).removeItem(guestOrderTokenKeyPrefix + orderId) } catch { /* Storage is best-effort. */ }
+}
+
+export function readGuestOrderToken(orderId: string, target?: PendingCheckoutStorage): string {
+  let stored: string | null = null
+  try { stored = sessionStorageOrThrow(target).getItem(guestOrderTokenKeyPrefix + orderId) } catch { /* Fall back to the pending checkout. */ }
+  if (stored?.trim()) return stored.trim()
+  const pending = readPendingCheckout(target)
+  return pending?.orderId === orderId ? pending.guestAccessToken?.trim() ?? '' : ''
+}
+
+/** Reads `#token=` from an emailed guest order link. The fragment never reaches servers or Referer headers. */
+export function guestOrderTokenFromHash(hash: string): string {
+  return new URLSearchParams(hash.replace(/^#/, '')).get('token')?.trim() ?? ''
+}
+
 export function redirectToStripe(
   value: PendingCheckout,
   checkoutUrl: string,

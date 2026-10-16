@@ -89,17 +89,18 @@ export function orderConfirmationEmail(
   guestAccessToken?: string,
 ): EmailContent {
   const url = orderUrl(orderId, storefrontUrl, Boolean(guestAccessToken))
+  // The guest token rides in the fragment, which browsers never send to servers or in Referer headers.
+  const actionUrl = guestAccessToken ? `${url}#${new URLSearchParams({ token: guestAccessToken })}` : url
   const content = orderEmail(`ยืนยันคำสั่งซื้อ ${orderNumber} จาก Suannn`, [
     'ร้านได้รับคำสั่งซื้อของคุณแล้ว',
     `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
-  ], url, 'ดูคำสั่งซื้อ')
+  ], actionUrl, 'ดูคำสั่งซื้อ')
   if (!guestAccessToken) return content
 
-  // The guest token is shown as text only, never inside a link.
   return {
     subject: content.subject,
-    text: `${content.text}\n\nกรอกรหัสเข้าดูคำสั่งซื้อนี้ในหน้าดังกล่าว:\n${guestAccessToken}`,
-    html: `${content.html}<p>กรอกรหัสเข้าดูคำสั่งซื้อนี้ในหน้าดังกล่าว:</p><p><code>${escapeHtml(guestAccessToken)}</code></p>`,
+    text: `${content.text}\n\nหากลิงก์เปิดไม่ได้ ให้เปิด ${url} แล้วกรอกรหัสเข้าดูคำสั่งซื้อ:\n${guestAccessToken}`,
+    html: `${content.html}<p>หากลิงก์เปิดไม่ได้ ให้เปิด ${escapeHtml(url)} แล้วกรอกรหัสเข้าดูคำสั่งซื้อ:</p><p><code>${escapeHtml(guestAccessToken)}</code></p>`,
   }
 }
 

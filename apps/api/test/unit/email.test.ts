@@ -125,14 +125,16 @@ describe('authentication email', () => {
 })
 
 describe('order confirmation email', () => {
-  it('includes a guest order link without the access token in the URL', () => {
-    const content = orderConfirmationEmail('order-123', 'S-2026-0001', 'https://shop.example.test', 'guest-secret')
+  it('links guests to the order with the access token only in the URL fragment', () => {
+    const content = orderConfirmationEmail('order-123', 'S-2026-0001', 'https://shop.example.test', 'guest/secret+1')
+    const links = [...content.html.matchAll(/href="([^"]+)"/g)].map(match => match[1]!.replaceAll('&amp;', '&'))
 
-    expect(content.text).toContain('https://shop.example.test/orders/guest/order-123')
-    expect(content.html).toContain('https://shop.example.test/orders/guest/order-123')
-    expect(content.text).toContain('guest-secret')
-    const links = content.html.match(/href="([^"]+)"/g) ?? []
-    expect(links.some(link => link.includes('guest-secret'))).toBe(false)
+    expect(links).toEqual(['https://shop.example.test/orders/guest/order-123#token=guest%2Fsecret%2B1'])
+    const link = new URL(links[0]!)
+    expect(link.pathname + link.search).toBe('/orders/guest/order-123')
+    expect(new URLSearchParams(link.hash.slice(1)).get('token')).toBe('guest/secret+1')
+    expect(content.text).toContain('https://shop.example.test/orders/guest/order-123#token=guest%2Fsecret%2B1')
+    expect(content.text).toContain('guest/secret+1')
   })
 })
 
