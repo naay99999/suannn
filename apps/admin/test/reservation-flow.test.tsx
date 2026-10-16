@@ -50,6 +50,7 @@ const product: ProductDetail = {
   description: null,
   originStory: null,
   storageInstructions: null,
+  farms: [],
   variants: [
     {
       id: variantId,

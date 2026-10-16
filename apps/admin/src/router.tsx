@@ -53,6 +53,19 @@ export const router = createBrowserRouter([
             ],
           },
           {
+            path: 'farms',
+            element: <PermissionGate permission="catalog:read" />,
+            children: [
+              { index: true, lazy: () => import('./pages/farms/farms-page') },
+              {
+                path: 'new',
+                element: <PermissionGate permission="catalog:create" />,
+                children: [{ index: true, lazy: () => import('./pages/farms/farm-create-page') }],
+              },
+              { path: ':farmId', lazy: () => import('./pages/farms/farm-detail-page') },
+            ],
+          },
+          {
             path: 'inventory',
             element: <PermissionGate permission="inventory:read" />,
             children: [
@@ -73,6 +86,11 @@ export const router = createBrowserRouter([
               { index: true, lazy: () => import('./pages/orders/orders-page') },
               { path: ':orderId', lazy: () => import('./pages/orders/order-detail-page') },
             ],
+          },
+          {
+            path: 'audit',
+            element: <PermissionGate permission="audit:read" />,
+            children: [{ index: true, lazy: () => import('./pages/audit/audit-page') }],
           },
           { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
           { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },

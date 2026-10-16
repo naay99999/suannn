@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
 import { Add01Icon, MoreVerticalCircle01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { authSessionQuery, type AuthSession } from '@/lib/auth-session'
@@ -106,6 +107,8 @@ function PageControls({
 
 function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; actorRole: StaffRole; permissions: string[] }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const canReadAudit = permissions.includes('audit:read')
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined])
   const cursor = cursors.at(-1)
   const [selectedAction, setSelectedAction] = useState<{ action: ManagedAction; member: StaffMember } | null>(null)
@@ -183,7 +186,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
               <TableBody>
                 {staffQuery.data.items.map((member: StaffMember) => {
                   const actions = getStaffActions({ actorId, actorRole, actorPermissions: permissions, target: member })
-                  const hasActions = actions.canChangeRole || actions.canSuspend || actions.canReactivate || actions.canRevokeSessions || actions.canResetMfa
+                  const hasActions = canReadAudit || actions.canChangeRole || actions.canSuspend || actions.canReactivate || actions.canRevokeSessions || actions.canResetMfa
                   return (
                     <TableRow key={member.id}>
                       <TableCell><div className="flex flex-col gap-0.5"><span className="font-medium">{member.name || 'Unnamed staff'}</span><span className="text-muted-foreground">{member.email}</span></div></TableCell>
@@ -194,6 +197,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
                         {hasActions && <DropdownMenu>
                           <DropdownMenuTrigger render={<Button aria-label={`Actions for ${member.name}`} size="icon" variant="ghost" />}><HugeiconsIcon icon={MoreVerticalCircle01Icon} strokeWidth={2} /></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {canReadAudit && <DropdownMenuItem onClick={() => void navigate(`/audit?actorUserId=${encodeURIComponent(member.id)}`)}>View activity</DropdownMenuItem>}
                             {actions.canChangeRole && <DropdownMenuItem onClick={() => openAction('change-role', member)}>Change role</DropdownMenuItem>}
                             {actions.canSuspend && <DropdownMenuItem variant="destructive" onClick={() => openAction('suspend', member)}>Suspend account</DropdownMenuItem>}
                             {actions.canReactivate && <DropdownMenuItem onClick={() => openAction('reactivate', member)}>Reactivate account</DropdownMenuItem>}

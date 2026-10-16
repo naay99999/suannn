@@ -6,6 +6,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Input } from '@workspace/ui/components/input'
 import { BackupCodesPanel } from '@/components/auth/backup-codes-panel'
 import { AuthRequestError, regenerateBackupCodes } from '@/lib/auth-client'
+import { ActiveSessions } from './active-sessions'
 
 export function SecuritySettings() {
   const [password, setPassword] = useState('')
@@ -31,50 +32,53 @@ export function SecuritySettings() {
   }
 
   return (
-    <Card className="border-0 shadow-none ring-0">
-      <CardHeader>
-        <CardTitle>Security</CardTitle>
-        <CardDescription>Manage recovery codes for your authenticator.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={(event) => void submit(event)}>
-          <FieldGroup>
-            <p className="text-sm text-muted-foreground" role="note">Regenerating codes immediately invalidates every existing backup code. The new set is shown once, so save or download it before leaving this page.</p>
-            <Field data-invalid={!!error}>
-              <FieldLabel htmlFor="mfa-regenerate-password">Current password</FieldLabel>
-              <Input
-                id="mfa-regenerate-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                aria-invalid={!!error}
+    <div className="flex flex-col gap-4">
+      <Card className="border-0 shadow-none ring-0">
+        <CardHeader>
+          <CardTitle>Security</CardTitle>
+          <CardDescription>Manage recovery codes for your authenticator.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(event) => void submit(event)}>
+            <FieldGroup>
+              <p className="text-sm text-muted-foreground" role="note">Regenerating codes immediately invalidates every existing backup code. The new set is shown once, so save or download it before leaving this page.</p>
+              <Field data-invalid={!!error}>
+                <FieldLabel htmlFor="mfa-regenerate-password">Current password</FieldLabel>
+                <Input
+                  id="mfa-regenerate-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  aria-invalid={!!error}
+                />
+                {error && <FieldError>{error}</FieldError>}
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox id="confirm-backup-code-regeneration" checked={confirmed} onCheckedChange={(value) => setConfirmed(value === true)} />
+                <FieldLabel htmlFor="confirm-backup-code-regeneration">I understand my existing codes will stop working</FieldLabel>
+              </Field>
+              <Field>
+                <Button type="submit" disabled={!password || !confirmed || pending}>
+                  {pending ? 'Regenerating…' : 'Regenerate backup codes'}
+                </Button>
+              </Field>
+            </FieldGroup>
+          </form>
+          {codes && (
+            <div className="mt-6 flex flex-col gap-3">
+              <p role="status" className="text-sm font-medium">Existing backup codes have been replaced. Save this new set now.</p>
+              <BackupCodesPanel
+                codes={codes}
+                title="New backup codes"
+                description="Each code works once. Store this set somewhere private; the previous set no longer works."
               />
-              {error && <FieldError>{error}</FieldError>}
-            </Field>
-            <Field orientation="horizontal">
-              <Checkbox id="confirm-backup-code-regeneration" checked={confirmed} onCheckedChange={(value) => setConfirmed(value === true)} />
-              <FieldLabel htmlFor="confirm-backup-code-regeneration">I understand my existing codes will stop working</FieldLabel>
-            </Field>
-            <Field>
-              <Button type="submit" disabled={!password || !confirmed || pending}>
-                {pending ? 'Regenerating…' : 'Regenerate backup codes'}
-              </Button>
-            </Field>
-          </FieldGroup>
-        </form>
-        {codes && (
-          <div className="mt-6 flex flex-col gap-3">
-            <p role="status" className="text-sm font-medium">Existing backup codes have been replaced. Save this new set now.</p>
-            <BackupCodesPanel
-              codes={codes}
-              title="New backup codes"
-              description="Each code works once. Store this set somewhere private; the previous set no longer works."
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <ActiveSessions />
+    </div>
   )
 }

@@ -222,7 +222,7 @@ export function ProductForm(props: ProductFormProps) {
   )
 }
 
-function FormInput({ id, label, description, error, ...props }: {
+export function FormInput({ id, label, description, error, ...props }: {
   id: string
   label: string
   description?: string
@@ -240,7 +240,7 @@ function FormInput({ id, label, description, error, ...props }: {
   )
 }
 
-function FormTextarea({ id, label, description, error, ...props }: {
+export function FormTextarea({ id, label, description, error, ...props }: {
   id: string
   label: string
   description?: string

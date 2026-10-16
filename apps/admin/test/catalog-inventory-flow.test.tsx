@@ -73,12 +73,13 @@ function productDetail(status: ProductDetail['status'] = 'draft'): ProductDetail
     description: 'มะม่วงน้ำดอกไม้สำหรับตรวจสอบขั้นตอนจัดการสินค้า',
     originStory: 'สวนทดสอบ',
     storageInstructions: 'เก็บในที่เย็น',
+    farms: [],
     variants: [productVariant()],
   }
 }
 
 function productSummary(product: ProductDetail): ProductSummary {
-  const { description: _description, originStory: _originStory, storageInstructions: _storageInstructions, variants: _variants, ...summary } = product
+  const { description: _description, originStory: _originStory, storageInstructions: _storageInstructions, variants: _variants, farms: _farms, ...summary } = product
   return summary
 }
 

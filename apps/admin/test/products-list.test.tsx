@@ -33,6 +33,7 @@ const detail: ProductDetail = {
   description: 'มะม่วงสุกหวานจากสวน',
   originStory: 'ปลูกในสวนครอบครัว',
   storageInstructions: 'เก็บในที่เย็น',
+  farms: [],
   variants: [{
     id: variantId,
     productId,
