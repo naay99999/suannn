@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
+import { A11y } from 'swiper/modules'
+import type { Swiper as SwiperInstance } from 'swiper'
+import { Swiper, SwiperSlide } from 'swiper/react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -22,6 +25,8 @@ import { principles } from './home-data'
 import { getStoreProducts, storeProductQueryKey } from '@/lib/store-products'
 import { ProductRecommendations, recommendationLimit } from '@/components/product-recommendations'
 import { FeaturedFarms } from '@/components/farms/featured-farms'
+
+import 'swiper/css'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
@@ -53,6 +58,7 @@ export function Component() {
   const scope = useRef<HTMLDivElement>(null)
   const [category, setCategory] = useState('all')
   const [activeCollection, setActiveCollection] = useState(0)
+  const storySwiper = useRef<SwiperInstance | null>(null)
   const [story, setStory] = useState(0)
   const [paused, setPaused] = useState(false)
   const { hash, key } = useLocation()
@@ -408,19 +414,40 @@ export function Component() {
               สวนเล็ก ๆ<br />
               ความตั้งใจที่ไม่เล็ก
             </h2>
-            <div className="mt-7 min-h-36" aria-live="polite" aria-atomic="true">
-              <p className="text-lg font-medium leading-8">{principles[story].title}</p>
-              <p className="mt-4 text-sm leading-8 text-muted-foreground">
-                {principles[story].body}
-              </p>
-            </div>
+            <Swiper
+              modules={[A11y]}
+              slidesPerView={1}
+              rewind
+              watchOverflow
+              speed={300}
+              a11y={{
+                containerRole: 'group',
+                itemRoleDescriptionMessage: 'แนวคิด',
+                slideLabelMessage: 'แนวคิด {{index}} จาก {{slidesLength}}',
+                wrapperLiveRegion: true,
+              }}
+              onSwiper={swiper => { storySwiper.current = swiper }}
+              onSlideChange={swiper => setStory(swiper.realIndex)}
+              className="story-swiper mt-7"
+            >
+              {principles.map((principle, index) => (
+                <SwiperSlide key={principle.number} aria-hidden={story !== index} className="!h-auto">
+                  <div className="min-h-36">
+                    <p className="text-lg font-medium leading-8">{principle.title}</p>
+                    <p className="mt-4 text-sm leading-8 text-muted-foreground">
+                      {principle.body}
+                    </p>
+                  </div>
+                </SwiperSlide>
+              ))}
+            </Swiper>
             <div className="mt-7 flex items-center gap-3">
               <Button
                 variant="outline"
                 size="icon-lg"
                 className="rounded-full"
                 aria-label="แนวคิดก่อนหน้า"
-                onClick={() => setStory((story + principles.length - 1) % principles.length)}
+                onClick={() => storySwiper.current?.slidePrev()}
               >
                 <HugeiconsIcon icon={ArrowLeft02Icon} />
               </Button>
@@ -429,12 +456,12 @@ export function Component() {
                 size="icon-lg"
                 className="rounded-full"
                 aria-label="แนวคิดถัดไป"
-                onClick={() => setStory((story + 1) % principles.length)}
+                onClick={() => storySwiper.current?.slideNext()}
               >
                 <HugeiconsIcon icon={ArrowRight02Icon} />
               </Button>
               <span className="ml-3 text-xs text-muted-foreground">
-                {String(story + 1).padStart(2, '0')} / 03
+                {String(story + 1).padStart(2, '0')} / {String(principles.length).padStart(2, '0')}
               </span>
             </div>
           </div>

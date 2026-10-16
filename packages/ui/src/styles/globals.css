@@ -322,7 +322,9 @@ html[data-theme-transition='active']::view-transition-group(root) {
 @media (prefers-reduced-motion: reduce) {
   .suannn-store *, .suannn-store *::before, .suannn-store *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .suannn-store .product-gallery-main .swiper-wrapper,
-  .suannn-store .product-gallery-viewer-swiper .swiper-wrapper { transition-duration: 0ms !important; }
+  .suannn-store .product-gallery-viewer-swiper .swiper-wrapper,
+  .suannn-store .story-swiper .swiper-wrapper,
+  .suannn-store .related-products-swiper .swiper-wrapper { transition-duration: 0ms !important; }
   .suannn-store .marquee-shell > button { display: none; }
   .suannn-store .suannn-brand-marquee { display: block; padding: 0 16px !important; }
   .suannn-store .suannn-brand-marquee > div { flex-wrap: wrap; justify-content: center; gap: 12px 24px; }
