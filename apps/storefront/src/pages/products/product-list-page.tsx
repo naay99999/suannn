@@ -37,12 +37,8 @@ export function ProductCatalog({ fixedCategory, title = 'สินค้าจ�
   return (
     <div ref={scope} className="@container/catalog w-full max-w-full">
       <title>{`${title} | suannn`}</title>
-      <section aria-labelledby="catalog-list-title">
-        <header className="catalog-reveal mb-6 border-b pb-6">
-          <h1 id="catalog-list-title" className="section-heading max-w-5xl">{title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">ผลไม้สดและของอร่อย เลือกที่ถูกใจได้เลย</p>
-        </header>
-        <div className="grid gap-5 @min-[900px]/catalog:grid-cols-[176px_minmax(0,1fr)] @min-[900px]/catalog:gap-8">
+      <section aria-label={title}>
+        <div className="grid gap-3 @min-[900px]/catalog:grid-cols-[176px_minmax(0,1fr)] @min-[900px]/catalog:gap-8">
           <CatalogFilters fixedCategory={fixedCategory} />
           <section aria-label="รายการสินค้า" className="min-w-0">
             <CatalogToolbar count={products.data?.items.length ?? 0} pending={products.isPending} fetching={products.isFetching} failed={products.isError} />
@@ -76,10 +72,6 @@ export function ProductCatalog({ fixedCategory, title = 'สินค้าจ�
           </section>
         </div>
       </section>
-      {!fixedCategory && <section className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t py-8">
-        <div><h2 className="text-lg font-semibold">อร่อยขึ้น เมื่อรู้จักที่มา</h2><p className="mt-2 text-sm text-muted-foreground">ทำความรู้จักความตั้งใจที่เชื่อมคนกินกับคนปลูก</p></div>
-        <Link className={buttonVariants({ variant: 'link', className: 'min-h-11 px-0' })} to="/#from-the-farm">จากสวนถึงคุณ</Link>
-      </section>}
     </div>
   )
 }

@@ -14,8 +14,8 @@
 
 ## Storefront products
 
-- Selected variant B: plain sidebar and page surfaces, with cards reserved for products. Avoid wrapping the toolbar, filters or closing links in decorative cards.
-- Sidebar search and category navigation on desktop; compact category disclosure on smaller screens. Sorting and current-page result count belong above the product grid.
+- Selected variant B: plain category-only sidebar and page surfaces, with cards reserved for products. Search, sorting, count and reset belong above the product grid. The closing provenance promotion is removed.
+- Category-only sidebar on desktop; all three category choices remain visible on mobile. On mobile, search is above the product grid, with sorting and the current-page count in one compact row. Desktop places search (maximum 24rem wide), count, sort and reset on a single toolbar row. No visible catalog heading or introduction.
 - Product cards use a square photo, clear category/name/availability/price and a bottom-aligned 44px cart action. Image and text link to product details; cart buttons sit outside the link.
 - Add directly using the lowest-price purchasable variant, or adjust the existing cart variant. Show the variant name and unit. After adding, replace the action with minus/quantity/plus; decrementing one removes the line. Cart data is authoritative, updates are disabled while pending, and failures appear inline without changing the quantity.
 - Responsive catalog: 1 column on very narrow content, 2 mobile, 3 tablet, 4 desktop; sidebar at 900px container width. Use container queries and existing semantic tokens.

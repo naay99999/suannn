@@ -11,6 +11,7 @@ import { Input } from '@workspace/ui/components/input'
 import { changePassword, listSessions, revokeOtherSessions, revokeSession, sendVerificationEmail, signOut } from '@/lib/auth-client'
 import { authSessionQuery, accountQueryPrefix } from '@/lib/auth-session'
 import { AccountPageHeading } from './account-ui'
+import { DeleteAccountCard } from './delete-account-card'
 import { expireSecuritySession, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from './customer-security'
 
 const passwordSchema = z.object({
@@ -99,6 +100,7 @@ export function Component() {
           {sessions.isPending ? <p role="status" className="text-muted-foreground">กำลังโหลดอุปกรณ์...</p> : sessions.isError ? <div role="alert" className="flex flex-wrap items-center gap-3"><p>โหลดรายการอุปกรณ์ไม่ได้</p><Button type="button" variant="outline" onClick={() => void sessions.refetch()}>ลองอีกครั้ง</Button></div> : sessions.data.length ? <ul className="flex flex-col gap-3">{sessions.data.map(row => <li key={row.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4"><div><p className="font-medium">{row.userAgent || 'อุปกรณ์ที่ไม่ระบุชื่อ'}</p><p className="text-xs text-muted-foreground">{row.id === session?.session.id ? 'อุปกรณ์นี้' : 'อุปกรณ์อื่น'}{row.createdAt && ` · ${new Date(row.createdAt).toLocaleDateString('th-TH')}`}</p></div><Button type="button" size="sm" variant="outline" disabled={revokeMutation.isPending} onClick={() => { setNotice(''); setError(''); revokeMutation.mutate(row) }}>ออกจากอุปกรณ์นี้</Button></li>)}</ul> : <p className="text-muted-foreground">ไม่พบรายการอุปกรณ์</p>}
           <div className="flex flex-wrap gap-3"><Button type="button" variant="outline" disabled={revokeOthersMutation.isPending} onClick={() => { setNotice(''); setError(''); revokeOthersMutation.mutate() }}>ออกจากอุปกรณ์อื่นทั้งหมด</Button><Button type="button" variant="destructive" disabled={signOutMutation.isPending} onClick={() => { setNotice(''); setError(''); signOutMutation.mutate() }}>ออกจากระบบ</Button></div>
         </CardContent></Card>
+        <DeleteAccountCard />
       </div>
     </>
   )

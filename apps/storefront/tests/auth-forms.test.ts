@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { signInSchema, signUpSchema } from '../src/pages/auth/auth-schemas'
+import { forgotPasswordSchema, resetPasswordSchema, signInSchema, signUpSchema } from '../src/pages/auth/auth-schemas'
 import { registrationSuccessMessage } from '../src/pages/auth/auth-result'
 
 const valid = {
@@ -31,4 +31,29 @@ test('uses one registration result independent of whether an address exists', ()
   const accepted = { accepted: true, next: 'sign-in' } as const
   expect(registrationSuccessMessage(accepted)).toContain('หากอีเมลนี้ใช้ลงทะเบียนได้')
   expect(registrationSuccessMessage(accepted)).not.toMatch(/สร้างบัญชีแล้ว|ลงทะเบียนสำเร็จ/)
+})
+
+test('distinguishes missing confirmation from a password mismatch', () => {
+  for (const schema of [signUpSchema, resetPasswordSchema]) {
+    const result = schema.safeParse({ ...valid, confirmPassword: '' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.find(issue => issue.path[0] === 'confirmPassword')?.message)
+        .toBe('กรุณายืนยันรหัสผ่าน')
+    }
+  }
+})
+
+test('normalizes surrounding email whitespace on every email form', () => {
+  for (const schema of [signInSchema, signUpSchema, forgotPasswordSchema]) {
+    expect(schema.parse({ ...valid, email: '  mali@example.com  ' }).email).toBe('mali@example.com')
+  }
+})
+
+test('reset password enforces length bounds and matching confirmation', () => {
+  expect(resetPasswordSchema.safeParse(valid).success).toBe(true)
+  for (const password of ['', 'short', 'a'.repeat(257)]) {
+    expect(resetPasswordSchema.safeParse({ password, confirmPassword: password }).success).toBe(false)
+  }
+  expect(resetPasswordSchema.safeParse({ ...valid, confirmPassword: 'differentpassword' }).success).toBe(false)
 })

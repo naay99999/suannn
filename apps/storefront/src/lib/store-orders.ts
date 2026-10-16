@@ -52,13 +52,42 @@ export async function getCustomerOrder(orderId: string): Promise<StoreOrderDetai
 }
 
 export async function getGuestOrder(orderId: string, token: string, fetcher: typeof fetch = fetch): Promise<StoreOrderDetail> {
+  return guestOrderRequest(`/api/v1/store/orders/${encodeURIComponent(orderId)}`, orderId, token, { method: 'GET' }, fetcher)
+}
+
+export async function cancelCustomerOrder(orderId: string, idempotencyKey: string): Promise<StoreOrderDetail> {
+  return unwrapOrder(await api.store.orders({ orderId }).cancel.post({}, { headers: { 'idempotency-key': idempotencyKey } }))
+}
+
+const cancellableStatuses: ReadonlySet<StoreOrderStatus> = new Set(['placed', 'processing', 'packed'])
+
+export function canCancelOrder(order: Pick<StoreOrderDetail, 'paymentMethod' | 'status'>): boolean {
+  return order.paymentMethod === 'cod' && cancellableStatuses.has(order.status)
+}
+
+export function cancelOrderErrorMessage(error: unknown): string {
+  if (error instanceof StoreOrderRequestError) {
+    if (error.status === 409 || error.status === 422) return 'คำสั่งซื้อนี้ยกเลิกไม่ได้แล้ว ร้านอาจเริ่มจัดส่งแล้ว กรุณาโหลดสถานะล่าสุด'
+    if (error.status === 429) return 'ลองใหม่อีกครั้งในภายหลัง'
+    if (error.status === 401 || error.status === 404) return 'ไม่พบคำสั่งซื้อหรือไม่มีสิทธิ์ยกเลิก'
+  }
+  return 'ยกเลิกคำสั่งซื้อไม่สำเร็จ กรุณาลองใหม่'
+}
+
+async function guestOrderRequest(
+  path: string,
+  orderId: string,
+  token: string,
+  init: { method: 'GET' | 'POST'; headers?: Record<string, string>; body?: string },
+  fetcher: typeof fetch,
+): Promise<StoreOrderDetail> {
   if (!orderId.trim() || !token.trim()) throw new StoreOrderRequestError(401, 'ORDER_ACCESS_TOKEN_REQUIRED')
   let response: Response
   try {
-    response = await fetcher(new URL(`/api/v1/store/orders/${encodeURIComponent(orderId)}`, defaultApiUrl), {
-      method: 'GET',
+    response = await fetcher(new URL(path, defaultApiUrl), {
+      ...init,
       credentials: 'omit',
-      headers: { 'X-Order-Access-Token': token },
+      headers: { ...init.headers, 'X-Order-Access-Token': token },
     })
   } catch {
     throw new StoreOrderRequestError(0, 'NETWORK_ERROR')
@@ -123,4 +152,18 @@ export function redirectToStripe(
   if (parsed.protocol !== 'https:' || parsed.hostname !== 'checkout.stripe.com') throw new Error('INVALID_STRIPE_CHECKOUT_URL')
   savePendingCheckout({ ...value, paymentMethod: 'stripe', checkoutUrl }, target)
   redirect(parsed.toString())
+}
+
+type StoreOrderRefund = NonNullable<StoreOrderDetail['payment']['refund']>
+
+const refundStatusLabels: Record<StoreOrderRefund['status'], string> = {
+  pending: 'กำลังดำเนินการคืนเงิน',
+  requires_action: 'การคืนเงินรอการดำเนินการเพิ่มเติม',
+  succeeded: 'คืนเงินสำเร็จแล้ว',
+  failed: 'คืนเงินไม่สำเร็จ ร้านจะติดต่อกลับ',
+  canceled: 'ยกเลิกการคืนเงินแล้ว',
+}
+
+export function refundStatusLabel(refund: StoreOrderRefund): string {
+  return refundStatusLabels[refund.status]
 }

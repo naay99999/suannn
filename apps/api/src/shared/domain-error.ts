@@ -3,6 +3,7 @@ export type DomainErrorCode =
   | 'IDENTITY_LOCK_TIMEOUT'
   | 'CLIENT_IP_UNAVAILABLE'
   | 'AUTHENTICATION_REQUIRED'
+  | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PRODUCT_NOT_FOUND'
   | 'VARIANT_NOT_FOUND'
   | 'PRODUCT_SLUG_CONFLICT'
@@ -52,12 +53,15 @@ export type DomainErrorCode =
   | 'ORDER_REFUND_CONFLICT'
   | 'COD_AMOUNT_MISMATCH'
   | 'INVALID_ORDER_QUERY'
+  | 'SHIPMENT_REQUIRED'
+  | 'INVALID_SHIPMENT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
   IDENTITY_LOCK_TIMEOUT: { status: 503, message: 'Service temporarily unavailable' },
   CLIENT_IP_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
   AUTHENTICATION_REQUIRED: { status: 401, message: 'Authentication required' },
+  EMAIL_VERIFICATION_REQUIRED: { status: 403, message: 'Email verification required' },
   PRODUCT_NOT_FOUND: { status: 404, message: 'Product not found' },
   VARIANT_NOT_FOUND: { status: 404, message: 'Variant not found' },
   PRODUCT_SLUG_CONFLICT: { status: 409, message: 'Product slug is already in use' },
@@ -107,6 +111,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   ORDER_REFUND_CONFLICT: { status: 409, message: 'Order refund state does not allow this action' },
   COD_AMOUNT_MISMATCH: { status: 422, message: 'Collected amount must match the order total' },
   INVALID_ORDER_QUERY: { status: 422, message: 'Order query is invalid' },
+  SHIPMENT_REQUIRED: { status: 422, message: 'Carrier and tracking number are required to ship an order' },
+  INVALID_SHIPMENT: { status: 422, message: 'Shipment details are invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
@@ -133,6 +139,7 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   INVALID_ADDRESS: { status: 422, message: 'Request validation failed' },
   ADDRESS_NOT_FOUND: { status: 404, message: 'Address not found' },
   ADDRESS_LIMIT_REACHED: { status: 409, message: 'Address limit reached' },
+  ACCOUNT_HAS_OPEN_ORDERS: { status: 409, message: 'Finish or cancel open orders before deleting the account' },
 }
 
 export class DomainError extends Error {

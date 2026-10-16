@@ -65,12 +65,13 @@ export function buildCheckoutOrderBody(
   return { quoteToken: quote.quoteToken, paymentMethod, contact, address }
 }
 
-export function availablePaymentMethods(isCustomer: boolean): CheckoutPaymentMethod[] {
-  return isCustomer ? ['cod', 'stripe'] : ['stripe']
+// COD needs a signed-in customer with a verified email; the API enforces the same rule.
+export function availablePaymentMethods(canUseCod: boolean): CheckoutPaymentMethod[] {
+  return canUseCod ? ['cod', 'stripe'] : ['stripe']
 }
 
-export function effectivePaymentMethod(isCustomer: boolean, selected: CheckoutPaymentMethod): CheckoutPaymentMethod {
-  return isCustomer ? selected : 'stripe'
+export function effectivePaymentMethod(canUseCod: boolean, selected: CheckoutPaymentMethod): CheckoutPaymentMethod {
+  return canUseCod ? selected : 'stripe'
 }
 
 export async function refreshAfterStaleQuote(queryClient: QueryClient, quoteKey: readonly unknown[]) {

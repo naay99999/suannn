@@ -91,6 +91,10 @@ export const commerceOrder = pgTable('commerce_order', {
   status: text('status', { enum: ['pending_payment', 'placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled'] })
     .notNull().default('placed'),
   reservationId: uuid('reservation_id').notNull().references(() => inventoryReservation.id, { onDelete: 'restrict' }),
+  shipmentCarrier: text('shipment_carrier', { enum: ['thailand_post', 'kerry', 'flash', 'jt', 'other'] }),
+  shipmentCarrierName: text('shipment_carrier_name'),
+  trackingNumber: text('tracking_number'),
+  shippedAt: timestamp('shipped_at', { withTimezone: true }),
   quoteFingerprint: text('quote_fingerprint').notNull(),
   terminalAt: timestamp('terminal_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -142,6 +146,18 @@ export const commerceOrder = pgTable('commerce_order', {
   check('commerce_order_currency_check', sql`${table.currency} = 'THB'`),
   check('commerce_order_payment_method_nonblank_check', sql`length(btrim(${table.paymentMethod})) between 1 and 80`),
   check('commerce_order_status_check', sql`${table.status} in ('pending_payment', 'placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled')`),
+  check('commerce_order_shipment_carrier_check', sql`${table.shipmentCarrier} is null or ${table.shipmentCarrier} in ('thailand_post', 'kerry', 'flash', 'jt', 'other')`),
+  check('commerce_order_shipment_shape_check', sql`
+    (${table.shipmentCarrier} is null
+      and ${table.shipmentCarrierName} is null
+      and ${table.trackingNumber} is null
+      and ${table.shippedAt} is null)
+    or (${table.shipmentCarrier} is not null
+      and ${table.trackingNumber} ~ '^[A-Za-z0-9-]{4,40}$'
+      and ${table.shippedAt} is not null
+      and ((${table.shipmentCarrier} = 'other' and length(btrim(${table.shipmentCarrierName})) between 1 and 80)
+        or (${table.shipmentCarrier} <> 'other' and ${table.shipmentCarrierName} is null)))
+  `),
   check('commerce_order_quote_fingerprint_check', sql`${table.quoteFingerprint} ~ '^[0-9a-f]{64}$'`),
 ])
 

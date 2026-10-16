@@ -14,7 +14,7 @@ export type OrderListInput = NonNullable<Parameters<OrdersRoute['get']>[0]>['que
 export type FulfillmentInput = NonNullable<Parameters<OrderRoute['fulfillment']['post']>[0]>
 export type GuestAccessInput = NonNullable<Parameters<OrderRoute['guest-access']['reissue']['post']>[0]>
 export type OrderCommand =
-  | { kind: 'fulfillment'; status: FulfillmentInput['status'] }
+  | { kind: 'fulfillment'; status: FulfillmentInput['status']; shipment?: FulfillmentInput['shipment'] }
   | { kind: 'cancel' }
   | { kind: 'collectCod'; amountSatang: number }
   | { kind: 'refund' }
@@ -27,7 +27,7 @@ export function createOrdersApi(client: ApiClient = api) {
     execute: (orderId: string, command: OrderCommand, key: string) => apiRequest(async () => {
       const route = client.admin.orders({ orderId })
       switch (command.kind) {
-        case 'fulfillment': return apiData(await route.fulfillment.post({ status: command.status }, { headers: { 'idempotency-key': key } })) as OrderDetail
+        case 'fulfillment': return apiData(await route.fulfillment.post({ status: command.status, ...(command.shipment ? { shipment: command.shipment } : {}) }, { headers: { 'idempotency-key': key } })) as OrderDetail
         case 'cancel': return apiData(await route.cancel.post({}, { headers: { 'idempotency-key': key } })) as OrderDetail
         case 'collectCod': return apiData(await route['collect-cod'].post({ amountSatang: command.amountSatang }, { headers: { 'idempotency-key': key } })) as OrderDetail
         case 'refund': return apiData(await route.refund.post({}, { headers: { 'idempotency-key': key } })) as OrderDetail

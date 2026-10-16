@@ -17,7 +17,8 @@ export function Component() {
   const [resultMessage, setResultMessage] = useState('')
   const [requestError, setRequestError] = useState('')
   const [pending, setPending] = useState(false)
-  const { register, handleSubmit, formState: { errors } } = useForm<SignUpValues>({
+  const { register, handleSubmit, formState: { errors, touchedFields } } = useForm<SignUpValues>({
+    mode: 'onTouched',
     resolver: zodResolver(signUpSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   })
@@ -54,7 +55,7 @@ export function Component() {
           <FieldGroup className="gap-5">
             <Field data-invalid={Boolean(errors.name)}><FieldLabel htmlFor="sign-up-name">ชื่อที่แสดง</FieldLabel><Input id="sign-up-name" className="h-12 text-base md:text-base" autoComplete="name" aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? 'sign-up-name-error' : undefined} {...register('name')} /><FieldError id="sign-up-name-error">{errors.name?.message}</FieldError></Field>
             <Field data-invalid={Boolean(errors.email)}><FieldLabel htmlFor="sign-up-email">อีเมล</FieldLabel><Input id="sign-up-email" className="h-12 text-base md:text-base" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'sign-up-email-error' : undefined} {...register('email')} /><FieldError id="sign-up-email-error">{errors.email?.message}</FieldError></Field>
-            <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="sign-up-password">รหัสผ่าน</FieldLabel><Input id="sign-up-password" className="h-12 text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'sign-up-password-hint sign-up-password-error' : 'sign-up-password-hint'} {...register('password')} /><p id="sign-up-password-hint" className="text-sm text-muted-foreground">อย่างน้อย 12 ตัวอักษร</p><FieldError id="sign-up-password-error">{errors.password?.message}</FieldError></Field>
+            <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="sign-up-password">รหัสผ่าน</FieldLabel><Input id="sign-up-password" className="h-12 text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'sign-up-password-error' : undefined} {...register('password', { deps: touchedFields.confirmPassword ? ['confirmPassword'] : [] })} /><FieldError id="sign-up-password-error">{errors.password?.message}</FieldError></Field>
             <Field data-invalid={Boolean(errors.confirmPassword)}><FieldLabel htmlFor="sign-up-confirm">ยืนยันรหัสผ่าน</FieldLabel><Input id="sign-up-confirm" className="h-12 text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} aria-describedby={errors.confirmPassword ? 'sign-up-confirm-error' : undefined} {...register('confirmPassword')} /><FieldError id="sign-up-confirm-error">{errors.confirmPassword?.message}</FieldError></Field>
             {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
             <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังส่งข้อมูล...' : 'สมัครสมาชิก'}</Button>

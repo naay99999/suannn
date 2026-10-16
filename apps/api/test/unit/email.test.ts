@@ -6,7 +6,10 @@ import {
 } from '../../src/modules/email/sender'
 import {
   invitationEmail,
+  orderCancelledEmail,
   orderConfirmationEmail,
+  orderRefundedEmail,
+  orderShippedEmail,
   resetPasswordEmail,
   verificationEmail,
 } from '../../src/modules/email/templates'
@@ -16,9 +19,9 @@ import { FakeEmailSender } from '../helpers/fakes'
 describe('authentication email', () => {
   it('builds verification, reset, and invitation messages', () => {
     expect(verificationEmail('https://store.example/verify?token=secret').subject)
-      .toContain('Verify')
+      .toContain('ยืนยันอีเมล')
     expect(resetPasswordEmail('https://store.example/reset?token=secret').subject)
-      .toContain('Reset')
+      .toContain('รหัสผ่าน')
     expect(invitationEmail('Support', 'https://admin.example/invite?token=secret').text)
       .toContain('Support')
   })
@@ -132,3 +135,21 @@ describe('order confirmation email', () => {
     expect(links.some(link => link.includes('guest-secret'))).toBe(false)
   })
 })
+
+describe('order status emails', () => {
+  it('links guests to the guest order page without repeating the access token', () => {
+    const shipped = orderShippedEmail('order-1', 'S-1', 'https://shop.example.test', true, { carrierLabel: 'Kerry Express', trackingNumber: 'KEX123' })
+    expect(shipped.text).toContain('https://shop.example.test/orders/guest/order-1')
+    expect(shipped.text).toContain('KEX123')
+    expect(orderCancelledEmail('order-1', 'S-1', 'https://shop.example.test', false).text)
+      .toContain('https://shop.example.test/account/orders/order-1')
+  })
+
+  it('formats refunded amounts in baht and escapes HTML', () => {
+    const refunded = orderRefundedEmail('order-1', '<S-1>', 'https://shop.example.test', false, 12_950)
+    expect(refunded.text).toContain('129.50')
+    expect(refunded.html).toContain('&lt;S-1&gt;')
+    expect(refunded.html).not.toContain('<S-1>')
+  })
+})
+

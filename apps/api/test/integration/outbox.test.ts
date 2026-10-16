@@ -449,4 +449,31 @@ describe('guest order access and confirmation outbox', () => {
     expect(firstResult).toBe(1)
     expect(second).toBe(0)
   })
+
+  it('emails customers in Thai when their order ships or is cancelled', async () => {
+    const shipped = await placeOrder({ kind: 'customer', userId: customerId })
+    const cancelled = await placeOrder({ kind: 'customer', userId: customerId })
+    const orders = new OrderService(database.db)
+    await orders.advanceFulfillment(shipped.result.order.id, 'processing', staffActor, 'mail-processing')
+    await orders.advanceFulfillment(shipped.result.order.id, 'packed', staffActor, 'mail-packed')
+    await orders.advanceFulfillment(shipped.result.order.id, 'shipped', staffActor, 'mail-shipped', { carrier: 'flash', trackingNumber: 'TH0123456789' })
+    await orders.cancel(cancelled.result.order.id, { kind: 'customer', userId: customerId }, 'mail-cancel')
+
+    const messages: EmailMessage[] = []
+    await makeOutbox(makeSender(async (message) => {
+      messages.push(message)
+      return { id: `email-${messages.length}` }
+    })).processBatch(10)
+
+    const shippedMail = messages.find(message => message.template === 'order-shipped')
+    const cancelledMail = messages.find(message => message.template === 'order-cancelled')
+    expect(messages.filter(message => message.template === 'order-confirmation')).toHaveLength(2)
+    expect(shippedMail?.subject).toContain('จัดส่งแล้ว')
+    expect(shippedMail?.text).toContain('Flash Express')
+    expect(shippedMail?.text).toContain('TH0123456789')
+    expect(shippedMail?.text).toContain(`https://shop.example.test/account/orders/${shipped.result.order.id}`)
+    expect(cancelledMail?.subject).toContain('ยกเลิก')
+    const outbox = await database.db.select().from(orderOutbox)
+    expect(outbox.every(row => row.status === 'sent')).toBe(true)
+  })
 })

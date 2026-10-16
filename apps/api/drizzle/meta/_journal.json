@@ -155,6 +155,13 @@
       "when": 1791413934016,
       "tag": "0021_normal_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792133122674,
+      "tag": "0022_order_shipment",
+      "breakpoints": true
     }
   ]
 }

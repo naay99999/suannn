@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ShoppingBag01Icon, Cancel01Icon } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
-import { SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '@workspace/ui/components/sheet'
+import { SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '@workspace/ui/components/sheet'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@workspace/ui/components/empty'
 import { formatStorePrice } from '@/lib/store-products'
 import { getCartSummary } from '@/lib/cart'
@@ -11,13 +11,13 @@ import { useCart } from './cart-context'
 import { QuantityControl } from './quantity-control'
 
 export function CartTrigger() {
-  const { cart, triggerRef } = useCart()
+  const { cart, open, setOpen, triggerRef } = useCart()
   const { count } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
   return (
-    <SheetTrigger render={<Button ref={triggerRef} variant="outline" size="icon-lg" className="relative rounded-full" />} aria-label={`เปิดตะกร้า ${count} ชิ้น`}>
+    <Button ref={triggerRef} variant="outline" size="icon-lg" className="relative rounded-full" aria-label={`เปิดตะกร้า ${count} ชิ้น`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <HugeiconsIcon icon={ShoppingBag01Icon} />
       {count > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">{count > 99 ? '99+' : count}</span>}
-    </SheetTrigger>
+    </Button>
   )
 }
 

@@ -16,6 +16,8 @@ import { CustomerAddressRepository } from '../../src/modules/customer/addresses/
 import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
 import { CustomerEmailChangeRepository } from '../../src/modules/customer/email-change/repository'
 import { CustomerEmailChangeService } from '../../src/modules/customer/email-change/service'
+import { CustomerAccountDeletionRepository } from '../../src/modules/customer/account-deletion/repository'
+import { CustomerAccountDeletionService } from '../../src/modules/customer/account-deletion/service'
 import { createCustomerAuthModule } from '../../src/modules/auth/customer'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
@@ -68,6 +70,9 @@ const app = await createApp(config, {
     claims,
     secret: config.betterAuthSecret,
     emailSender,
+  }),
+  customerAccountDeletion: new CustomerAccountDeletionService({
+    audit, repository: new CustomerAccountDeletionRepository(database.db), claims,
   }),
   staffInvitations: new StaffInvitationService({
     auth,
@@ -207,6 +212,7 @@ describe('API routes', () => {
       'Customer Profile',
       'Customer Addresses',
       'Customer Email Change',
+      'Customer Account',
       'Store Products',
       'Store Farms',
       'Store Cart',
@@ -360,7 +366,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(106)
+    expect(operations).toHaveLength(107)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
@@ -403,6 +409,7 @@ describe('API routes', () => {
       ['/api/v1/customer/addresses/{id}/default', 'put', 'Customer Addresses', true],
       ['/api/v1/customer/email-change/request', 'post', 'Customer Email Change', true],
       ['/api/v1/customer/email-change/confirm', 'post', 'Customer Email Change', true],
+      ['/api/v1/customer/account/deletion', 'post', 'Customer Account', true],
     ] as const
     const actualOperations = Object.entries(specification.paths)
       .filter(([path]) => path.startsWith('/api/v1/customer/'))

@@ -37,6 +37,10 @@ export async function confirmEmailChange(code: string) {
   return unwrapAccountResult(await api.customer['email-change'].confirm.post({ code }))
 }
 
+export async function deleteAccount(currentPassword: string) {
+  return unwrapAccountResult(await api.customer.account.deletion.post({ currentPassword }))
+}
+
 export async function getAddresses() {
   return unwrapAccountResult(await api.customer.addresses.get())
 }

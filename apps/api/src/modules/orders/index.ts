@@ -9,7 +9,7 @@ import { httpModels } from '../../shared/http-model'
 import { DomainError } from '../../shared/domain-error'
 import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
-import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus } from './types'
+import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus, ShipmentInput } from './types'
 import type { OrderService } from './service'
 import type { StripeRefundService } from '../payments/stripe/refunds'
 import { ordersModels } from './model'
@@ -110,6 +110,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
       status: order.payment.status,
       ...(order.payment.refund ? { refund: order.payment.refund } : {}),
     },
+    ...(order.shipment ? { shipment: order.shipment } : {}),
   }
 }
 
@@ -171,7 +172,7 @@ async function rateLimitGuestOrderAccess(
 export function createStoreOrdersModule(
   config: AppConfig,
   auth: Auth,
-  service: Pick<OrderService, 'listCustomer' | 'getForPrincipal' | 'cancel'>,
+  service: Pick<OrderService, 'listCustomer' | 'getStoreOrder' | 'cancel'>,
   limiter: Pick<RateLimiter, 'consume'>,
 ) {
   const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error' } as const
@@ -201,13 +202,13 @@ export function createStoreOrdersModule(
         const limited = await rateLimitGuestOrderAccess(request, limiter, requestContext, set)
         if (limited) return limited
       }
-      return service.getForPrincipal(params.orderId, principal)
+      return service.getStoreOrder(params.orderId, principal)
     }, {
       params: 'orders.idParams',
-      response: { 200: 'orders.detail', ...errors, 429: 'http.error' },
+      response: { 200: 'orders.storeDetail', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Get an owned store order',
-        description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response.',
+        description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response. Unpaid Stripe orders include checkout with the hosted Checkout URL while that session is still open.',
         tags: ['Store Orders'],
         security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
       },
@@ -284,9 +285,10 @@ export function createAdminOrdersModule(
         body.status as OrderStatus,
         actorFrom(user.id, requestContext),
         headers['idempotency-key'],
+        body.shipment as ShipmentInput | undefined,
       ),
     ), {
-      parse: [parseStrictJsonBody(['status']), 'json'],
+      parse: [parseStrictJsonBody(['status', 'shipment']), 'json'],
       browserMutation: 'admin',
       permission: { order: ['fulfill'] },
       params: 'orders.idParams',
@@ -295,7 +297,7 @@ export function createAdminOrdersModule(
       response: { 200: 'orders.detail', ...errors },
       detail: {
         summary: 'Advance order fulfillment',
-        description: 'Advances the order to its next fulfillment status. The command is idempotent. Requires order:fulfill permission and an admin-origin browser request.',
+        description: 'Advances the order to its next fulfillment status. Moving to shipped requires shipment carrier and tracking number (carrierName only for carrier other). The command is idempotent. Requires order:fulfill permission and an admin-origin browser request.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

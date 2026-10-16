@@ -6,12 +6,14 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { z } from 'zod'
 import { Button } from '@workspace/ui/components/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
-import { Field, FieldError, FieldLabel } from '@workspace/ui/components/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
+import { cn } from '@workspace/ui/lib/utils'
 import { ThaiAddressCascadeSelect } from '@workspace/ui/components/thai-address-cascade-select'
 import { useCart } from '@/components/cart/cart-context'
 import { authSessionQuery } from '@/lib/auth-session'
 import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, placeStoreOrder, refreshAfterStaleQuote } from '@/lib/store-checkout'
+import { formatStorePrice } from '@/lib/store-products'
 import { getCartSummary } from '@/lib/cart'
 import { addressesQuery } from '@/pages/account/account-queries'
 import type { CustomerAddress } from '@/pages/account/account-api'
@@ -70,6 +72,7 @@ function selectedAddressPayload(choice: string, address?: CustomerAddress, value
 function checkoutErrorMessage(error: unknown) {
   if (error instanceof StoreCheckoutRequestError) {
     if (error.code === 'AUTHENTICATION_REQUIRED') return 'เก็บเงินปลายทางใช้ได้เมื่อเข้าสู่ระบบเท่านั้น'
+    if (error.code === 'EMAIL_VERIFICATION_REQUIRED') return 'ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้'
     if (error.code === 'QUOTE_STALE' || error.status === 409 || error.status === 422) return 'ราคา จำนวนสินค้า หรือค่าจัดส่งเปลี่ยนแล้ว ตรวจสอบยอดใหม่ก่อนยืนยันอีกครั้ง'
     if (error.code === 'STRIPE_NOT_CONFIGURED') return 'ระบบชำระเงินออนไลน์ยังตั้งค่าไม่ครบ'
   }
@@ -84,6 +87,7 @@ export function Component() {
   const session = useQuery(authSessionQuery)
   const customerSession = session.data?.user.accountType === 'customer' ? session.data : null
   const isCustomer = Boolean(customerSession)
+  const canUseCod = customerSession?.user.emailVerified === true
   const sessionResolved = !session.isPending && !session.isError
   const userId = customerSession?.user.id ?? ''
   const addresses = useQuery({ ...addressesQuery(userId), enabled: Boolean(userId) })
@@ -102,7 +106,7 @@ export function Component() {
   const [submitError, setSubmitError] = useState('')
   const orderMutation = useMutation({ mutationFn: ({ input, key }: { input: Parameters<typeof placeStoreOrder>[0]; key: string }) => placeStoreOrder(input, key) })
   const locationDetails = (location.state as { details?: Partial<CheckoutForm> } | null)?.details
-  const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<CheckoutForm>({
+  const { register, handleSubmit, setValue, setError, formState: { errors, isSubmitting } } = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       email: session.data?.user.email ?? '', phone: '', recipientName: '', addressLine1: '', addressLine2: '',
@@ -112,8 +116,8 @@ export function Component() {
   const defaultShippingAddress = addresses.data?.items.find(address => address.isDefaultShipping)
   const effectiveAddressChoice = addressChoice === 'default' ? defaultShippingAddress?.id ?? 'manual' : addressChoice
   const selectedSavedAddress = addresses.data?.items.find(address => address.id === effectiveAddressChoice)
-  const availableMethods = availablePaymentMethods(isCustomer)
-  const selectedPaymentMethod = effectivePaymentMethod(isCustomer, paymentMethod)
+  const availableMethods = availablePaymentMethods(canUseCod)
+  const selectedPaymentMethod = effectivePaymentMethod(canUseCod, paymentMethod)
 
   const handleAddressError = useCallback(() => setManualAddress(true), [])
 
@@ -130,7 +134,7 @@ export function Component() {
       setSubmitError('ตรวจสอบสถานะบัญชีก่อนสั่งซื้อ กรุณาลองโหลดอีกครั้ง')
       return
     }
-    if (!availableMethods.includes(selectedPaymentMethod) || (selectedPaymentMethod === 'cod' && !isCustomer)) {
+    if (!availableMethods.includes(selectedPaymentMethod) || (selectedPaymentMethod === 'cod' && !canUseCod)) {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
@@ -192,36 +196,40 @@ export function Component() {
 
   if (cartPending && !cart) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดตะกร้า...</p>
   if (!lines.length) {
-    return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>ยังไม่มีสินค้าในตะกร้า</EmptyTitle><EmptyDescription>เลือกสินค้าจากร้านก่อน แล้วกลับมาตรวจสอบรายการได้ที่นี่</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link to="/products" />} nativeButton={false} size="storefront">ไปเลือกสินค้า</Button></EmptyContent></Empty>
+    return <Empty className="py-20"><EmptyHeader><EmptyTitle>ยังไม่มีสินค้าในตะกร้า</EmptyTitle><EmptyDescription>เลือกสินค้าจากร้านก่อน แล้วกลับมาตรวจสอบรายการได้ที่นี่</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link to="/products" />} nativeButton={false} size="storefront">ไปเลือกสินค้า</Button></EmptyContent></Empty>
   }
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden">
-      <title>ตรวจสอบรายการสั่งซื้อ | suannn</title>
-      <div className="mb-10 max-w-5xl md:mb-14">
-        <p className="mb-4 text-sm font-medium text-primary-ink">ตะกร้า / ตรวจสอบรายการ</p>
-        <h1 className="text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl md:text-6xl">ของอร่อยกำลังจะไปหาคุณ</h1>
-        <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">ตรวจสอบสินค้า ที่อยู่จัดส่ง และยอดจากราคาปัจจุบันของร้าน</p>
+    <div className="mx-auto w-full max-w-6xl">
+      <title>ชำระเงิน | suannn</title>
+      <div className="mb-10 max-w-5xl md:mb-12">
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">ชำระเงิน</h1>
+        <p className="mt-3 max-w-xl text-sm leading-7 text-muted-foreground">กรอกข้อมูลจัดส่ง เลือกวิธีชำระเงิน แล้วตรวจสอบยอดก่อนยืนยัน</p>
       </div>
       {cartError && <p role="alert" className="mb-5 text-sm text-destructive">{cartError}</p>}
       {session.isError && <div role="alert" className="mb-5 flex items-center gap-3"><p>ตรวจสอบสถานะบัญชีไม่ได้ กรุณาลองอีกครั้งก่อนสั่งซื้อ</p><Button variant="outline" onClick={() => void session.refetch()}>ลองอีกครั้ง</Button></div>}
       {session.isPending && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังตรวจสอบสถานะบัญชี...</p>}
       {hasUnavailable && <p role="alert" className="mb-5 text-sm text-destructive">มีสินค้าไม่พร้อมสั่งซื้อ กรุณากลับไปแก้ไขตะกร้าก่อน</p>}
       {quote.isPending && !quote.data && !hasUnavailable && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังคำนวณยอดและค่าจัดส่ง...</p>}
-      {quote.isError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3"><p>ขอราคาสำหรับคำสั่งซื้อไม่ได้</p><Button variant="outline" onClick={() => void quote.refetch()}>คำนวณใหม่</Button></div>}
-      <div className="grid grid-flow-dense items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)] lg:gap-12">
-        <div className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-28">{quote.data ? <OrderSummary quote={quote.data} /> : <p role="status" className="rounded-3xl border p-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}</div>
-        <form id="checkout-form" noValidate onSubmit={handleSubmit(submit)} className="min-w-0 lg:col-start-1 lg:row-start-1">
-          <div className="rounded-3xl border bg-card p-5 md:p-8">
-            <h2 className="text-2xl font-semibold">ข้อมูลติดต่อและจัดส่ง</h2>
-            {fields.map(field => <Field key={field.name} className="mt-5" data-invalid={Boolean(errors[field.name])}>
-              <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-              <Input id={field.name} type={field.type} inputMode={field.inputMode} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
-              <FieldError>{errors[field.name]?.message}</FieldError>
-            </Field>)}
+      {quote.isError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3"><p>คำนวณยอดชำระไม่ได้ กรุณาลองอีกครั้ง</p><Button variant="outline" onClick={() => void quote.refetch()}>คำนวณใหม่</Button></div>}
+      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:gap-16">
+        <form id="checkout-form" noValidate onSubmit={handleSubmit(submit)} className="min-w-0">
+          <section aria-labelledby="contact-heading">
+            <h2 id="contact-heading" className="text-xl font-semibold">ข้อมูลติดต่อ</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">สำหรับแจ้งรายละเอียดคำสั่งซื้อและติดต่อเรื่องการจัดส่ง</p>
+            <FieldGroup className="mt-6 gap-5">
+              {fields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
+                <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
+                <Input className="h-12" id={field.name} type={field.type} inputMode={field.inputMode} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+                <FieldError>{errors[field.name]?.message}</FieldError>
+              </Field>)}
+            </FieldGroup>
+          </section>
+          <section aria-labelledby="shipping-heading" className="mt-8 border-t pt-8">
+            <h2 id="shipping-heading" className="text-xl font-semibold">ที่อยู่จัดส่ง</h2>
             {isCustomer && <Field className="mt-6">
-              <FieldLabel htmlFor="checkout-address-choice">ที่อยู่จัดส่ง</FieldLabel>
-              <select id="checkout-address-choice" className="h-11 rounded-xl border bg-background px-3" value={effectiveAddressChoice} onChange={event => setAddressChoice(event.target.value)}>
+              <FieldLabel htmlFor="checkout-address-choice">เลือกที่อยู่</FieldLabel>
+              <select id="checkout-address-choice" className="h-12 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" value={effectiveAddressChoice} onChange={event => setAddressChoice(event.target.value)}>
                 <option value="manual">กรอกที่อยู่ใหม่</option>
                 {addresses.data?.items.map(address => <option key={address.id} value={address.id}>{address.label} · {address.recipientName}</option>)}
               </select>
@@ -230,40 +238,45 @@ export function Component() {
             {(!isCustomer || effectiveAddressChoice === 'manual' || !selectedSavedAddress) && <>
               {addressFields.map(field => <Field key={field.name} className="mt-5" data-invalid={Boolean(errors[field.name])}>
                 <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                <Input id={field.name} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+                <Input className="h-12" id={field.name} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
                 <FieldError>{errors[field.name]?.message}</FieldError>
               </Field>)}
               {manualAddress ? <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <p role="status" className="text-sm text-muted-foreground sm:col-span-2">โหลดรายการที่อยู่ไม่สำเร็จ กรุณากรอกข้อมูลเอง</p>
                 {manualAddressFields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
                   <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                  <Input id={field.name} inputMode={field.inputMode} autoComplete={field.autoComplete} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+                  <Input className="h-12" id={field.name} inputMode={field.inputMode} autoComplete={field.autoComplete} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
                   <FieldError>{errors[field.name]?.message}</FieldError>
                 </Field>)}
                 <Button type="button" variant="outline" onClick={() => setManualAddress(false)} className="sm:col-span-2">ลองโหลดรายการที่อยู่อีกครั้ง</Button>
               </div> : <Field className="mt-5" data-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)}>
-                <ThaiAddressCascadeSelect defaultValue={checkoutAddressDefaultValue(locationDetails)} onValueChange={handleAddressChange} onError={handleAddressError} aria-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)} required />
+                <ThaiAddressCascadeSelect triggerClassName="h-12" defaultValue={checkoutAddressDefaultValue(locationDetails)} onValueChange={handleAddressChange} onError={handleAddressError} aria-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)} required />
                 {(errors.province || errors.district || errors.subdistrict || errors.postalCode) && <FieldError>กรุณาเลือกจังหวัด อำเภอ และตำบลให้ครบ</FieldError>}
               </Field>}
             </>}
-            {selectedSavedAddress && <div className="mt-5 rounded-2xl bg-accent p-4 text-sm leading-7"><p className="font-medium">{selectedSavedAddress.recipientName} · {selectedSavedAddress.phone}</p><p>{selectedSavedAddress.addressLine1}{selectedSavedAddress.addressLine2 ? ` ${selectedSavedAddress.addressLine2}` : ''}</p><p>{selectedSavedAddress.subdistrict} {selectedSavedAddress.district} {selectedSavedAddress.province} {selectedSavedAddress.postalCode}</p></div>}
-          </div>
-          <section aria-labelledby="payment-heading" className="mt-6 rounded-3xl border bg-card p-5 md:p-8">
-            <h2 id="payment-heading" className="text-2xl font-semibold">วิธีชำระเงิน</h2>
+            {selectedSavedAddress && <div className="mt-5 border-l-2 border-primary pl-4 text-sm leading-7"><p className="font-medium">{selectedSavedAddress.recipientName} · {selectedSavedAddress.phone}</p><p>{selectedSavedAddress.addressLine1}{selectedSavedAddress.addressLine2 ? ` ${selectedSavedAddress.addressLine2}` : ''}</p><p>{selectedSavedAddress.subdistrict} {selectedSavedAddress.district} {selectedSavedAddress.province} {selectedSavedAddress.postalCode}</p></div>}
+          </section>
+          <fieldset className="mt-8 min-w-0 border-t pt-8">
+            <legend className="sr-only">วิธีชำระเงิน</legend>
+            <h2 aria-hidden="true" className="text-xl font-semibold">วิธีชำระเงิน</h2>
             <div className="mt-5 grid gap-3">
-              {availableMethods.map(method => <label key={method} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 ${method === selectedPaymentMethod ? 'border-primary bg-accent' : ''}`}>
+              {availableMethods.map(method => <label key={method} className={cn('flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-ring', method === selectedPaymentMethod && 'border-primary bg-accent')}>
                 <input type="radio" name="paymentMethod" value={method} checked={method === selectedPaymentMethod} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
-                <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'สำหรับบัญชีลูกค้าที่เข้าสู่ระบบแล้ว' : 'ชำระผ่าน Stripe Checkout'}</span></span>
+                <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'ชำระเงินเมื่อได้รับสินค้า' : 'กรอกข้อมูลบัตรในหน้าชำระเงินของ Stripe'}</span></span>
               </label>)}
               {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
+              {isCustomer && !canUseCod && <p className="text-sm text-muted-foreground">ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้ <Link className="font-medium text-primary-ink underline" to="/account/security">ส่งอีเมลยืนยัน</Link></p>}
             </div>
-          </section>
-          <div className="mt-8 flex flex-col items-start gap-4">
-            {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-            <Button type="submit" size="storefront" className="w-full sm:w-auto" disabled={!sessionResolved || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)}>{orderMutation.isPending ? 'กำลังส่งคำสั่งซื้อ...' : selectedPaymentMethod === 'stripe' ? 'ไปชำระเงินด้วย Stripe' : 'ยืนยันคำสั่งซื้อ'}</Button>
-            <Link to="/products" className="text-sm font-medium text-primary-ink underline underline-offset-4 hover:text-foreground">เลือกสินค้าต่อ</Link>
-          </div>
+          </fieldset>
         </form>
+        <aside aria-label="ตรวจสอบยอดและยืนยันคำสั่งซื้อ" className="min-w-0 border-t pt-8 lg:sticky lg:top-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+          {quote.data ? <OrderSummary quote={quote.data} /> : <p role="status" className="py-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}
+          <div className="mt-6 flex flex-col gap-4">
+            {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
+            <Button type="submit" form="checkout-form" size="storefront" className="w-full" aria-busy={isSubmitting} disabled={!sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)}>{isSubmitting ? 'กำลังส่งคำสั่งซื้อ...' : `${selectedPaymentMethod === 'stripe' ? 'ไปชำระเงิน' : 'ยืนยันสั่งซื้อ'}${quote.data ? ` · ${formatStorePrice(quote.data.totalSatang)}` : ''}`}</Button>
+            <p className="text-center text-xs leading-6 text-muted-foreground">{selectedPaymentMethod === 'stripe' ? 'ขั้นตอนถัดไป: ชำระเงินด้วยบัตรผ่าน Stripe' : 'ชำระยอดนี้กับผู้จัดส่งเมื่อได้รับสินค้า'}</p>
+          </div>
+        </aside>
       </div>
     </div>
   )

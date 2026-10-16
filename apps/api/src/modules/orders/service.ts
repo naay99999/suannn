@@ -19,7 +19,8 @@ import {
   hashGuestOrderToken,
   isGuestOrderAccessExpired,
 } from './access'
-import { listOrderDetails, lockOrder, readOrderDetail } from './repository'
+import { listOrderDetails, lockOrder, readOpenStripeCheckout, readOrderDetail } from './repository'
+import { enqueueOrderEmail } from './outbox'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
 import type {
@@ -28,6 +29,8 @@ import type {
   OrderPrincipal,
   OrderStaffActor,
   OrderStatus,
+  ShipmentInput,
+  StoreOrderDetail,
 } from './types'
 
 const orderIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -130,6 +133,23 @@ function commandResult(orderId: string, detail: OrderDetail): OrderCommandResult
     resultPayload: { order: detail as unknown as Record<string, unknown> },
     value: detail,
   }
+}
+
+const trackingNumberPattern = /^[A-Za-z0-9-]{4,40}$/
+
+function normalizeShipment(nextStatus: OrderStatus, input: ShipmentInput | undefined) {
+  if (nextStatus !== 'shipped') {
+    if (input) throw new DomainError('INVALID_ORDER_COMMAND')
+    return null
+  }
+  if (!input) throw new DomainError('SHIPMENT_REQUIRED')
+  const trackingNumber = input.trackingNumber.trim().toUpperCase()
+  const carrierName = input.carrierName?.trim() ?? ''
+  if (!trackingNumberPattern.test(trackingNumber)) throw new DomainError('INVALID_SHIPMENT')
+  if (input.carrier === 'other' ? carrierName.length < 1 || carrierName.length > 80 : carrierName.length > 0) {
+    throw new DomainError('INVALID_SHIPMENT')
+  }
+  return { carrier: input.carrier, carrierName: input.carrier === 'other' ? carrierName : null, trackingNumber }
 }
 
 function replayOrder(existing: OrderOperationRecord): OrderDetail {
@@ -321,6 +341,19 @@ export class OrderService {
     })
   }
 
+  async getStoreOrder(orderId: string, principal: OrderPrincipal): Promise<StoreOrderDetail> {
+    assertOrderId(orderId)
+    assertPrincipal(principal)
+    return this.db.transaction(async (tx) => {
+      const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
+      if (!order) throw new DomainError('ORDER_NOT_FOUND')
+      assertCanAccess(order, principal)
+      const detail = await readOrderDetail(tx, orderId)
+      const checkout = order.status === 'pending_payment' ? await readOpenStripeCheckout(tx, orderId) : null
+      return checkout ? { ...detail, checkout } : detail
+    })
+  }
+
   listCustomer(userId: string, cursor: string | undefined, limit: number): Promise<OrderPage> {
     if (typeof userId !== 'string' || !userId.trim()) throw new DomainError('INVALID_ORDER_QUERY')
     return this.list({ customerId: userId, cursor, limit })
@@ -390,8 +423,9 @@ export class OrderService {
 
       const type = actorType(principal)
       const id = principalId(principal, orderId)
+      const cancelledEventId = crypto.randomUUID()
       await tx.insert(orderEvent).values({
-        id: crypto.randomUUID(),
+        id: cancelledEventId,
         orderId,
         paymentId: savedPayment.id,
         eventType: 'order.cancelled',
@@ -402,6 +436,7 @@ export class OrderService {
         reasonCode: `cancelled_by_${type}`,
         metadata: { operationId, restoredQuantity, totalSatang: order.totalSatang },
       })
+      await enqueueOrderEmail(tx, { orderId, orderEventId: cancelledEventId, eventType: 'order.cancelled', templateId: 'order_cancelled' })
       const auditContext = auditContextFor(principal, orderId)
       await recordOrderAudit(tx, {
         id: crypto.randomUUID(),
@@ -422,23 +457,25 @@ export class OrderService {
     })
   }
 
-  advanceFulfillment(
+  async advanceFulfillment(
     orderId: string,
     nextStatus: OrderStatus,
     staffActor: OrderStaffActor,
     key: string,
+    shipmentInput?: ShipmentInput,
   ): Promise<OrderDetail> {
     assertOrderId(orderId)
     assertStaffActor(staffActor)
     if (!['processing', 'packed', 'shipped', 'delivered'].includes(nextStatus)) {
       throw new DomainError('INVALID_ORDER_TRANSITION')
     }
+    const shipment = normalizeShipment(nextStatus, shipmentInput)
     const command = 'advance-fulfillment'
     return runOrderCommand(this.db, {
       scope: `staff:${staffActor.userId}`,
       command,
       idempotencyKey: key,
-      payload: { orderId, nextStatus },
+      payload: shipment ? { orderId, nextStatus, shipment } : { orderId, nextStatus },
     }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
       const order = await lockOrder(tx, orderId)
       if (order.status === nextStatus) return commandResult(orderId, await readOrderDetail(tx, orderId))
@@ -448,19 +485,29 @@ export class OrderService {
       const [updatedOrder] = await tx.update(commerceOrder).set({
         status: nextStatus,
         terminalAt: nextStatus === 'delivered' ? sql`transaction_timestamp()` : null,
+        ...(shipment ? {
+          shipmentCarrier: shipment.carrier,
+          shipmentCarrierName: shipment.carrierName,
+          trackingNumber: shipment.trackingNumber,
+          shippedAt: sql`transaction_timestamp()`,
+        } : {}),
       }).where(eq(commerceOrder.id, orderId)).returning({ status: commerceOrder.status })
       if (updatedOrder?.status !== nextStatus) throw new DomainError('INVALID_ORDER_TRANSITION')
 
+      const fulfillmentEventId = crypto.randomUUID()
       await tx.insert(orderEvent).values({
-        id: crypto.randomUUID(),
+        id: fulfillmentEventId,
         orderId,
         eventType: 'order.fulfillment-advanced',
         fromStatus: order.status,
         toStatus: nextStatus,
         actorType: 'staff',
         actorId: staffActor.userId,
-        metadata: { operationId },
+        metadata: shipment ? { operationId, shipment } : { operationId },
       })
+      if (shipment) {
+        await enqueueOrderEmail(tx, { orderId, orderEventId: fulfillmentEventId, eventType: 'order.fulfillment-advanced', templateId: 'order_shipped' })
+      }
       const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
       await recordOrderAudit(tx, {
         id: crypto.randomUUID(),

@@ -1,13 +1,56 @@
-import { and, asc, eq, inArray, lte, or, sql, lt } from 'drizzle-orm'
-import type { Database } from '../../database/types'
-import { commerceOrder, orderOutbox } from '../../database/schema'
-import type { EmailSender } from '../email/sender'
-import { orderConfirmationEmail } from '../email/templates'
+import { and, asc, desc, eq, inArray, lte, or, sql, lt } from 'drizzle-orm'
+import type { Database, DatabaseTransaction } from '../../database/types'
+import { commerceOrder, orderOutbox, payment, stripeRefund } from '../../database/schema'
+import type { EmailSender, EmailTemplate } from '../email/sender'
+import {
+  orderCancelledEmail,
+  orderConfirmationEmail,
+  orderRefundedEmail,
+  orderShippedEmail,
+  type EmailContent,
+} from '../email/templates'
+import type { ShipmentCarrier } from './types'
 import { deriveGuestOrderToken, guestOrderTokenVerifierMatches } from './access'
 
 const maximumBatchSize = 100
 const initialRetryDelayMs = 30 * 1000
 const maximumRetryDelayMs = 24 * 60 * 60 * 1000
+
+export type OrderOutboxTemplate = 'order_confirmation' | 'order_shipped' | 'order_cancelled' | 'order_refunded'
+
+const emailTemplates: Record<OrderOutboxTemplate, EmailTemplate> = {
+  order_confirmation: 'order-confirmation',
+  order_shipped: 'order-shipped',
+  order_cancelled: 'order-cancelled',
+  order_refunded: 'order-refunded',
+}
+
+const carrierLabels: Record<ShipmentCarrier, string> = {
+  thailand_post: 'ไปรษณีย์ไทย',
+  kerry: 'Kerry Express',
+  flash: 'Flash Express',
+  jt: 'J&T Express',
+  other: 'ขนส่งของร้าน',
+}
+
+// Queues a customer email in the same transaction as the order event it describes.
+export async function enqueueOrderEmail(tx: DatabaseTransaction, input: {
+  orderId: string
+  orderEventId: string
+  eventType: string
+  templateId: OrderOutboxTemplate
+}) {
+  await tx.insert(orderOutbox).values({
+    orderId: input.orderId,
+    orderEventId: input.orderEventId,
+    eventType: input.eventType,
+    templateId: input.templateId,
+  })
+}
+
+function isOutboxTemplate(value: string): value is OrderOutboxTemplate {
+  return Object.hasOwn(emailTemplates, value)
+}
 
 interface ClaimedOutboxRow {
   id: string
@@ -23,6 +66,9 @@ interface OrderEmailData {
   guestAccessTokenHash: string | null
   guestAccessTokenNonce: string | null
   guestAccessTokenVersion: number | null
+  shipmentCarrier: ShipmentCarrier | null
+  shipmentCarrierName: string | null
+  trackingNumber: string | null
 }
 
 function retryDelayMs(attemptCount: number) {
@@ -95,7 +141,8 @@ export class OrderOutbox {
       )).limit(1)
     if (!activeClaim) return
 
-    if (row.templateId !== 'order_confirmation') {
+    const templateId = row.templateId
+    if (!isOutboxTemplate(templateId)) {
       await this.markFailed(row, 'OUTBOX_TEMPLATE_INVALID')
       return
     }
@@ -107,24 +154,52 @@ export class OrderOutbox {
       guestAccessTokenHash: commerceOrder.guestAccessTokenHash,
       guestAccessTokenNonce: commerceOrder.guestAccessTokenNonce,
       guestAccessTokenVersion: commerceOrder.guestAccessTokenVersion,
+      shipmentCarrier: commerceOrder.shipmentCarrier,
+      shipmentCarrierName: commerceOrder.shipmentCarrierName,
+      trackingNumber: commerceOrder.trackingNumber,
     }).from(commerceOrder).where(eq(commerceOrder.id, row.orderId)).limit(1)
     if (!order) {
       await this.markFailed(row, 'OUTBOX_ORDER_MISSING')
       return
     }
 
-    const accessToken = this.accessTokenFor(row.orderId, order)
-    if (order.customerId === null && !accessToken) {
-      await this.markFailed(row, 'GUEST_TOKEN_UNAVAILABLE')
-      return
+    const guest = order.customerId === null
+    let content: EmailContent
+    if (templateId === 'order_confirmation') {
+      const accessToken = this.accessTokenFor(row.orderId, order)
+      if (guest && !accessToken) {
+        await this.markFailed(row, 'GUEST_TOKEN_UNAVAILABLE')
+        return
+      }
+      content = orderConfirmationEmail(row.orderId, order.orderNumber, this.storefrontUrl, accessToken ?? undefined)
+    } else if (templateId === 'order_shipped') {
+      if (!order.shipmentCarrier || !order.trackingNumber) {
+        await this.markFailed(row, 'OUTBOX_SHIPMENT_MISSING')
+        return
+      }
+      content = orderShippedEmail(row.orderId, order.orderNumber, this.storefrontUrl, guest, {
+        carrierLabel: order.shipmentCarrier === 'other' && order.shipmentCarrierName
+          ? order.shipmentCarrierName
+          : carrierLabels[order.shipmentCarrier],
+        trackingNumber: order.trackingNumber,
+      })
+    } else if (templateId === 'order_cancelled') {
+      content = orderCancelledEmail(row.orderId, order.orderNumber, this.storefrontUrl, guest)
+    } else {
+      const [refund] = await this.db.select({ amountSatang: stripeRefund.amountSatang })
+        .from(stripeRefund)
+        .innerJoin(payment, eq(payment.id, stripeRefund.paymentId))
+        .where(and(eq(payment.orderId, row.orderId), eq(stripeRefund.status, 'succeeded')))
+        .orderBy(desc(stripeRefund.updatedAt)).limit(1)
+      if (!refund) {
+        await this.markFailed(row, 'OUTBOX_REFUND_MISSING')
+        return
+      }
+      content = orderRefundedEmail(row.orderId, order.orderNumber, this.storefrontUrl, guest, refund.amountSatang)
     }
 
     try {
-      await this.emailSender.send({
-        to: order.contactEmail,
-        template: 'order-confirmation',
-        ...orderConfirmationEmail(row.orderId, order.orderNumber, this.storefrontUrl, accessToken ?? undefined),
-      })
+      await this.emailSender.send({ to: order.contactEmail, template: emailTemplates[templateId], ...content })
       await this.db.update(orderOutbox).set({
         status: 'sent',
         sentAt: sql`transaction_timestamp()`,

@@ -25,18 +25,18 @@ function linkEmail(subject: string, message: string, action: string, url: string
 
 export function verificationEmail(url: string) {
   return linkEmail(
-    'Verify your Suannn email',
-    'Verify your email address to secure your Suannn account.',
-    'Verify email',
+    'ยืนยันอีเมลสำหรับบัญชี Suannn',
+    'กดลิงก์ด้านล่างเพื่อยืนยันอีเมลและเปิดใช้งานบัญชี Suannn ของคุณ',
+    'ยืนยันอีเมล',
     url,
   )
 }
 
 export function resetPasswordEmail(url: string) {
   return linkEmail(
-    'Reset your Suannn password',
-    'Use this link to reset your Suannn password. Ignore this email if you did not request it.',
-    'Reset password',
+    'ตั้งรหัสผ่าน Suannn ใหม่',
+    'ใช้ลิงก์นี้เพื่อตั้งรหัสผ่านใหม่ หากคุณไม่ได้ขอเปลี่ยนรหัสผ่าน ไม่ต้องดำเนินการใดๆ',
+    'ตั้งรหัสผ่านใหม่',
     url,
   )
 }
@@ -61,9 +61,24 @@ export function staffMfaRecoveryEmail(url: string) {
 
 export function changeEmailCodeEmail(code: string): EmailContent {
   return {
-    subject: 'Confirm your new Suannn email',
-    text: `Use this code to confirm your new email address: ${code}\n\nThis code expires in 10 minutes.`,
-    html: `<p>Use this code to confirm your new email address: <strong>${escapeHtml(code)}</strong></p><p>This code expires in 10 minutes.</p>`,
+    subject: 'ยืนยันอีเมลใหม่ของบัญชี Suannn',
+    text: `ใช้รหัสนี้เพื่อยืนยันอีเมลใหม่: ${code}\n\nรหัสจะหมดอายุใน 10 นาที`,
+    html: `<p>ใช้รหัสนี้เพื่อยืนยันอีเมลใหม่: <strong>${escapeHtml(code)}</strong></p><p>รหัสจะหมดอายุใน 10 นาที</p>`,
+  }
+}
+
+function orderUrl(orderId: string, storefrontUrl: string, guest: boolean) {
+  const storefront = new URL(storefrontUrl)
+  if (storefront.protocol !== 'https:' && storefront.protocol !== 'http:') throw new Error('INVALID_STOREFRONT_URL')
+  const path = guest ? `/orders/guest/${encodeURIComponent(orderId)}` : `/account/orders/${encodeURIComponent(orderId)}`
+  return new URL(path, storefront).toString()
+}
+
+function orderEmail(subject: string, lines: string[], url: string, action: string): EmailContent {
+  return {
+    subject,
+    text: `${lines.join('\n')}\n\n${action}: ${url}`,
+    html: `${lines.map(line => `<p>${escapeHtml(line)}</p>`).join('')}<p><a href="${escapeHtml(url)}">${escapeHtml(action)}</a></p>`,
   }
 }
 
@@ -73,23 +88,58 @@ export function orderConfirmationEmail(
   storefrontUrl: string,
   guestAccessToken?: string,
 ): EmailContent {
-  const safeOrderNumber = escapeHtml(orderNumber)
-  const storefront = new URL(storefrontUrl)
-  if (storefront.protocol !== 'https:' && storefront.protocol !== 'http:') throw new Error('INVALID_STOREFRONT_URL')
-  if (!guestAccessToken) {
-    const url = new URL(`/account/orders/${encodeURIComponent(orderId)}`, storefront).toString()
-    return {
-      subject: `Your Suannn order ${orderNumber} is confirmed`,
-      text: `We received your order.\nOrder number: ${orderNumber}\n\nView your order: ${url}`,
-      html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p><a href="${escapeHtml(url)}">View your order</a></p>`,
-    }
-  }
+  const url = orderUrl(orderId, storefrontUrl, Boolean(guestAccessToken))
+  const content = orderEmail(`ยืนยันคำสั่งซื้อ ${orderNumber} จาก Suannn`, [
+    'ร้านได้รับคำสั่งซื้อของคุณแล้ว',
+    `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
+  ], url, 'ดูคำสั่งซื้อ')
+  if (!guestAccessToken) return content
 
-  const url = new URL(`/orders/guest/${encodeURIComponent(orderId)}`, storefront).toString()
-  const safeToken = escapeHtml(guestAccessToken)
+  // The guest token is shown as text only, never inside a link.
   return {
-    subject: `Your Suannn order ${orderNumber} is confirmed`,
-    text: `We received your order.\nOrder number: ${orderNumber}\n\nView your guest order: ${url}\n\nEnter this guest access token on that page:\n${guestAccessToken}`,
-    html: `<p>We received your order.</p><p>Order number: <strong>${safeOrderNumber}</strong></p><p><a href="${escapeHtml(url)}">View your guest order</a></p><p>Enter this guest access token on that page:</p><p><code>${safeToken}</code></p>`,
+    subject: content.subject,
+    text: `${content.text}\n\nกรอกรหัสเข้าดูคำสั่งซื้อนี้ในหน้าดังกล่าว:\n${guestAccessToken}`,
+    html: `${content.html}<p>กรอกรหัสเข้าดูคำสั่งซื้อนี้ในหน้าดังกล่าว:</p><p><code>${escapeHtml(guestAccessToken)}</code></p>`,
   }
+}
+
+export interface ShipmentEmailDetails {
+  carrierLabel: string
+  trackingNumber: string
+}
+
+export function orderShippedEmail(
+  orderId: string,
+  orderNumber: string,
+  storefrontUrl: string,
+  guest: boolean,
+  shipment: ShipmentEmailDetails,
+): EmailContent {
+  return orderEmail(`คำสั่งซื้อ ${orderNumber} จัดส่งแล้ว`, [
+    'ร้านส่งสินค้าของคุณแล้ว',
+    `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
+    `ขนส่ง: ${shipment.carrierLabel}`,
+    `เลขพัสดุ: ${shipment.trackingNumber}`,
+  ], orderUrl(orderId, storefrontUrl, guest), 'ดูคำสั่งซื้อและติดตามพัสดุ')
+}
+
+export function orderCancelledEmail(orderId: string, orderNumber: string, storefrontUrl: string, guest: boolean): EmailContent {
+  return orderEmail(`คำสั่งซื้อ ${orderNumber} ถูกยกเลิก`, [
+    'คำสั่งซื้อนี้ถูกยกเลิกแล้ว หากชำระเงินออนไลน์ไว้ ร้านจะแจ้งเมื่อคืนเงินเรียบร้อย',
+    `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
+  ], orderUrl(orderId, storefrontUrl, guest), 'ดูคำสั่งซื้อ')
+}
+
+export function orderRefundedEmail(
+  orderId: string,
+  orderNumber: string,
+  storefrontUrl: string,
+  guest: boolean,
+  amountSatang: number,
+): EmailContent {
+  const amount = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amountSatang / 100)
+  return orderEmail(`คืนเงินคำสั่งซื้อ ${orderNumber} แล้ว`, [
+    `ร้านคืนเงิน ${amount} ไปยังช่องทางที่คุณชำระแล้ว ระยะเวลาที่เงินเข้าขึ้นอยู่กับธนาคารหรือผู้ออกบัตร`,
+    `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
+  ], orderUrl(orderId, storefrontUrl, guest), 'ดูคำสั่งซื้อ')
 }

@@ -5,6 +5,7 @@ import { auditLog, orderEvent, payment, stripeRefund } from '../../../database/s
 import { assertAuditMetadata, type AuditEvent } from '../../audit/model'
 import type { OrderDetail, OrderStaffActor } from '../../orders/types'
 import { lockOrder, readOrderDetail } from '../../orders/repository'
+import { enqueueOrderEmail } from '../../orders/outbox'
 import { runOrderCommand, type OrderCommandResult } from '../../orders/operation'
 import { DomainError } from '../../../shared/domain-error'
 import type { StripeGateway, StripeRefundState, StripeRefundStatus } from './gateway'
@@ -299,8 +300,9 @@ export class StripeRefundService {
         stripeRefundId: state.refundId,
         status: state.status as StripeRefundStatus,
       })
+      const refundEventId = crypto.randomUUID()
       await tx.insert(orderEvent).values({
-        id: crypto.randomUUID(),
+        id: refundEventId,
         orderId: order.id,
         paymentId: claim.paymentId,
         eventType: 'payment.stripe-refund-status-changed',
@@ -309,6 +311,14 @@ export class StripeRefundService {
         reasonCode: state.status,
         metadata: { refundId: claim.id, stripeRefundId: state.refundId, stripeEventId: event?.id ?? null },
       })
+      if (state.status === 'succeeded' && claim.status !== 'succeeded') {
+        await enqueueOrderEmail(tx, {
+          orderId: order.id,
+          orderEventId: refundEventId,
+          eventType: 'payment.stripe-refund-status-changed',
+          templateId: 'order_refunded',
+        })
+      }
       return true
     })
   }

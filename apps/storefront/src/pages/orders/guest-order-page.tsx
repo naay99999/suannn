@@ -7,7 +7,10 @@ import { Field, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { formatStorePrice } from '@/lib/store-products'
-import { getGuestOrder, guestOrderQueryKey, readPendingCheckout } from '@/lib/store-orders'
+import { getGuestOrder, guestOrderQueryKey, readPendingCheckout, refundStatusLabel } from '@/lib/store-orders'
+import { orderStatusLabels } from '@/pages/account/order-display'
+import { ShipmentDetails } from '@/components/orders/shipment-details'
+import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 
 export function Component() {
   const { orderId = '' } = useParams()
@@ -22,7 +25,7 @@ export function Component() {
     retry: false,
   })
 
-  if (!orderId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>ไม่พบหมายเลขคำสั่งซื้อ</EmptyTitle><EmptyDescription>เปิดลิงก์ guest order จากอีเมลอีกครั้ง</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants()} to="/products">กลับไปที่ร้าน</Link></EmptyContent></Empty>
+  if (!orderId) return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>ไม่พบหมายเลขคำสั่งซื้อ</EmptyTitle><EmptyDescription>เปิดลิงก์ดูคำสั่งซื้อจากอีเมลยืนยันอีกครั้ง</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants()} to="/products">กลับไปที่ร้าน</Link></EmptyContent></Empty>
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,29 +35,32 @@ export function Component() {
   const detail = order.data
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <title>คำสั่งซื้อ guest | suannn</title>
-      <p className="mb-3 text-sm font-medium text-primary-ink">คำสั่งซื้อ guest</p>
+      <title>ติดตามคำสั่งซื้อ | suannn</title>
+      <p className="mb-3 text-sm font-medium text-primary-ink">สั่งซื้อโดยไม่สมัครสมาชิก</p>
       <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">ตรวจสอบคำสั่งซื้อ</h1>
-      <p className="mt-4 leading-7 text-muted-foreground">กรอก guest access token จากอีเมลยืนยัน ระบบจะส่ง token ผ่าน header ไปตรวจสอบคำสั่งซื้อโดยไม่ใส่ token ในลิงก์</p>
+      <p className="mt-4 leading-7 text-muted-foreground">กรอกรหัสเข้าดูคำสั่งซื้อที่ได้รับในอีเมลยืนยันคำสั่งซื้อ</p>
       <form onSubmit={submit} className="mt-8 rounded-3xl border bg-card p-5 md:p-8">
         <Field>
-          <FieldLabel htmlFor="guest-order-token">Guest access token</FieldLabel>
+          <FieldLabel htmlFor="guest-order-token">รหัสเข้าดูคำสั่งซื้อ</FieldLabel>
           <Input id="guest-order-token" type="password" autoComplete="off" spellCheck={false} value={tokenInput} onChange={event => setTokenInput(event.target.value)} aria-describedby="guest-token-help" />
-          <p id="guest-token-help" className="text-xs text-muted-foreground">Token จะไม่ถูกบันทึกใน URL หรือ localStorage</p>
+          <p id="guest-token-help" className="text-xs text-muted-foreground">เพื่อความปลอดภัย ระบบจะไม่บันทึกรหัสนี้ไว้ในลิงก์หรือในเบราว์เซอร์</p>
         </Field>
         <Button className="mt-5" type="submit" disabled={!tokenInput.trim() || order.isFetching}>{order.isFetching ? 'กำลังตรวจสอบ...' : 'ดูคำสั่งซื้อ'}</Button>
       </form>
-      {order.isError && <p role="alert" className="mt-5 text-sm text-destructive">ไม่พบคำสั่งซื้อหรือ token ใช้ไม่ได้ ตรวจ token ในอีเมลแล้วลองอีกครั้ง</p>}
+      {order.isError && <p role="alert" className="mt-5 text-sm text-destructive">ไม่พบคำสั่งซื้อหรือรหัสไม่ถูกต้อง ตรวจรหัสในอีเมลแล้วลองอีกครั้ง</p>}
       {order.isPending && request.token && <p role="status" className="mt-5 text-sm text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>}
       {detail && <section className="mt-8 rounded-3xl border bg-card p-6 md:p-8" aria-labelledby="guest-order-title">
         <h2 id="guest-order-title" className="text-xl font-semibold">คำสั่งซื้อ {detail.orderNumber}</h2>
-        <p role="status" className="mt-3 text-sm text-muted-foreground">{detail.status === 'pending_payment' ? 'รอการชำระเงินออนไลน์' : detail.payment.status === 'collected' ? 'ได้รับการยืนยันการชำระเงินจากระบบแล้ว' : 'สถานะคำสั่งซื้อได้รับการอัปเดตจากร้าน'}</p>
+        <p role="status" className="mt-3 text-sm text-muted-foreground">สถานะ: {orderStatusLabels[detail.status]}{detail.status === 'pending_payment' ? ' · รอการชำระเงินออนไลน์' : detail.payment.status === 'collected' ? ' · ชำระเงินแล้ว' : ''}</p>
         <ul className="mt-5 divide-y">{detail.items.map(item => <li key={item.id} className="flex justify-between gap-4 py-3"><span>{item.productName} · {item.variantName} × {item.quantity}</span><span className="shrink-0 tabular-nums">{formatStorePrice(item.lineTotalSatang)}</span></li>)}</ul>
         <dl className="mt-4 flex flex-col gap-3 border-t pt-4 text-sm">
           <div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatStorePrice(detail.subtotalSatang)}</dd></div>
           <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatStorePrice(detail.shippingSatang)}</dd></div>
           <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดรวม</dt><dd>{formatStorePrice(detail.totalSatang)}</dd></div>
         </dl>
+        <div className="mt-5 empty:hidden"><OrderPaymentActions order={detail} guestAccessToken={request.token} /></div>
+        {detail.shipment && <div className="mt-4 border-t pt-4"><ShipmentDetails shipment={detail.shipment} /></div>}
+        {detail.payment.refund && <p className="mt-4 text-sm text-muted-foreground">การคืนเงิน: {refundStatusLabel(detail.payment.refund)} · {formatStorePrice(detail.payment.refund.amountSatang)}</p>}
       </section>}
     </div>
   )

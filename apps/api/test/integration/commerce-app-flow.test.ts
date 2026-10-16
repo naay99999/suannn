@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createApp } from '../../src/app'
 import { loadConfig } from '../../src/config/env'
-import { commerceOrder, commerceSettings, inventoryLot, inventoryReservation, payment, product, productVariant, user, warehouse } from '../../src/database/schema'
+import { commerceOrder, commerceSettings, identityEmailClaim, inventoryLot, inventoryReservation, payment, product, productVariant, user, warehouse } from '../../src/database/schema'
 import { createAuth } from '../../src/plugins/auth/auth'
 import { hashToken } from '../../src/shared/crypto'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -14,6 +14,8 @@ import { CustomerAddressRepository } from '../../src/modules/customer/addresses/
 import { CustomerAddressService } from '../../src/modules/customer/addresses/service'
 import { CustomerEmailChangeRepository } from '../../src/modules/customer/email-change/repository'
 import { CustomerEmailChangeService } from '../../src/modules/customer/email-change/service'
+import { CustomerAccountDeletionRepository } from '../../src/modules/customer/account-deletion/repository'
+import { CustomerAccountDeletionService } from '../../src/modules/customer/account-deletion/service'
 import { IdentityClaimRepository } from '../../src/modules/identity-claims/repository'
 import { IdentityClaimService } from '../../src/modules/identity-claims/service'
 import { ApplicationRateLimitRepository } from '../../src/modules/rate-limit/repository'
@@ -42,6 +44,7 @@ import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
 import { testEnv } from '../fixtures'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { createIdentityLockPool } from '../../src/database/client'
 
 const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
@@ -53,7 +56,8 @@ const auth = createAuth(config, database.db, {
   audit,
   staffMfaRequired: async () => false,
 })
-const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
+const identityLockPool = createIdentityLockPool(database.url)
+const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 const inventoryRead = new InventoryReadRepository(database.db)
 const cart = new CartService(new CartRepository(database.db, inventoryRead))
@@ -67,6 +71,9 @@ const app = await createApp(config, {
   customerEmailChange: new CustomerEmailChangeService({
     audit, repository: new CustomerEmailChangeRepository(database.db),
     claims, secret: config.betterAuthSecret, emailSender,
+  }),
+  customerAccountDeletion: new CustomerAccountDeletionService({
+    audit, repository: new CustomerAccountDeletionRepository(database.db), claims,
   }),
   staffInvitations: new StaffInvitationService({
     auth, claims, repository: new StaffInvitationRepository(database.db),
@@ -113,6 +120,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await unlock?.()
+  await identityLockPool.end()
   await database.client.end()
 })
 
@@ -191,9 +199,68 @@ it('rejects guest COD over HTTP without creating an order or reserving stock', a
   expect((await cart.get({ kind: 'guest', tokenHash: hashToken(guestToken) })).lines).toHaveLength(1)
 })
 
+it('requires a verified email before a customer can place a COD order', async () => {
+  const { variantId } = await seedVariant()
+  await auth.api.signUpEmail({ body: { name: 'Unverified Customer', email: 'unverified@example.test', password: 'correct horse battery staple' } })
+  const signedIn = await request('/auth/sign-in/email', {
+    method: 'POST', origin: config.storefrontUrl,
+    body: { email: 'unverified@example.test', password: 'correct horse battery staple' },
+  })
+  expect(signedIn.status).toBe(200)
+  const customerCookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  const { quote, cookie } = await cartAndQuote(variantId, customerCookie)
+  const placed = await place(quote.quoteToken, cookie)
+  expect(placed.status).toBe(403)
+  expect(await placed.json()).toMatchObject({ code: 'EMAIL_VERIFICATION_REQUIRED' })
+})
+
+it('anonymizes a deleted customer account and frees its email for a new sign-up', async () => {
+  const { variantId } = await seedVariant()
+  const password = 'correct horse battery staple'
+  const signup = { name: 'Leaving Customer', email: 'leaving@example.test', password }
+  await auth.api.signUpEmail({ body: signup })
+  const [created] = await database.db.select().from(user).where(eq(user.email, 'leaving@example.test'))
+  await database.db.update(user).set({ emailVerified: true }).where(eq(user.id, created!.id))
+  const signedIn = await request('/auth/sign-in/email', { method: 'POST', origin: config.storefrontUrl, body: { email: signup.email, password } })
+  const customerCookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  const deleteAccount = (currentPassword: string) => request('/customer/account/deletion', {
+    method: 'POST', origin: config.storefrontUrl, cookie: customerCookie, body: { currentPassword },
+  })
+
+  expect((await deleteAccount('wrong password value')).status).toBe(422)
+  const { quote, cookie } = await cartAndQuote(variantId, customerCookie)
+  const placed = await place(quote.quoteToken, cookie)
+  expect(placed.status).toBe(201)
+  const openOrder = await deleteAccount(password)
+  expect(openOrder.status).toBe(409)
+  expect(await openOrder.json()).toMatchObject({ code: 'ACCOUNT_HAS_OPEN_ORDERS' })
+
+  const order = (await placed.json()) as { order: { id: string } }
+  const cancelled = await request(`/store/orders/${order.order.id}/cancel`, {
+    method: 'POST', origin: config.storefrontUrl, cookie: customerCookie,
+    headers: { 'idempotency-key': crypto.randomUUID() }, body: {},
+  })
+  expect(cancelled.status).toBe(200)
+  const deleted = await deleteAccount(password)
+  expect(deleted.status).toBe(200)
+  expect(await deleted.json()).toEqual({ deleted: true })
+
+  const [anonymized] = await database.db.select().from(user).where(eq(user.id, created!.id))
+  expect(anonymized).toMatchObject({ name: 'ลูกค้าที่ลบบัญชี', email: `deleted-${created!.id}@deleted.invalid`, banned: true })
+  const session = await request('/auth/get-session', { cookie: customerCookie })
+  expect(await session.json()).toBeNull()
+  expect((await request('/auth/sign-in/email', { method: 'POST', origin: config.storefrontUrl, body: { email: signup.email, password } })).status).toBe(401)
+  const [keptOrder] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, order.order.id))
+  expect(keptOrder?.customerId).toBe(created!.id)
+  expect(await database.db.select().from(identityEmailClaim).where(eq(identityEmailClaim.normalizedEmail, signup.email))).toHaveLength(0)
+  const again = await auth.api.signUpEmail({ body: signup })
+  expect(again.user.id).not.toBe(created!.id)
+})
+
 it('rejects a quote after cart mutation', async () => {
   const { variantId } = await seedVariant()
-  await auth.api.signUpEmail({ body: { name: 'Quote Customer', email: 'stale-quote@example.test', password: 'correct horse battery staple' } })
+  const quoteCustomer = await auth.api.signUpEmail({ body: { name: 'Quote Customer', email: 'stale-quote@example.test', password: 'correct horse battery staple' } })
+  await database.db.update(user).set({ emailVerified: true }).where(eq(user.id, quoteCustomer.user.id))
   const signedIn = await request('/auth/sign-in/email', {
     method: 'POST', origin: config.storefrontUrl,
     body: { email: 'stale-quote@example.test', password: 'correct horse battery staple' },
@@ -225,6 +292,7 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
   await database.db.update(user).set({
     accountType: 'staff', role: 'admin', staffActivatedAt: new Date(), emailVerified: true,
   }).where(eq(user.id, staff.user.id))
+  await database.db.update(user).set({ emailVerified: true }).where(eq(user.id, customer.user.id))
 
   const signedIn = await request('/auth/sign-in/email', {
     method: 'POST', origin: config.storefrontUrl,
@@ -277,10 +345,15 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
   for (const status of ['processing', 'packed', 'shipped', 'delivered']) {
     const response = await request(`/admin/orders/${result.order.id}/fulfillment`, {
       method: 'POST', origin: config.adminUrl, cookie: staffCookie,
-      headers: { 'idempotency-key': crypto.randomUUID() }, body: { status },
+      headers: { 'idempotency-key': crypto.randomUUID() },
+      body: status === 'shipped' ? { status, shipment: { carrier: 'other', carrierName: 'Farm van', trackingNumber: 'VAN-0001' } } : { status },
     })
     expect(response.status).toBe(200)
   }
+  const customerView = await request(`/store/orders/${result.order.id}`, { cookie: customerCookie })
+  expect(await customerView.json()).toMatchObject({
+    shipment: { carrier: 'other', carrierName: 'Farm van', trackingNumber: 'VAN-0001' },
+  })
   const collected = await request(`/admin/orders/${result.order.id}/collect-cod`, {
     method: 'POST', origin: config.adminUrl, cookie: staffCookie,
     headers: { 'idempotency-key': crypto.randomUUID() },

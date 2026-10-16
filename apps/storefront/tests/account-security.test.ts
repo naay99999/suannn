@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
 import { QueryClient } from '@tanstack/react-query'
-import { expireSecuritySession, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from '../src/pages/account/customer-security'
+import { accountDeletionFailureMessage, expireSecuritySession, performAccountDeletion, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from '../src/pages/account/customer-security'
 import { AuthRequestError } from '../src/lib/auth-client'
+import { AccountRequestError } from '../src/pages/account/account-api'
 
 test('sign-out removes account and session cache after the server accepts it', async () => {
   const client = new QueryClient()
@@ -46,4 +47,19 @@ test('security 401 clears session and protected cache; server errors remain retr
   expect(expireSecuritySession(client, new AuthRequestError(401, 'UNAUTHORIZED', 'no'))).toBe(true)
   expect(client.getQueryData(['auth', 'session'])).toBeNull()
   expect(client.getQueryData(['customer-account', 'customer-1', 'sessions'])).toBeUndefined()
+})
+
+test('account deletion clears the session only after the server accepts it', async () => {
+  const client = new QueryClient()
+  client.setQueryData(['auth', 'session'], { user: { id: 'customer-1' } })
+  await expect(performAccountDeletion(client, async () => { throw new AccountRequestError(409, 'ACCOUNT_HAS_OPEN_ORDERS') })).rejects.toThrow()
+  expect(client.getQueryData(['auth', 'session'])).toEqual({ user: { id: 'customer-1' } })
+  await performAccountDeletion(client, async () => ({ deleted: true }))
+  expect(client.getQueryData(['auth', 'session'])).toBeNull()
+})
+
+test('explains why an account cannot be deleted', () => {
+  expect(accountDeletionFailureMessage(new AccountRequestError(409, 'ACCOUNT_HAS_OPEN_ORDERS'))).toContain('คำสั่งซื้อ')
+  expect(accountDeletionFailureMessage(new AccountRequestError(422, 'INVALID_CURRENT_PASSWORD'))).toBe('รหัสผ่านไม่ถูกต้อง')
+  expect(accountDeletionFailureMessage(new Error('offline'))).toBe('ลบบัญชีไม่สำเร็จ กรุณาลองใหม่')
 })

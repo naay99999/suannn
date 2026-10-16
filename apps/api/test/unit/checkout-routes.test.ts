@@ -148,8 +148,8 @@ function createHarness(options: {
       calls.push({ method: 'orders.listCustomer', args })
       return { items: [customerDetail], nextCursor: null }
     },
-    getForPrincipal: async (...args: unknown[]) => {
-      calls.push({ method: 'orders.getForPrincipal', args })
+    getStoreOrder: async (...args: unknown[]) => {
+      calls.push({ method: 'orders.getStoreOrder', args })
       const [orderId, principal] = args as [string, { kind: string; userId?: string; accessToken?: string }]
       if (orderId === customerOrderId && principal.kind === 'customer' && principal.userId === 'customer-1') {
         return customerDetail
@@ -172,7 +172,10 @@ function createHarness(options: {
       getSession: async ({ headers }: { headers: Headers }) => {
         const value = headers.get('cookie')?.match(/(?:^|;\s*)session=([^;]+)/)?.[1]
         if (value === 'customer') {
-          return { user: { id: 'customer-1', accountType: 'customer' as const }, session: { id: 'session-customer' } }
+          return { user: { id: 'customer-1', accountType: 'customer' as const, emailVerified: true }, session: { id: 'session-customer' } }
+        }
+        if (value === 'unverified-customer') {
+          return { user: { id: 'customer-1', accountType: 'customer' as const, emailVerified: false }, session: { id: 'session-customer' } }
         }
         if (value === 'empty-customer') {
           return { user: { id: ' ', accountType: 'customer' as const }, session: { id: 'session-customer' } }
@@ -251,6 +254,16 @@ describe('store checkout and order HTTP contracts', () => {
 
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+  })
+
+  it('rejects COD from a customer whose email is not verified', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest(validCheckoutBody, 'session=unverified-customer'))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'EMAIL_VERIFICATION_REQUIRED' })
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
   })
 
@@ -453,7 +466,7 @@ describe('store checkout and order HTTP contracts', () => {
     expect(await invalidToken.json()).toEqual(await unknownOrder.json())
     expect(ownedCustomerOrder.status).toBe(200)
     expect(invalidCustomerSession.status).toBe(401)
-    const customerCall = calls.find((call) => call.method === 'orders.getForPrincipal' && call.args[0] === guestOrderId)
+    const customerCall = calls.find((call) => call.method === 'orders.getStoreOrder' && call.args[0] === guestOrderId)
     expect(customerCall?.args[1]).toEqual({ kind: 'customer', userId: 'customer-1' })
   })
 
