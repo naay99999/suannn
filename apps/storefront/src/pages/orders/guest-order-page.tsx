@@ -9,6 +9,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { formatStorePrice } from '@/lib/store-products'
 import { getGuestOrder, guestOrderQueryKey, readPendingCheckout, refundStatusLabel } from '@/lib/store-orders'
 import { orderStatusLabels } from '@/pages/account/order-display'
+import { ShipmentDetails } from '@/components/orders/shipment-details'
 
 export function Component() {
   const { orderId = '' } = useParams()
@@ -56,6 +57,7 @@ export function Component() {
           <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatStorePrice(detail.shippingSatang)}</dd></div>
           <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดรวม</dt><dd>{formatStorePrice(detail.totalSatang)}</dd></div>
         </dl>
+        {detail.shipment && <div className="mt-4 border-t pt-4"><ShipmentDetails shipment={detail.shipment} /></div>}
         {detail.payment.refund && <p className="mt-4 text-sm text-muted-foreground">การคืนเงิน: {refundStatusLabel(detail.payment.refund)} · {formatStorePrice(detail.payment.refund.amountSatang)}</p>}
       </section>}
     </div>

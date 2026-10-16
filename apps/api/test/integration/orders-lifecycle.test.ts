@@ -367,13 +367,19 @@ describe('COD order lifecycle', () => {
       .rejects.toMatchObject({ code: 'INVALID_ORDER_TRANSITION' })
     await placed.orders.advanceFulfillment(orderId, 'processing', staffActor, 'fulfill-processing-1')
     await placed.orders.advanceFulfillment(orderId, 'packed', staffActor, 'fulfill-packed-1')
-    const shipped = await placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'fulfill-shipped-1')
+    await expect(placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'fulfill-shipped-missing'))
+      .rejects.toMatchObject({ code: 'SHIPMENT_REQUIRED' })
+    await expect(placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'fulfill-shipped-bad', { carrier: 'other', trackingNumber: 'TH12345' }))
+      .rejects.toMatchObject({ code: 'INVALID_SHIPMENT' })
+    const shipped = await placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'fulfill-shipped-1', { carrier: 'kerry', trackingNumber: ' kex1234567 ' })
     const delivered = await placed.orders.advanceFulfillment(orderId, 'delivered', staffActor, 'fulfill-delivered-1')
     const lot = (await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, placed.lotId)))[0]
     const allocations = await database.db.select().from(orderItemAllocation).where(eq(orderItemAllocation.orderId, orderId))
 
     expect(shipped.status).toBe('shipped')
+    expect(shipped.shipment).toMatchObject({ carrier: 'kerry', carrierName: null, trackingNumber: 'KEX1234567' })
     expect(delivered.status).toBe('delivered')
+    expect(delivered.shipment?.trackingNumber).toBe('KEX1234567')
     expect(lot).toMatchObject({ onHandQuantity: placed.initialQuantity - 2, reversibleQuantity: 0 })
     expect(allocations.map(({ restorationStatus }) => restorationStatus)).toEqual(['released'])
     await expect(placed.orders.cancel(orderId, placed.orderPrincipal, 'cancel-after-shipment-1'))
@@ -388,7 +394,7 @@ describe('COD order lifecycle', () => {
 
     const outcomes = await Promise.allSettled([
       placed.orders.cancel(orderId, placed.orderPrincipal, 'race-cancel-1'),
-      placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'race-shipped-1'),
+      placed.orders.advanceFulfillment(orderId, 'shipped', staffActor, 'race-shipped-1', { carrier: 'thailand_post', trackingNumber: 'EF123456789TH' }),
     ])
     const order = (await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)))[0]
     const lot = (await database.db.select().from(inventoryLot).where(eq(inventoryLot.id, placed.lotId)))[0]

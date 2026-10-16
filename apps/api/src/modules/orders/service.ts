@@ -28,6 +28,7 @@ import type {
   OrderPrincipal,
   OrderStaffActor,
   OrderStatus,
+  ShipmentInput,
 } from './types'
 
 const orderIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -130,6 +131,23 @@ function commandResult(orderId: string, detail: OrderDetail): OrderCommandResult
     resultPayload: { order: detail as unknown as Record<string, unknown> },
     value: detail,
   }
+}
+
+const trackingNumberPattern = /^[A-Za-z0-9-]{4,40}$/
+
+function normalizeShipment(nextStatus: OrderStatus, input: ShipmentInput | undefined) {
+  if (nextStatus !== 'shipped') {
+    if (input) throw new DomainError('INVALID_ORDER_COMMAND')
+    return null
+  }
+  if (!input) throw new DomainError('SHIPMENT_REQUIRED')
+  const trackingNumber = input.trackingNumber.trim().toUpperCase()
+  const carrierName = input.carrierName?.trim() ?? ''
+  if (!trackingNumberPattern.test(trackingNumber)) throw new DomainError('INVALID_SHIPMENT')
+  if (input.carrier === 'other' ? carrierName.length < 1 || carrierName.length > 80 : carrierName.length > 0) {
+    throw new DomainError('INVALID_SHIPMENT')
+  }
+  return { carrier: input.carrier, carrierName: input.carrier === 'other' ? carrierName : null, trackingNumber }
 }
 
 function replayOrder(existing: OrderOperationRecord): OrderDetail {
@@ -422,23 +440,25 @@ export class OrderService {
     })
   }
 
-  advanceFulfillment(
+  async advanceFulfillment(
     orderId: string,
     nextStatus: OrderStatus,
     staffActor: OrderStaffActor,
     key: string,
+    shipmentInput?: ShipmentInput,
   ): Promise<OrderDetail> {
     assertOrderId(orderId)
     assertStaffActor(staffActor)
     if (!['processing', 'packed', 'shipped', 'delivered'].includes(nextStatus)) {
       throw new DomainError('INVALID_ORDER_TRANSITION')
     }
+    const shipment = normalizeShipment(nextStatus, shipmentInput)
     const command = 'advance-fulfillment'
     return runOrderCommand(this.db, {
       scope: `staff:${staffActor.userId}`,
       command,
       idempotencyKey: key,
-      payload: { orderId, nextStatus },
+      payload: shipment ? { orderId, nextStatus, shipment } : { orderId, nextStatus },
     }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
       const order = await lockOrder(tx, orderId)
       if (order.status === nextStatus) return commandResult(orderId, await readOrderDetail(tx, orderId))
@@ -448,6 +468,12 @@ export class OrderService {
       const [updatedOrder] = await tx.update(commerceOrder).set({
         status: nextStatus,
         terminalAt: nextStatus === 'delivered' ? sql`transaction_timestamp()` : null,
+        ...(shipment ? {
+          shipmentCarrier: shipment.carrier,
+          shipmentCarrierName: shipment.carrierName,
+          trackingNumber: shipment.trackingNumber,
+          shippedAt: sql`transaction_timestamp()`,
+        } : {}),
       }).where(eq(commerceOrder.id, orderId)).returning({ status: commerceOrder.status })
       if (updatedOrder?.status !== nextStatus) throw new DomainError('INVALID_ORDER_TRANSITION')
 
@@ -459,7 +485,7 @@ export class OrderService {
         toStatus: nextStatus,
         actorType: 'staff',
         actorId: staffActor.userId,
-        metadata: { operationId },
+        metadata: shipment ? { operationId, shipment } : { operationId },
       })
       const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
       await recordOrderAudit(tx, {

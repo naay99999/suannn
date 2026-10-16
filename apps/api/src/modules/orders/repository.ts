@@ -3,9 +3,23 @@ import type { DatabaseTransaction } from '../../database/types'
 import { commerceOrder, orderItem, payment, stripeRefund } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
 import { encodeCursor, decodeCursor } from '../../shared/cursor'
-import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderSnapshot } from './types'
+import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderShipment, OrderSnapshot } from './types'
 
 export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string): Promise<OrderSnapshot> {
+  return (await loadOrder(tx, orderId)).snapshot
+}
+
+function shipmentOf(order: typeof commerceOrder.$inferSelect): OrderShipment | null {
+  if (!order.shipmentCarrier || !order.trackingNumber || !order.shippedAt) return null
+  return {
+    carrier: order.shipmentCarrier,
+    carrierName: order.shipmentCarrierName,
+    trackingNumber: order.trackingNumber,
+    shippedAt: order.shippedAt.toISOString(),
+  }
+}
+
+async function loadOrder(tx: DatabaseTransaction, orderId: string) {
   const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
   if (!order) throw new DomainError('ORDER_NOT_FOUND')
   const itemRows = await tx.select().from(orderItem)
@@ -23,7 +37,7 @@ export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string
     quantity: item.quantity,
     lineTotalSatang: item.lineTotalSatang,
   }))
-  return {
+  const snapshot: OrderSnapshot = {
     id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
@@ -45,6 +59,7 @@ export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string
     createdAt: order.createdAt.toISOString(),
     items,
   }
+  return { snapshot, shipment: shipmentOf(order) }
 }
 
 export async function readGuestOrderAccessRecord(tx: DatabaseTransaction, orderId: string) {
@@ -65,7 +80,7 @@ export async function lockOrder(tx: DatabaseTransaction, orderId: string) {
 }
 
 export async function readOrderDetail(tx: DatabaseTransaction, orderId: string): Promise<OrderDetail> {
-  const order = await readOrderSnapshot(tx, orderId)
+  const { snapshot: order, shipment } = await loadOrder(tx, orderId)
   const [savedPayment] = await tx.select({
     id: payment.id,
     method: payment.method,
@@ -85,6 +100,7 @@ export async function readOrderDetail(tx: DatabaseTransaction, orderId: string):
     .orderBy(desc(stripeRefund.createdAt), desc(stripeRefund.id)).limit(1)
   return {
     ...order,
+    ...(shipment ? { shipment } : {}),
     payment: {
       ...savedPayment,
       currency: 'THB',

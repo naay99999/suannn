@@ -97,8 +97,25 @@ export interface OrderPaymentSnapshot {
   }
 }
 
+export type ShipmentCarrier = 'thailand_post' | 'kerry' | 'flash' | 'jt' | 'other'
+
+export interface ShipmentInput {
+  carrier: ShipmentCarrier
+  carrierName?: string
+  trackingNumber: string
+}
+
+export interface OrderShipment {
+  carrier: ShipmentCarrier
+  carrierName: string | null
+  trackingNumber: string
+  shippedAt: string
+}
+
 export interface OrderDetail extends OrderSnapshot {
   payment: OrderPaymentSnapshot
+  // Optional so replayed command results stored before shipments existed still validate.
+  shipment?: OrderShipment
 }
 
 export interface OrderPage {

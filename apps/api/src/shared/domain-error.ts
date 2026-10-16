@@ -53,6 +53,8 @@ export type DomainErrorCode =
   | 'ORDER_REFUND_CONFLICT'
   | 'COD_AMOUNT_MISMATCH'
   | 'INVALID_ORDER_QUERY'
+  | 'SHIPMENT_REQUIRED'
+  | 'INVALID_SHIPMENT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -109,6 +111,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   ORDER_REFUND_CONFLICT: { status: 409, message: 'Order refund state does not allow this action' },
   COD_AMOUNT_MISMATCH: { status: 422, message: 'Collected amount must match the order total' },
   INVALID_ORDER_QUERY: { status: 422, message: 'Order query is invalid' },
+  SHIPMENT_REQUIRED: { status: 422, message: 'Carrier and tracking number are required to ship an order' },
+  INVALID_SHIPMENT: { status: 422, message: 'Shipment details are invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

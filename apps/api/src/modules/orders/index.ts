@@ -9,7 +9,7 @@ import { httpModels } from '../../shared/http-model'
 import { DomainError } from '../../shared/domain-error'
 import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
-import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus } from './types'
+import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus, ShipmentInput } from './types'
 import type { OrderService } from './service'
 import type { StripeRefundService } from '../payments/stripe/refunds'
 import { ordersModels } from './model'
@@ -110,6 +110,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
       status: order.payment.status,
       ...(order.payment.refund ? { refund: order.payment.refund } : {}),
     },
+    ...(order.shipment ? { shipment: order.shipment } : {}),
   }
 }
 
@@ -284,9 +285,10 @@ export function createAdminOrdersModule(
         body.status as OrderStatus,
         actorFrom(user.id, requestContext),
         headers['idempotency-key'],
+        body.shipment as ShipmentInput | undefined,
       ),
     ), {
-      parse: [parseStrictJsonBody(['status']), 'json'],
+      parse: [parseStrictJsonBody(['status', 'shipment']), 'json'],
       browserMutation: 'admin',
       permission: { order: ['fulfill'] },
       params: 'orders.idParams',
@@ -295,7 +297,7 @@ export function createAdminOrdersModule(
       response: { 200: 'orders.detail', ...errors },
       detail: {
         summary: 'Advance order fulfillment',
-        description: 'Advances the order to its next fulfillment status. The command is idempotent. Requires order:fulfill permission and an admin-origin browser request.',
+        description: 'Advances the order to its next fulfillment status. Moving to shipped requires shipment carrier and tracking number (carrierName only for carrier other). The command is idempotent. Requires order:fulfill permission and an admin-origin browser request.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

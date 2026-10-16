@@ -294,10 +294,15 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
   for (const status of ['processing', 'packed', 'shipped', 'delivered']) {
     const response = await request(`/admin/orders/${result.order.id}/fulfillment`, {
       method: 'POST', origin: config.adminUrl, cookie: staffCookie,
-      headers: { 'idempotency-key': crypto.randomUUID() }, body: { status },
+      headers: { 'idempotency-key': crypto.randomUUID() },
+      body: status === 'shipped' ? { status, shipment: { carrier: 'other', carrierName: 'Farm van', trackingNumber: 'VAN-0001' } } : { status },
     })
     expect(response.status).toBe(200)
   }
+  const customerView = await request(`/store/orders/${result.order.id}`, { cookie: customerCookie })
+  expect(await customerView.json()).toMatchObject({
+    shipment: { carrier: 'other', carrierName: 'Farm van', trackingNumber: 'VAN-0001' },
+  })
   const collected = await request(`/admin/orders/${result.order.id}/collect-cod`, {
     method: 'POST', origin: config.adminUrl, cookie: staffCookie,
     headers: { 'idempotency-key': crypto.randomUUID() },

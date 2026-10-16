@@ -74,7 +74,22 @@ const payment = t.Object({
   }, { additionalProperties: false })),
 }, { additionalProperties: false })
 
-const detail = t.Composite([snapshot, t.Object({ payment })], { additionalProperties: false })
+const shipmentCarrier = t.Union([
+  t.Literal('thailand_post'),
+  t.Literal('kerry'),
+  t.Literal('flash'),
+  t.Literal('jt'),
+  t.Literal('other'),
+])
+const trackingNumber = t.String({ pattern: '^[A-Za-z0-9-]{4,40}$' })
+const shipment = t.Object({
+  carrier: shipmentCarrier,
+  carrierName: t.Union([t.String({ minLength: 1, maxLength: 80 }), t.Null()]),
+  trackingNumber,
+  shippedAt: t.String({ format: 'date-time' }),
+}, { additionalProperties: false })
+
+const detail = t.Composite([snapshot, t.Object({ payment, shipment: t.Optional(shipment) })], { additionalProperties: false })
 const page = t.Object({ items: t.Array(detail), nextCursor: t.Union([t.String(), t.Null()]) }, { additionalProperties: false })
 const createResponse = t.Object({
   order: snapshot,
@@ -93,6 +108,11 @@ const idempotencyHeaders = t.Object({ 'idempotency-key': t.String({ pattern: '^[
 const emptyBody = t.Object({}, { additionalProperties: false })
 const fulfillmentBody = t.Object({
   status: t.Union([t.Literal('processing'), t.Literal('packed'), t.Literal('shipped'), t.Literal('delivered')]),
+  shipment: t.Optional(t.Object({
+    carrier: shipmentCarrier,
+    carrierName: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+    trackingNumber,
+  }, { additionalProperties: false })),
 }, { additionalProperties: false })
 const collectCodBody = t.Object({
   amountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
