@@ -61,7 +61,7 @@ export function Component() {
       </section>
       <div className="mt-6 flex flex-wrap gap-3">
         {pending.guestAccessToken
-          ? <Link className={buttonVariants()} to={`/orders/guest/${snapshot.id}`}>เปิดคำสั่งซื้อ guest</Link>
+          ? <Link className={buttonVariants()} to={`/orders/guest/${snapshot.id}`}>ดูคำสั่งซื้อ</Link>
           : <Link className={buttonVariants()} to={`/account/orders/${snapshot.id}`}>ดูคำสั่งซื้อในบัญชี</Link>}
         {!settled && <Button variant="outline" onClick={() => void order.refetch()}>ตรวจสอบอีกครั้ง</Button>}
       </div>
