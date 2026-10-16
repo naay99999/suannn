@@ -149,3 +149,17 @@ export async function verifyEnrollment(code: string) {
 export async function regenerateBackupCodes(password: string) {
   return dataOrError(await api.auth.staff.mfa['backup-codes'].regenerate.post({ password }))
 }
+
+export async function listOwnSessions(cursor?: string) {
+  return dataOrError(await api.auth.staff.sessions.get({ query: { limit: 50, cursor } }))
+}
+
+export type OwnStaffSession = Awaited<ReturnType<typeof listOwnSessions>>['items'][number]
+
+export async function revokeOwnSession(id: string) {
+  const result = await api.auth.staff.sessions({ id }).revoke.post()
+  if (result.error) {
+    const body = isRecord(result.error) && 'value' in result.error ? result.error.value : result.error
+    throw errorFromResponse(result.status, body)
+  }
+}
