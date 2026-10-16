@@ -8,6 +8,7 @@ import {
   DashboardSquare01Icon,
   ShoppingBag01Icon,
   Plant02Icon,
+  Audit01Icon,
   DeliveryBox01Icon,
   WarehouseIcon,
   SettingsIcon,
@@ -36,6 +37,7 @@ const navigation = [
   { title: 'ฟาร์ม', url: '/farms', icon: Plant02Icon, permission: 'catalog:read' },
   { title: 'สต็อก', url: '/inventory', icon: WarehouseIcon, permission: 'inventory:read' },
   { title: 'Customers', url: '/customers', icon: UserListIcon },
+  { title: 'บันทึกกิจกรรม', url: '/audit', icon: Audit01Icon, permission: 'audit:read' },
   { title: 'Settings', url: '/settings', icon: SettingsIcon },
 ]
 

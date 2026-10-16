@@ -2,6 +2,7 @@ import './setup'
 import { afterEach, expect, mock, test } from 'bun:test'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router'
 const { default: userEvent } = await import('@testing-library/user-event')
 
 mock.module('../src/pages/settings/_components/staff-management-api', () => ({
@@ -26,7 +27,7 @@ const session = {
 
 function renderStaffManagement() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}><StaffManagementContent session={session} /></QueryClientProvider>)
+  return render(<MemoryRouter><QueryClientProvider client={client}><StaffManagementContent session={session} /></QueryClientProvider></MemoryRouter>)
 }
 
 afterEach(() => cleanup())
