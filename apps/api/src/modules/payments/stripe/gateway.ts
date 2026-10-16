@@ -69,7 +69,7 @@ export interface StripeGateway {
     idempotencyKey: string
   }): Promise<StripeRefundState>
   retrieveRefund(refundId: string): Promise<StripeRefundState>
-  constructEvent(rawBody: string, signature: string): Stripe.Event
+  constructEvent(rawBody: string, signature: string): Promise<Stripe.Event>
 }
 
 function randomIntegrationIdentifier() {
@@ -220,7 +220,7 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
     },
 
     constructEvent(rawBody, signature) {
-      return stripe.webhooks.constructEvent(rawBody, signature, config.webhookSecret)
+      return stripe.webhooks.constructEventAsync(rawBody, signature, config.webhookSecret)
     },
   }
 }

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
-import { Field, FieldLabel } from '@workspace/ui/components/field'
+import { Field, FieldError, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { formatStorePrice } from '@/lib/store-products'
@@ -18,6 +18,7 @@ export function Component() {
   const initialToken = pending?.orderId === orderId ? pending.guestAccessToken ?? '' : ''
   const [tokenInput, setTokenInput] = useState(initialToken)
   const [request, setRequest] = useState({ token: initialToken, attempt: initialToken ? 1 : 0 })
+  const [missingToken, setMissingToken] = useState(false)
   const order = useQuery({
     queryKey: guestOrderQueryKey(orderId, request.attempt),
     queryFn: () => getGuestOrder(orderId, request.token),
@@ -29,7 +30,13 @@ export function Component() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setRequest(previous => ({ token: tokenInput.trim(), attempt: previous.attempt + 1 }))
+    // Read the submitted value so a browser-autofilled token is used even if React state never saw it.
+    const submitted = new FormData(event.currentTarget).get('token')
+    const token = (typeof submitted === 'string' ? submitted : tokenInput).trim()
+    setMissingToken(!token)
+    if (!token) return
+    setTokenInput(token)
+    setRequest(previous => ({ token, attempt: previous.attempt + 1 }))
   }
 
   const detail = order.data
@@ -40,12 +47,13 @@ export function Component() {
       <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">ตรวจสอบคำสั่งซื้อ</h1>
       <p className="mt-4 leading-7 text-muted-foreground">กรอกรหัสเข้าดูคำสั่งซื้อที่ได้รับในอีเมลยืนยันคำสั่งซื้อ</p>
       <form onSubmit={submit} className="mt-8 rounded-3xl border bg-card p-5 md:p-8">
-        <Field>
+        <Field data-invalid={missingToken}>
           <FieldLabel htmlFor="guest-order-token">รหัสเข้าดูคำสั่งซื้อ</FieldLabel>
-          <Input id="guest-order-token" type="password" autoComplete="off" spellCheck={false} value={tokenInput} onChange={event => setTokenInput(event.target.value)} aria-describedby="guest-token-help" />
+          <Input id="guest-order-token" name="token" type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" spellCheck={false} value={tokenInput} onChange={event => { setTokenInput(event.target.value); setMissingToken(false) }} aria-invalid={missingToken} aria-describedby={missingToken ? 'guest-token-help guest-token-error' : 'guest-token-help'} />
           <p id="guest-token-help" className="text-xs text-muted-foreground">เพื่อความปลอดภัย ระบบจะไม่บันทึกรหัสนี้ไว้ในลิงก์หรือในเบราว์เซอร์</p>
+          {missingToken && <FieldError id="guest-token-error">กรอกรหัสเข้าดูคำสั่งซื้อจากอีเมลยืนยันคำสั่งซื้อ</FieldError>}
         </Field>
-        <Button className="mt-5" type="submit" disabled={!tokenInput.trim() || order.isFetching}>{order.isFetching ? 'กำลังตรวจสอบ...' : 'ดูคำสั่งซื้อ'}</Button>
+        <Button className="mt-5" type="submit" disabled={order.isFetching}>{order.isFetching ? 'กำลังตรวจสอบ...' : 'ดูคำสั่งซื้อ'}</Button>
       </form>
       {order.isError && <p role="alert" className="mt-5 text-sm text-destructive">ไม่พบคำสั่งซื้อหรือรหัสไม่ถูกต้อง ตรวจรหัสในอีเมลแล้วลองอีกครั้ง</p>}
       {order.isPending && request.token && <p role="status" className="mt-5 text-sm text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>}

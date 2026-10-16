@@ -103,14 +103,14 @@ function makeGateway(options: {
     retrieveRefund: async (refundId) => options.retrieveRefund
       ? options.retrieveRefund(refundId)
       : Promise.reject(new Error('not used')),
-    constructEvent(rawBody, signature) {
+    async constructEvent(rawBody, signature) {
       if (signature !== 'valid-signature') throw new Error('Invalid signature')
       return JSON.parse(rawBody) as StripeGatewayEvent
     },
   }
 }
 
-type StripeGatewayEvent = ReturnType<StripeGateway['constructEvent']>
+type StripeGatewayEvent = Awaited<ReturnType<StripeGateway['constructEvent']>>
 
 function event(eventId: string, type: string, session: Record<string, unknown>) {
   return {

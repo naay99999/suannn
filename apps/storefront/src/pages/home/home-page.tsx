@@ -112,21 +112,26 @@ export function Component() {
           })
         },
       )
-      let active = true
-      void document.fonts.ready.then(() => {
-        if (active) ScrollTrigger.refresh()
+      // Async content (products, farms, fonts) changes the page height after the
+      // pins are measured, so re-measure whenever the layout height changes.
+      let frame = 0
+      let height = scope.current?.offsetHeight ?? 0
+      const observer = new ResizeObserver(() => {
+        const next = scope.current?.offsetHeight ?? 0
+        if (next === height) return
+        height = next
+        cancelAnimationFrame(frame)
+        frame = requestAnimationFrame(() => ScrollTrigger.refresh())
       })
+      if (scope.current) observer.observe(scope.current)
       return () => {
-        active = false
+        observer.disconnect()
+        cancelAnimationFrame(frame)
         media.revert()
       }
     },
     { scope },
   )
-
-  useEffect(() => {
-    ScrollTrigger.refresh()
-  }, [category])
 
   function chooseCollection(value: string) {
     if (value === 'story')
