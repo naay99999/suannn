@@ -23,6 +23,7 @@ export function Component() {
   const [staffFlow, setStaffFlow] = useState(false)
   const [pending, setPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<SignInValues>({
+    mode: 'onTouched',
     resolver: zodResolver(signInSchema),
     defaultValues: { email: '', password: '' },
   })

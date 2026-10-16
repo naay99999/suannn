@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-const email = z.email('กรุณากรอกอีเมลให้ถูกต้อง').max(322, 'อีเมลยาวเกินไป')
+const email = z.string().trim().min(1, 'กรุณากรอกอีเมล')
+  .pipe(z.email('กรุณากรอกอีเมลให้ถูกต้อง').max(322, 'อีเมลยาวเกินไป'))
+const newPassword = z.string().min(1, 'กรุณากรอกรหัสผ่าน')
+  .min(12, 'รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร').max(256, 'รหัสผ่านยาวเกินไป')
+const confirmPassword = z.string().min(1, 'กรุณายืนยันรหัสผ่าน')
 
 export const signInSchema = z.object({
   email,
@@ -10,8 +14,8 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(100, 'ชื่อยาวเกินไป'),
   email,
-  password: z.string().min(12, 'รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร').max(256, 'รหัสผ่านยาวเกินไป'),
-  confirmPassword: z.string(),
+  password: newPassword,
+  confirmPassword,
 }).refine(value => value.password === value.confirmPassword, {
   path: ['confirmPassword'],
   message: 'รหัสผ่านไม่ตรงกัน',
@@ -19,8 +23,8 @@ export const signUpSchema = z.object({
 
 export const forgotPasswordSchema = z.object({ email })
 export const resetPasswordSchema = z.object({
-  password: z.string().min(12, 'รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร').max(256, 'รหัสผ่านยาวเกินไป'),
-  confirmPassword: z.string(),
+  password: newPassword,
+  confirmPassword,
 }).refine(value => value.password === value.confirmPassword, {
   path: ['confirmPassword'],
   message: 'รหัสผ่านไม่ตรงกัน',

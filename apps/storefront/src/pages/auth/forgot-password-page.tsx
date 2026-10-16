@@ -17,6 +17,7 @@ export function Component() {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<Values>({
+    mode: 'onTouched',
     resolver: zodResolver(forgotPasswordSchema), defaultValues: { email: '' },
   })
 
