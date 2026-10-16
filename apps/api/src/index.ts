@@ -11,6 +11,8 @@ import { CustomerAddressRepository } from './modules/customer/addresses/reposito
 import { CustomerAddressService } from './modules/customer/addresses/service'
 import { CustomerEmailChangeRepository } from './modules/customer/email-change/repository'
 import { CustomerEmailChangeService } from './modules/customer/email-change/service'
+import { CustomerAccountDeletionRepository } from './modules/customer/account-deletion/repository'
+import { CustomerAccountDeletionService } from './modules/customer/account-deletion/service'
 import { createResendEmailSender } from './modules/email/sender'
 import { EmailTaskQueue } from './modules/email/sender'
 import { IdentityClaimRepository } from './modules/identity-claims/repository'
@@ -116,6 +118,11 @@ const app = await createApp(config, {
     secret: config.betterAuthSecret,
     emailSender,
     runInBackground: (task) => emailQueue.enqueue(task),
+  }),
+  customerAccountDeletion: new CustomerAccountDeletionService({
+    audit,
+    repository: new CustomerAccountDeletionRepository(database.db),
+    claims,
   }),
   staffInvitations: new StaffInvitationService({
     auth,

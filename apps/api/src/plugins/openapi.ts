@@ -16,6 +16,7 @@ export const apiTags = [
   { name: 'Customer Profile', description: 'Read and rename the current customer profile.' },
   { name: 'Customer Addresses', description: 'Manage the current customer addresses.' },
   { name: 'Customer Email Change', description: 'Request and confirm a customer email change. Confirmation verifies the new email and revokes all customer sessions.' },
+  { name: 'Customer Account', description: 'Delete (anonymize) the signed-in customer account.' },
   { name: 'Store Products', description: 'Public catalog products and active variants available to storefront clients.' },
   { name: 'Store Farms', description: 'Public farm profiles and product associations for storefront clients.' },
   { name: 'Store Cart', description: 'Maintain the current customer or guest cart.' },

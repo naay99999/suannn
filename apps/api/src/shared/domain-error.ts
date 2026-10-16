@@ -139,6 +139,7 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   INVALID_ADDRESS: { status: 422, message: 'Request validation failed' },
   ADDRESS_NOT_FOUND: { status: 404, message: 'Address not found' },
   ADDRESS_LIMIT_REACHED: { status: 409, message: 'Address limit reached' },
+  ACCOUNT_HAS_OPEN_ORDERS: { status: 409, message: 'Finish or cancel open orders before deleting the account' },
 }
 
 export class DomainError extends Error {
