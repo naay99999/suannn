@@ -126,7 +126,7 @@ function testStripeGateway(): StripeGateway {
 async function confirmGuestStripePayment(order: { id: string; totalSatang: number }) {
   const gateway: StripeGateway = {
     ...testStripeGateway(),
-    constructEvent: () => ({
+    constructEvent: async () => ({
       id: `evt_guestpaid${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`,
       type: 'checkout.session.completed',
       data: { object: {
@@ -141,7 +141,7 @@ async function confirmGuestStripePayment(order: { id: string; totalSatang: numbe
         payment_intent: `pi_guestpaid${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`,
         expires_at: Math.floor(Date.now() / 1000) + 1800,
       } },
-    }) as unknown as ReturnType<StripeGateway['constructEvent']>,
+    }) as unknown as Awaited<ReturnType<StripeGateway['constructEvent']>>,
   }
   await new StripeEventService(database.db, gateway).handle('{}', 'valid-signature')
 }
@@ -450,7 +450,7 @@ describe('COD order lifecycle', () => {
 
     const gateway: StripeGateway = {
       ...testStripeGateway(),
-      constructEvent: () => ({
+      constructEvent: async () => ({
         id: 'evt_afterrejectedcod',
         type: 'checkout.session.completed',
         data: { object: {
@@ -465,7 +465,7 @@ describe('COD order lifecycle', () => {
           payment_intent: 'pi_after_rejected_cod',
           expires_at: Math.floor(Date.now() / 1000) + 1800,
         } },
-      }) as unknown as ReturnType<StripeGateway['constructEvent']>,
+      }) as unknown as Awaited<ReturnType<StripeGateway['constructEvent']>>,
     }
     await new StripeEventService(database.db, gateway).handle('{}', 'valid-signature')
     const paidSnapshot = await beforeRejectedCollection()

@@ -121,14 +121,14 @@ function makeGateway(options: {
         currency: 'thb',
         status: 'pending',
       },
-    constructEvent(rawBody, signature) {
+    async constructEvent(rawBody, signature) {
       if (signature !== 'valid-signature') throw new Error('Invalid signature')
       return JSON.parse(rawBody) as StripeGatewayEvent
     },
   }
 }
 
-type StripeGatewayEvent = ReturnType<StripeGateway['constructEvent']>
+type StripeGatewayEvent = Awaited<ReturnType<StripeGateway['constructEvent']>>
 
 function stripeEvent(eventId: string, type: string, object: Record<string, unknown>) {
   return {

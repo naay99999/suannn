@@ -96,9 +96,19 @@ describe('Stripe gateway', () => {
     expect(expiresAt).toBe(Math.floor(checkoutInput.expiresAt.getTime() / 1000))
   })
 
-  it('rejects invalid raw body webhook signatures', () => {
+  it('rejects invalid raw body webhook signatures', async () => {
     const gateway = createStripeGateway(config)
 
-    expect(() => gateway.constructEvent('not-json', 'invalid-signature')).toThrow()
+    await expect(gateway.constructEvent('not-json', 'invalid-signature')).rejects.toThrow()
+  })
+
+  it('accepts validly signed raw body webhooks', async () => {
+    const gateway = createStripeGateway(config)
+    const payload = JSON.stringify({ id: 'evt_test_signed', object: 'event', type: 'checkout.session.completed' })
+    const signature = await Stripe.webhooks.generateTestHeaderStringAsync({ payload, secret: config.webhookSecret })
+
+    const event = await gateway.constructEvent(payload, signature)
+
+    expect(event.id).toBe('evt_test_signed')
   })
 })

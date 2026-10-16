@@ -130,7 +130,7 @@ export class StripeEventService {
     if (!this.gateway) throw new DomainError('STRIPE_NOT_CONFIGURED')
     let event: Stripe.Event
     try {
-      event = this.gateway.constructEvent(rawBody, signature)
+      event = await this.gateway.constructEvent(rawBody, signature)
     } catch {
       throw new StripeSignatureError()
     }
