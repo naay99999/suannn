@@ -1,7 +1,8 @@
 import { Elysia } from 'elysia'
 import { openapi } from '@elysia/openapi'
 import type { AppConfig } from './config/env'
-import { systemModule } from './modules/system'
+import { createSystemModule } from './modules/system'
+import type { ReadinessProbe } from './modules/system/readiness'
 import { createSystemSettingsModule } from './modules/settings'
 import { createAuditModule } from './modules/audit'
 import { createCustomerAuthModule } from './modules/auth/customer'
@@ -77,6 +78,7 @@ export interface AppDependencies {
   staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
+  readiness: Pick<ReadinessProbe, 'check'>
 }
 
 export async function createApp(config: AppConfig, dependencies: AppDependencies) {
@@ -137,7 +139,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
-    .use(systemModule)
+    .use(createSystemModule(dependencies.readiness))
 }
 
 export type App = Awaited<ReturnType<typeof createApp>>

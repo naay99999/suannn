@@ -97,6 +97,7 @@ const app = await createApp(config, {
   staffMfaRequired: async () => false,
   identityReservations: claims,
   limiter,
+  readiness: { check: async () => {} },
 })
 let unlock: (() => Promise<void>) | undefined
 

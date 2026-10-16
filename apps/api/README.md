@@ -130,6 +130,7 @@ Audit records are application-append-only and security mutations write their aud
 - `GET /api/v1/openapi.json` serves the generated OpenAPI specification for v1.
 - `GET /api/v1` returns the API welcome response.
 - `GET /api/v1/health` returns `{ "status": "ok" }` for liveness checks.
+- `GET /api/v1/ready` returns `{ "status": "ready" }` only when PostgreSQL is reachable, the commerce-settings row exists, and the current order shipment schema is installed; otherwise it returns 503 with `{ "code": "NOT_READY", "message" }`. Route traffic to a new API version only after it returns 200.
 - `/api/v1/auth/*` exposes only the pinned sign-in, sign-out, recovery, verification, session, and MFA-challenge allowlist. Raw Admin and MFA-enrollment endpoints remain denied.
 
 Errors use `{ "code", "message" }` and never expose internal stack traces to clients.
