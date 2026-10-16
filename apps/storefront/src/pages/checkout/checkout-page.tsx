@@ -72,6 +72,7 @@ function selectedAddressPayload(choice: string, address?: CustomerAddress, value
 function checkoutErrorMessage(error: unknown) {
   if (error instanceof StoreCheckoutRequestError) {
     if (error.code === 'AUTHENTICATION_REQUIRED') return 'เก็บเงินปลายทางใช้ได้เมื่อเข้าสู่ระบบเท่านั้น'
+    if (error.code === 'EMAIL_VERIFICATION_REQUIRED') return 'ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้'
     if (error.code === 'QUOTE_STALE' || error.status === 409 || error.status === 422) return 'ราคา จำนวนสินค้า หรือค่าจัดส่งเปลี่ยนแล้ว ตรวจสอบยอดใหม่ก่อนยืนยันอีกครั้ง'
     if (error.code === 'STRIPE_NOT_CONFIGURED') return 'ระบบชำระเงินออนไลน์ยังตั้งค่าไม่ครบ'
   }
@@ -86,6 +87,7 @@ export function Component() {
   const session = useQuery(authSessionQuery)
   const customerSession = session.data?.user.accountType === 'customer' ? session.data : null
   const isCustomer = Boolean(customerSession)
+  const canUseCod = customerSession?.user.emailVerified === true
   const sessionResolved = !session.isPending && !session.isError
   const userId = customerSession?.user.id ?? ''
   const addresses = useQuery({ ...addressesQuery(userId), enabled: Boolean(userId) })
@@ -114,8 +116,8 @@ export function Component() {
   const defaultShippingAddress = addresses.data?.items.find(address => address.isDefaultShipping)
   const effectiveAddressChoice = addressChoice === 'default' ? defaultShippingAddress?.id ?? 'manual' : addressChoice
   const selectedSavedAddress = addresses.data?.items.find(address => address.id === effectiveAddressChoice)
-  const availableMethods = availablePaymentMethods(isCustomer)
-  const selectedPaymentMethod = effectivePaymentMethod(isCustomer, paymentMethod)
+  const availableMethods = availablePaymentMethods(canUseCod)
+  const selectedPaymentMethod = effectivePaymentMethod(canUseCod, paymentMethod)
 
   const handleAddressError = useCallback(() => setManualAddress(true), [])
 
@@ -132,7 +134,7 @@ export function Component() {
       setSubmitError('ตรวจสอบสถานะบัญชีก่อนสั่งซื้อ กรุณาลองโหลดอีกครั้ง')
       return
     }
-    if (!availableMethods.includes(selectedPaymentMethod) || (selectedPaymentMethod === 'cod' && !isCustomer)) {
+    if (!availableMethods.includes(selectedPaymentMethod) || (selectedPaymentMethod === 'cod' && !canUseCod)) {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
@@ -263,6 +265,7 @@ export function Component() {
                 <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'ชำระเงินเมื่อได้รับสินค้า' : 'กรอกข้อมูลบัตรในหน้าชำระเงินของ Stripe'}</span></span>
               </label>)}
               {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
+              {isCustomer && !canUseCod && <p className="text-sm text-muted-foreground">ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้ <Link className="font-medium text-primary-ink underline" to="/account/security">ส่งอีเมลยืนยัน</Link></p>}
             </div>
           </fieldset>
         </form>

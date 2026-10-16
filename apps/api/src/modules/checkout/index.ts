@@ -66,7 +66,7 @@ async function resolveCheckoutPrincipal(auth: Auth, request: Request, secureCook
   if (session?.user.accountType === 'staff') throw new Error('CUSTOMER_ACCOUNT_REQUIRED')
   if (session?.user.accountType === 'customer') {
     if (!session.user.id.trim()) throw new Error('AUTHENTICATION_REQUIRED')
-    return { principal: { kind: 'customer' as const, userId: session.user.id } }
+    return { principal: { kind: 'customer' as const, userId: session.user.id }, emailVerified: session.user.emailVerified }
   }
 
   return resolveCartPrincipal(auth, request, secureCookies)
@@ -128,12 +128,14 @@ export function createStoreCheckoutModule(
       },
     })
     .post('/orders', async ({ request, body, headers, requestContext, set }) => {
-      const { principal } = await resolveCheckoutPrincipal(auth, request, config.secureCookies)
+      const resolved = await resolveCheckoutPrincipal(auth, request, config.secureCookies)
+      const { principal } = resolved
       const limited = await rateLimitGuestCheckout(principal, limiter, requestContext, set)
       if (limited) return limited
       let result
       if (body.paymentMethod === 'cod') {
         if (principal.kind !== 'customer') throw new DomainError('AUTHENTICATION_REQUIRED')
+        if (!('emailVerified' in resolved) || resolved.emailVerified !== true) throw new DomainError('EMAIL_VERIFICATION_REQUIRED')
         result = await checkout.placeCod(body as PlaceCodInput, principal, headers['idempotency-key'])
       } else {
         if (!config.stripe || !stripeCheckout) throw new DomainError('STRIPE_NOT_CONFIGURED')
@@ -149,7 +151,7 @@ export function createStoreCheckoutModule(
       response: { 201: 'orders.createResponse', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Place a store order',
-        description: 'Places an idempotent customer COD or customer or guest Stripe order. Stripe orders return a hosted Checkout URL.',
+        description: 'Places an idempotent customer COD or customer or guest Stripe order. COD requires a customer with a verified email (403 EMAIL_VERIFICATION_REQUIRED). Stripe orders return a hosted Checkout URL.',
         tags: ['Store Checkout'],
         security: [],
       },

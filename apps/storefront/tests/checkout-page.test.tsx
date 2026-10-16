@@ -73,6 +73,17 @@ test('fresh guest sees enabled Stripe checkout and cannot accidentally select CO
   await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false))
 })
 
+test('unverified customer cannot select COD and is pointed to email verification', async () => {
+  previousFetch = globalThis.fetch
+  globalThis.fetch = responseFor as typeof fetch
+  mountCheckout({ ...customerSession, user: { ...customerSession.user, emailVerified: false } })
+
+  const stripe = await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
+  expect((stripe as HTMLInputElement).checked).toBe(true)
+  expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
+  expect(screen.getByRole('link', { name: 'ส่งอีเมลยืนยัน' }).getAttribute('href')).toBe('/account/security')
+})
+
 test('guest submits Stripe checkout with the manual address and redirects to Stripe', async () => {
   previousFetch = globalThis.fetch
   globalThis.fetch = responseFor as typeof fetch

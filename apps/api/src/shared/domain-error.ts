@@ -3,6 +3,7 @@ export type DomainErrorCode =
   | 'IDENTITY_LOCK_TIMEOUT'
   | 'CLIENT_IP_UNAVAILABLE'
   | 'AUTHENTICATION_REQUIRED'
+  | 'EMAIL_VERIFICATION_REQUIRED'
   | 'PRODUCT_NOT_FOUND'
   | 'VARIANT_NOT_FOUND'
   | 'PRODUCT_SLUG_CONFLICT'
@@ -58,6 +59,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   IDENTITY_LOCK_TIMEOUT: { status: 503, message: 'Service temporarily unavailable' },
   CLIENT_IP_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
   AUTHENTICATION_REQUIRED: { status: 401, message: 'Authentication required' },
+  EMAIL_VERIFICATION_REQUIRED: { status: 403, message: 'Email verification required' },
   PRODUCT_NOT_FOUND: { status: 404, message: 'Product not found' },
   VARIANT_NOT_FOUND: { status: 404, message: 'Variant not found' },
   PRODUCT_SLUG_CONFLICT: { status: 409, message: 'Product slug is already in use' },

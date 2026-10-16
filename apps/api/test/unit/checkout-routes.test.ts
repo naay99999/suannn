@@ -172,7 +172,10 @@ function createHarness(options: {
       getSession: async ({ headers }: { headers: Headers }) => {
         const value = headers.get('cookie')?.match(/(?:^|;\s*)session=([^;]+)/)?.[1]
         if (value === 'customer') {
-          return { user: { id: 'customer-1', accountType: 'customer' as const }, session: { id: 'session-customer' } }
+          return { user: { id: 'customer-1', accountType: 'customer' as const, emailVerified: true }, session: { id: 'session-customer' } }
+        }
+        if (value === 'unverified-customer') {
+          return { user: { id: 'customer-1', accountType: 'customer' as const, emailVerified: false }, session: { id: 'session-customer' } }
         }
         if (value === 'empty-customer') {
           return { user: { id: ' ', accountType: 'customer' as const }, session: { id: 'session-customer' } }
@@ -251,6 +254,16 @@ describe('store checkout and order HTTP contracts', () => {
 
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+  })
+
+  it('rejects COD from a customer whose email is not verified', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest(validCheckoutBody, 'session=unverified-customer'))
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ code: 'EMAIL_VERIFICATION_REQUIRED' })
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
   })
 

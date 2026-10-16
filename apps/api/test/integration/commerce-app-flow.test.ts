@@ -191,9 +191,25 @@ it('rejects guest COD over HTTP without creating an order or reserving stock', a
   expect((await cart.get({ kind: 'guest', tokenHash: hashToken(guestToken) })).lines).toHaveLength(1)
 })
 
+it('requires a verified email before a customer can place a COD order', async () => {
+  const { variantId } = await seedVariant()
+  await auth.api.signUpEmail({ body: { name: 'Unverified Customer', email: 'unverified@example.test', password: 'correct horse battery staple' } })
+  const signedIn = await request('/auth/sign-in/email', {
+    method: 'POST', origin: config.storefrontUrl,
+    body: { email: 'unverified@example.test', password: 'correct horse battery staple' },
+  })
+  expect(signedIn.status).toBe(200)
+  const customerCookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  const { quote, cookie } = await cartAndQuote(variantId, customerCookie)
+  const placed = await place(quote.quoteToken, cookie)
+  expect(placed.status).toBe(403)
+  expect(await placed.json()).toMatchObject({ code: 'EMAIL_VERIFICATION_REQUIRED' })
+})
+
 it('rejects a quote after cart mutation', async () => {
   const { variantId } = await seedVariant()
-  await auth.api.signUpEmail({ body: { name: 'Quote Customer', email: 'stale-quote@example.test', password: 'correct horse battery staple' } })
+  const quoteCustomer = await auth.api.signUpEmail({ body: { name: 'Quote Customer', email: 'stale-quote@example.test', password: 'correct horse battery staple' } })
+  await database.db.update(user).set({ emailVerified: true }).where(eq(user.id, quoteCustomer.user.id))
   const signedIn = await request('/auth/sign-in/email', {
     method: 'POST', origin: config.storefrontUrl,
     body: { email: 'stale-quote@example.test', password: 'correct horse battery staple' },
@@ -225,6 +241,7 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
   await database.db.update(user).set({
     accountType: 'staff', role: 'admin', staffActivatedAt: new Date(), emailVerified: true,
   }).where(eq(user.id, staff.user.id))
+  await database.db.update(user).set({ emailVerified: true }).where(eq(user.id, customer.user.id))
 
   const signedIn = await request('/auth/sign-in/email', {
     method: 'POST', origin: config.storefrontUrl,
