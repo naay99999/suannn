@@ -19,6 +19,24 @@ bun run dev
 
 Use `bun run dev:api`, `bun run dev:storefront`, or `bun run dev:admin` to start one application. Copy an app's `.env.example` to `.env.local` before overriding its API URL.
 
+## Run with Docker
+
+```bash
+cp docker.env.example .env   # fill in BETTER_AUTH_SECRET, COMMERCE_SECRET, RESEND_API_KEY, AUTH_EMAIL_FROM
+docker compose up --build
+```
+
+This starts PostgreSQL, applies Drizzle migrations once, then serves:
+
+- storefront at http://localhost:4183
+- admin at http://localhost:4184
+- API at http://localhost:6767
+- PostgreSQL at `localhost:5433` (user and password `postgres`, database `suannn`)
+
+Create the first owner invitation with `docker compose run --rm api bun src/cli/bootstrap-owner.ts <email>`. `docker compose down -v` removes the database volume. The frontend API URLs are baked in at build time through the `web` service build args.
+
+Production runs the same images through Dokploy; see [`docs/deployment.md`](docs/deployment.md).
+
 ## Quality checks
 
 ```bash
