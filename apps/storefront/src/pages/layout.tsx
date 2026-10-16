@@ -48,13 +48,12 @@ function HeaderAccountAction({ session, className, onNavigate }: {
   const isCustomer = session.data?.user.accountType === 'customer'
   return (
     <Link
-      className={cn(buttonVariants({ variant: isCustomer ? 'outline' : 'default' }), className)}
+      className={cn(buttonVariants({ variant: 'outline' }), className)}
       to={isCustomer ? '/account' : '/sign-in'}
       onClick={onNavigate}
     >
-      {isCustomer && <HugeiconsIcon icon={UserCircleIcon} data-icon="inline-start" />}
+      <HugeiconsIcon icon={UserCircleIcon} data-icon="inline-start" />
       {isCustomer ? 'บัญชีของฉัน' : 'เข้าสู่ระบบ'}
-      {!isCustomer && <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />}
     </Link>
   )
 }
@@ -85,7 +84,9 @@ function StorefrontShell() {
   const isAuthPage = ['/sign-in', '/sign-up', '/forgot-password', '/reset-password'].includes(authPath)
     || /^\/reset-password\/[^/]+$/.test(authPath)
 
-  if (isAuthPage) {
+  const isCheckoutPage = authPath === '/checkout' || authPath.startsWith('/checkout/')
+
+  if (isAuthPage || isCheckoutPage) {
     return (
       <div className="suannn-store flex min-h-dvh flex-col bg-background text-foreground">
         <a className="skip-link" href="#main-content">ข้ามไปเนื้อหาหลัก</a>
@@ -95,7 +96,7 @@ function StorefrontShell() {
             <Link className="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" to="/products">กลับไปเลือกสินค้า</Link>
           </nav>
         </header>
-        <main id="main-content" tabIndex={-1} className="flex w-full min-w-0 flex-1 outline-none">
+        <main id="main-content" tabIndex={-1} className={cn('w-full min-w-0 flex-1 outline-none', isCheckoutPage ? 'page-width py-8 md:py-12' : 'flex')}>
           <Outlet />
         </main>
       </div>
