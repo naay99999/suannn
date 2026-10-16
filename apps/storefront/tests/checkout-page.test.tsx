@@ -69,7 +69,7 @@ test('fresh guest sees enabled Stripe checkout and cannot accidentally select CO
   const stripe = await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
   expect((stripe as HTMLInputElement).checked).toBe(true)
   expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
-  const submit = await screen.findByRole('button', { name: 'ไปชำระเงินด้วย Stripe' })
+  const submit = await screen.findByRole('button', { name: /ไปชำระเงิน/ })
   await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false))
 })
 
@@ -80,7 +80,7 @@ test('guest submits Stripe checkout with the manual address and redirects to Str
   mountCheckout(null, { email: 'guest@example.test', phone: '0812345678', recipientName: 'Nok Guest', addressLine1: '1 Main Road', addressLine2: '', subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200' })
 
   await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
-  await userEvent.setup().click(await screen.findByRole('button', { name: 'ไปชำระเงินด้วย Stripe' }))
+  await userEvent.setup().click(await screen.findByRole('button', { name: /ไปชำระเงิน/ }))
 
   await waitFor(() => expect(stripeRedirects).toEqual([stripeCheckoutUrl]))
   const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
@@ -96,7 +96,7 @@ test('customer checkout starts at COD, submits the selected payment method and s
   const cod = await screen.findByRole('radio', { name: /เก็บเงินปลายทาง/ })
   expect((cod as HTMLInputElement).checked).toBe(true)
   await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
-  await user.click(screen.getByRole('button', { name: 'ยืนยันคำสั่งซื้อ' }))
+  await user.click(screen.getByRole('button', { name: /ยืนยันสั่งซื้อ/ }))
 
   await waitFor(() => expect(requests.some(request => request.path === '/api/v1/store/checkout/orders')).toBe(true))
   const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
@@ -114,7 +114,7 @@ test('customer can switch to Stripe and submits the saved address', async () => 
   await user.click(stripe)
   expect((stripe as HTMLInputElement).checked).toBe(true)
   await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
-  await user.click(screen.getByRole('button', { name: 'ไปชำระเงินด้วย Stripe' }))
+  await user.click(screen.getByRole('button', { name: /ไปชำระเงิน/ }))
 
   await waitFor(() => expect(stripeRedirects).toEqual([stripeCheckoutUrl]))
   const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
@@ -130,7 +130,7 @@ test('guest checkout rejects a manual address with missing required fields', asy
   await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
   await user.type(screen.getByLabelText('อีเมลสำหรับรับรายละเอียดคำสั่งซื้อ'), 'mali@example.test')
   await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
-  await user.click(screen.getByRole('button', { name: 'ไปชำระเงินด้วย Stripe' }))
+  await user.click(screen.getByRole('button', { name: /ไปชำระเงิน/ }))
 
   expect(await screen.findByText('กรุณากรอกชื่อผู้รับและที่อยู่จัดส่งให้ครบ')).toBeTruthy()
   expect(screen.getByLabelText('ชื่อผู้รับ').getAttribute('aria-invalid')).toBe('true')
@@ -153,7 +153,7 @@ test('unresolved session blocks order submission until account status is known',
   globalThis.fetch = responseFor as typeof fetch
   mountCheckout(null, undefined, true)
 
-  const submit = await screen.findByRole('button', { name: 'ไปชำระเงินด้วย Stripe' })
+  const submit = await screen.findByRole('button', { name: /ไปชำระเงิน/ })
   expect((submit as HTMLButtonElement).disabled).toBe(true)
   expect(requests.some(request => request.path === '/api/v1/store/checkout/orders')).toBe(false)
 })
