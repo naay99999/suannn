@@ -48,10 +48,12 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { createDatabaseReadinessProbe } from './modules/system/readiness'
 import { drainShutdown } from './shared/shutdown'
 
 const config = loadConfig()
 const database = createDatabase(config.databaseUrl)
+const readiness = createDatabaseReadinessProbe(config.databaseUrl)
 const identityLockPool = createIdentityLockPool(config.databaseUrl)
 const inventoryReservations = new InventoryReservationRepository(database.db)
 const backgroundTasks = new Set<Promise<void>>()
@@ -157,6 +159,7 @@ const app = await createApp(config, {
   staffMfaRequired,
   identityReservations: claims,
   limiter,
+  readiness,
 })
 
 app.listen({ hostname: config.host, port: config.port })
@@ -247,6 +250,7 @@ async function shutdown(signal: string) {
       { name: 'background', run: async () => { await Promise.allSettled(backgroundTasks) } },
     ],
     pools: [
+      { name: 'readiness-pool', run: () => readiness.close() },
       { name: 'identity-pool', run: remainingMs => identityLockPool.end({ timeout: remainingMs / 1000 }) },
       { name: 'database-pool', run: remainingMs => database.client.end({ timeout: remainingMs / 1000 }) },
     ],

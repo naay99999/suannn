@@ -50,6 +50,7 @@ const emailSender = { send: async () => ({ id: 'test-email' }) }
 const auth = createAuth(config, database.db, { emailSender, runInBackground: (task) => void task, audit })
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
+let databaseIsReady = true
 const inventoryReadRepository = new InventoryReadRepository(database.db)
 const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
@@ -107,6 +108,7 @@ const app = await createApp(config, {
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
+  readiness: { check: async () => { if (!databaseIsReady) throw new Error('database unavailable') } },
 })
 
 afterAll(async () => {
@@ -249,6 +251,10 @@ describe('API routes', () => {
       summary: 'Check API health',
       tags: ['System'],
     })
+    expect(specification.paths['/api/v1/ready'].get).toMatchObject({
+      summary: 'Check API readiness',
+      tags: ['System'],
+    })
     expect(specification.paths['/api/v1/webhooks/stripe'].post).toMatchObject({
       summary: 'Receive a verified Stripe webhook event',
       tags: ['Payments'],
@@ -366,7 +372,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(107)
+    expect(operations).toHaveLength(108)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
@@ -508,6 +514,21 @@ describe('API routes', () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ status: 'ok' })
+  })
+
+  it('reports database readiness without exposing database failures', async () => {
+    databaseIsReady = true
+    const ready = await app.handle(new Request('http://localhost/api/v1/ready'))
+    expect(ready.status).toBe(200)
+    expect(await ready.json()).toEqual({ status: 'ready' })
+
+    databaseIsReady = false
+    const unavailable = await app.handle(new Request('http://localhost/api/v1/ready'))
+    expect(unavailable.status).toBe(503)
+    expect(await unavailable.json()).toEqual({
+      code: 'NOT_READY', message: 'Service temporarily unavailable',
+    })
+    databaseIsReady = true
   })
 
   it('returns the standard not-found envelope', async () => {
