@@ -1,48 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon, ArrowRight02Icon } from '@hugeicons/core-free-icons'
+import { A11y } from 'swiper/modules'
+import type { Swiper as SwiperInstance } from 'swiper'
+import { Swiper, SwiperSlide } from 'swiper/react'
 import { Button } from '@workspace/ui/components/button'
 import { ProductCard } from '@/components/product-card'
 import type { StoreProductSummary } from '@/lib/store-products'
 
+import 'swiper/css'
+
 export const relatedProductLimit = 8
 
 export function RelatedProductsCarousel({ products }: { products: StoreProductSummary[] }) {
-  const track = useRef<HTMLDivElement>(null)
+  const swiperRef = useRef<SwiperInstance | null>(null)
   const [position, setPosition] = useState({ active: 0, atStart: true, atEnd: false })
 
-  function updatePosition() {
-    const container = track.current
-    const first = container?.firstElementChild as HTMLElement | null
-    if (!container || !first) return
-    const positions = Array.from(container.children, child => (child as HTMLElement).offsetLeft - first.offsetLeft)
-    const active = positions.reduce((best, left, index) =>
-      Math.abs(left - container.scrollLeft) < Math.abs(positions[best]! - container.scrollLeft) ? index : best, 0)
+  function syncPosition(swiper: SwiperInstance) {
+    // With several cards in view the last slides never become active, so the end reports the final card.
     setPosition({
-      active,
-      atStart: container.scrollLeft <= 2,
-      atEnd: container.scrollLeft + container.clientWidth >= container.scrollWidth - 2,
-    })
-  }
-
-  useEffect(() => {
-    const container = track.current
-    if (!container) return
-    container.scrollLeft = 0
-    updatePosition()
-    const observer = new ResizeObserver(updatePosition)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [products])
-
-  function goTo(index: number) {
-    const container = track.current
-    const item = container?.children.item(index) as HTMLElement | null
-    const first = container?.firstElementChild as HTMLElement | null
-    if (!container || !item || !first) return
-    container.scrollTo({
-      left: Math.min(item.offsetLeft - first.offsetLeft, container.scrollWidth - container.clientWidth),
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      active: swiper.isEnd && !swiper.isLocked ? products.length - 1 : swiper.activeIndex,
+      atStart: swiper.isBeginning || swiper.isLocked,
+      atEnd: swiper.isEnd || swiper.isLocked,
     })
   }
 
@@ -50,29 +29,51 @@ export function RelatedProductsCarousel({ products }: { products: StoreProductSu
 
   return (
     <div role="region" aria-roledescription="carousel" aria-label="สินค้าอื่นที่น่าสนใจ">
+      {/* Swiper treats on* props as its own events, so keyboard handling lives on this wrapper. */}
       <div
-        ref={track}
-        onScroll={updatePosition}
         tabIndex={0}
         aria-label="เลื่อนดูสินค้า"
         onKeyDown={event => {
           if (event.target !== event.currentTarget) return
-          if (event.key === 'ArrowRight' && !position.atEnd) { event.preventDefault(); goTo(position.active + 1) }
-          if (event.key === 'ArrowLeft' && !position.atStart) { event.preventDefault(); goTo(position.active - 1) }
+          if (event.key === 'ArrowRight' && !position.atEnd) { event.preventDefault(); swiperRef.current?.slideNext() }
+          if (event.key === 'ArrowLeft' && !position.atStart) { event.preventDefault(); swiperRef.current?.slidePrev() }
         }}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-5 scroll-smooth motion-reduce:scroll-auto sm:gap-6"
       >
-        {products.map((product, index) => (
-          <div key={product.id} role="group" aria-roledescription="slide" aria-label={`${index + 1} จาก ${products.length}`} className="min-w-0 flex-none basis-[82%] snap-start sm:basis-[calc((100%-1.5rem)/2)] lg:basis-[calc((100%-4.5rem)/4)]">
-            <ProductCard product={product} />
-          </div>
-        ))}
+        <Swiper
+          modules={[A11y]}
+          slidesPerView="auto"
+          spaceBetween={16}
+          breakpoints={{ 640: { spaceBetween: 24 } }}
+          watchOverflow
+          speed={300}
+          a11y={{
+            itemRoleDescriptionMessage: 'slide',
+            slideLabelMessage: '{{index}} จาก {{slidesLength}}',
+          }}
+          onSwiper={swiper => {
+            swiperRef.current = swiper
+            syncPosition(swiper)
+          }}
+          onSlideChange={syncPosition}
+          onResize={syncPosition}
+          onReachEnd={syncPosition}
+          onReachBeginning={syncPosition}
+          onLock={syncPosition}
+          onUnlock={syncPosition}
+          className="related-products-swiper pb-5"
+        >
+          {products.map(product => (
+            <SwiperSlide key={product.id} className="!h-auto !w-[82%] sm:!w-[calc((100%-1.5rem)/2)] lg:!w-[calc((100%-4.5rem)/4)]">
+              <ProductCard product={product} />
+            </SwiperSlide>
+          ))}
+        </Swiper>
       </div>
       <div className="mt-2 flex items-center justify-between gap-4">
         <p className="text-sm tabular-nums text-muted-foreground" aria-live="polite">{position.active + 1} / {products.length}</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าก่อนหน้า" disabled={position.atStart} onClick={() => goTo(position.active - 1)}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
-          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าถัดไป" disabled={position.atEnd} onClick={() => goTo(position.active + 1)}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
+          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าก่อนหน้า" disabled={position.atStart} onClick={() => swiperRef.current?.slidePrev()}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
+          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าถัดไป" disabled={position.atEnd} onClick={() => swiperRef.current?.slideNext()}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
         </div>
       </div>
     </div>

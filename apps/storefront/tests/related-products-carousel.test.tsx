@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import type { Swiper as SwiperInstance } from 'swiper'
 import { MemoryRouter } from 'react-router'
 import { RelatedProductsCarousel } from '../src/pages/products/_components/related-products-carousel'
 import type { StoreProductSummary } from '../src/lib/store-products'
@@ -27,26 +28,31 @@ test('an empty related list does not render navigation or an empty carousel', ()
   expect(screen.queryByRole('region')).toBeNull()
 })
 
-test('desktop navigation reaches the last four cards and allows scrolling back', () => {
+test('navigation follows the swiper position and reaches the last card', () => {
   render(<MemoryRouter><RelatedProductsCarousel products={products} /></MemoryRouter>)
-  const track = screen.getByLabelText('เลื่อนดูสินค้า')
-  Object.defineProperties(track, {
-    clientWidth: { value: 1200 },
-    scrollWidth: { value: 2400 },
-  })
-  Array.from(track.children).forEach((child, index) => {
-    Object.defineProperty(child, 'offsetLeft', { value: index * 300 })
-  })
-  track.scrollTo = ((options: ScrollToOptions) => {
-    track.scrollLeft = options.left ?? 0
-    fireEvent.scroll(track)
-  }) as typeof track.scrollTo
-  fireEvent.scroll(track)
+  const container = screen.getByLabelText('เลื่อนดูสินค้า')
+  const swiper = (container.querySelector('.swiper') as HTMLElement & { swiper: SwiperInstance }).swiper
+  const moves: string[] = []
+  swiper.slideNext = () => { moves.push('next'); return true }
+  swiper.slidePrev = () => { moves.push('prev'); return true }
   const next = screen.getByRole('button', { name: 'สินค้าถัดไป' })
-  for (let index = 0; index < 4; index++) fireEvent.click(next)
-  expect(track.scrollLeft).toBe(1200)
+  const previous = screen.getByRole('button', { name: 'สินค้าก่อนหน้า' })
+
+  act(() => {
+    Object.assign(swiper, { isLocked: false, isBeginning: true, isEnd: false, activeIndex: 0 })
+    swiper.emit('slideChange')
+  })
+  fireEvent.click(next)
+  fireEvent.keyDown(container, { key: 'ArrowRight' })
+  expect(moves).toEqual(['next', 'next'])
+  expect(previous.hasAttribute('disabled')).toBe(true)
+
+  act(() => {
+    Object.assign(swiper, { isBeginning: false, isEnd: true, activeIndex: 4 })
+    swiper.emit('slideChange')
+  })
+  expect(screen.getByText('8 / 8')).toBeTruthy()
   expect(next.hasAttribute('disabled')).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'สินค้าก่อนหน้า' }))
-  expect(track.scrollLeft).toBe(900)
-  expect(next.hasAttribute('disabled')).toBe(false)
+  fireEvent.click(previous)
+  expect(moves).toEqual(['next', 'next', 'prev'])
 })
