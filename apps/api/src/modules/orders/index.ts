@@ -17,7 +17,9 @@ import { renderReceiptPdf } from '../receipts/pdf'
 
 async function receiptPdfResponse(service: Pick<OrderService, 'readReceipt'>, orderId: string, principal: OrderPrincipal) {
   const { snapshot, status, receiptNumber } = await service.readReceipt(orderId, principal)
-  return new Response(await renderReceiptPdf(snapshot, status), {
+  const pdf = await renderReceiptPdf(snapshot, status)
+  // Copy into a fresh ArrayBuffer-backed view so the body type holds under every tsconfig.
+  return new Response(new Uint8Array(pdf), {
     headers: {
       'content-type': 'application/pdf',
       'content-disposition': `attachment; filename="${receiptNumber}.pdf"`,
