@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { downloadCustomerReceipt, downloadGuestReceipt, StoreOrderRequestError } from '../src/lib/store-orders'
 import { orderQueryKey } from '../src/pages/account/account-queries'
 import { formatSatang, latestOrder, mergeOrderPages, orderStatusLabels } from '../src/pages/account/order-display'
 
@@ -29,4 +30,20 @@ test('appends cursor pages without duplicate order cards', () => {
 
 test('scopes order details to the signed-in customer', () => {
   expect(orderQueryKey('customer-a', 'order-1')).not.toEqual(orderQueryKey('customer-b', 'order-1'))
+})
+
+test('customer receipt download includes the session cookie and rejects non-OK responses', async () => {
+  const calls: RequestInit[] = []
+  const fetcher = (async (_url: unknown, init?: RequestInit) => { calls.push(init ?? {}); return new Response('{"code":"RECEIPT_NOT_FOUND"}', { status: 404 }) }) as typeof fetch
+  const error = await downloadCustomerReceipt('order-1', fetcher).catch(e => e)
+
+  expect(error).toBeInstanceOf(StoreOrderRequestError)
+  expect(error.status).toBe(404)
+  expect(calls[0]?.credentials).toBe('include')
+})
+
+test('guest receipt download rejects when the token is missing', async () => {
+  const error = await downloadGuestReceipt('order-1', ' ', (async () => new Response('')) as typeof fetch).catch(e => e)
+
+  expect(error).toBeInstanceOf(StoreOrderRequestError)
 })

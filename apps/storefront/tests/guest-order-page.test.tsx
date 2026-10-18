@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -28,21 +28,26 @@ afterEach(() => {
   sessionStorage.clear()
 })
 
-function renderPage(entry = `/orders/guest/${orderId}`, validToken?: string) {
+function renderPage(entry = `/orders/guest/${orderId}`, validToken?: string, body: Record<string, unknown> = order) {
   const tokens: string[] = []
+  const pdfTokens: string[] = []
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes(`/store/orders/${orderId}/receipt.pdf`)) {
+      pdfTokens.push(new Headers(init?.headers).get('X-Order-Access-Token') ?? '')
+      return new Response('%PDF', { status: 200, headers: { 'content-type': 'application/pdf' } })
+    }
     if (String(input).includes(`/store/orders/${orderId}`)) {
       const token = new Headers(init?.headers).get('X-Order-Access-Token') ?? ''
       tokens.push(token)
       if (validToken && token !== validToken) return new Response('{"code":"ORDER_NOT_FOUND"}', { status: 404, headers: { 'content-type': 'application/json' } })
-      return new Response(JSON.stringify(order), { status: 200, headers: { 'content-type': 'application/json' } })
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
     }
     return new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } })
   }) as typeof fetch
   const router = createMemoryRouter([{ path: '/orders/guest/:orderId', Component }], { initialEntries: [entry] })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={queryClient}><CartProvider><RouterProvider router={router} /></CartProvider></QueryClientProvider>)
-  return { tokens, router, user: userEvent.setup() }
+  return { tokens, pdfTokens, router, user: userEvent.setup() }
 }
 
 test('looks up a guest order with a browser-autofilled token React state never saw', async () => {
@@ -101,4 +106,60 @@ test('reads only the token parameter from a link fragment', () => {
   expect(guestOrderTokenFromHash('#token=a%2Bb')).toBe('a+b')
   expect(guestOrderTokenFromHash('#other=1')).toBe('')
   expect(guestOrderTokenFromHash('')).toBe('')
+})
+
+const billing = { name: 'สมชาย ใจดี', phone: '0812345678', addressLine1: '99 ถนนสุขุมวิท', addressLine2: null, subdistrict: 'คลองเตย', district: 'คลองเตย', province: 'กรุงเทพมหานคร', postalCode: '10110' }
+const receipt = { number: 'RC-20261018-0001', kind: 'receipt', status: 'issued', issuedAt: '2026-10-18T00:00:00.000Z' }
+
+test('billing card renders billing name and phone', async () => {
+  renderPage(`/orders/guest/${orderId}#token=t`, undefined, { ...order, billing })
+
+  expect(await screen.findByText('ที่อยู่ออกใบเสร็จ')).toBeTruthy()
+  expect(screen.getByText('สมชาย ใจดี')).toBeTruthy()
+  expect(screen.getByText('0812345678')).toBeTruthy()
+})
+
+test('download button hidden without receipt', async () => {
+  renderPage(`/orders/guest/${orderId}#token=t`, undefined, { ...order, billing, receipt: null })
+
+  await screen.findByText('ที่อยู่ออกใบเสร็จ')
+  expect(screen.queryByRole('button', { name: /ดาวน์โหลดใบเสร็จ/ })).toBeNull()
+})
+
+test('guest receipt download sends X-Order-Access-Token', async () => {
+  const originalCreate = URL.createObjectURL
+  const originalRevoke = URL.revokeObjectURL
+  const revoked: string[] = []
+  URL.createObjectURL = () => 'blob:receipt'
+  URL.revokeObjectURL = url => { revoked.push(url) }
+  try {
+    const { pdfTokens, user } = renderPage(`/orders/guest/${orderId}#token=guest-secret`, undefined, { ...order, billing, receipt })
+
+    expect(await screen.findByText('RC-20261018-0001')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /ดาวน์โหลดใบเสร็จ/ }))
+
+    await waitFor(() => expect(pdfTokens).toEqual(['guest-secret']))
+    await waitFor(() => expect(revoked).toEqual(['blob:receipt']))
+  } finally {
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+  }
+})
+
+test('shows the cancelled badge but keeps download available', async () => {
+  renderPage(`/orders/guest/${orderId}#token=t`, undefined, { ...order, billing, receipt: { ...receipt, status: 'cancelled' } })
+
+  expect(await screen.findByText('ใบเสร็จถูกยกเลิก')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /ดาวน์โหลดใบเสร็จ/ })).toBeTruthy()
+})
+
+test('shows an inline error when the receipt download fails', async () => {
+  const { user } = renderPage(`/orders/guest/${orderId}#token=t`, undefined, { ...order, billing, receipt })
+  const base = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes('receipt.pdf') ? new Response('{}', { status: 404 }) : base(input, init)) as typeof fetch
+
+  await user.click(await screen.findByRole('button', { name: /ดาวน์โหลดใบเสร็จ/ }))
+
+  expect((await screen.findByRole('alert')).textContent).toContain('ดาวน์โหลดใบเสร็จไม่สำเร็จ')
 })

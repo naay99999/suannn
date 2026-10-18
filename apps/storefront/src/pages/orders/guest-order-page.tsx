@@ -9,6 +9,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { formatStorePrice } from '@/lib/store-products'
 import {
   forgetGuestOrderToken,
+  downloadGuestReceipt,
   getGuestOrder,
   guestOrderQueryKey,
   guestOrderTokenFromHash,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/store-orders'
 import { orderStatusLabels } from '@/pages/account/order-display'
 import { ShipmentDetails } from '@/components/orders/shipment-details'
+import { BillingReceiptCard } from '@/components/orders/billing-receipt-card'
 import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 
 export function Component() {
@@ -90,6 +92,7 @@ export function Component() {
           <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดรวม</dt><dd>{formatStorePrice(detail.totalSatang)}</dd></div>
         </dl>
         <div className="mt-5 empty:hidden"><OrderPaymentActions order={detail} guestAccessToken={request.token} /></div>
+        <div className="mt-4 empty:hidden"><BillingReceiptCard billing={detail.billing} receipt={detail.receipt} download={fileName => downloadGuestReceipt(orderId, request.token, fetch, fileName)} /></div>
         {detail.shipment && <div className="mt-4 border-t pt-4"><ShipmentDetails shipment={detail.shipment} /></div>}
         {detail.payment.refund && <p className="mt-4 text-sm text-muted-foreground">การคืนเงิน: {refundStatusLabel(detail.payment.refund)} · {formatStorePrice(detail.payment.refund.amountSatang)}</p>}
       </section>}

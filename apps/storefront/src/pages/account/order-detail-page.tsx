@@ -4,9 +4,10 @@ import { buttonVariants } from '@workspace/ui/components/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { authSessionQuery } from '@/lib/auth-session'
-import { canCancelOrder, cancelCustomerOrder, refundStatusLabel } from '@/lib/store-orders'
+import { canCancelOrder, cancelCustomerOrder, downloadCustomerReceipt, refundStatusLabel } from '@/lib/store-orders'
 import { CancelOrderDialog } from '@/components/orders/cancel-order-dialog'
 import { ShipmentDetails } from '@/components/orders/shipment-details'
+import { BillingReceiptCard } from '@/components/orders/billing-receipt-card'
 import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 import { orderQuery, orderQueryKey, ordersQueryKey } from './account-queries'
 import { AccountQueryFeedback } from './account-query-feedback'
@@ -38,6 +39,7 @@ export function Component() {
         <Card><CardHeader><CardTitle className="text-lg">สินค้าในคำสั่งซื้อ</CardTitle></CardHeader><CardContent className="gap-6"><OrderItems order={detail} /><dl className="flex flex-col gap-3 border-t pt-5 text-sm"><div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatSatang(detail.subtotalSatang)}</dd></div><div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatSatang(detail.shippingSatang)}</dd></div><div className="flex justify-between gap-4 border-t pt-4 font-semibold"><dt>ยอดรวมทั้งหมด</dt><dd className="tabular-nums text-primary-ink">{formatSatang(detail.totalSatang)}</dd></div></dl></CardContent></Card>
         <div className="flex flex-col gap-6">
           <Card><CardHeader><CardTitle className="text-lg">จัดส่งถึง</CardTitle></CardHeader><CardContent className="leading-7"><p className="font-medium">{detail.recipientName}</p><p className="text-muted-foreground">{detail.contactPhone}</p><p className="text-muted-foreground"><AddressText address={detail} /></p>{detail.shipment && <div className="mt-4 border-t pt-4"><ShipmentDetails shipment={detail.shipment} /></div>}</CardContent></Card>
+          <BillingReceiptCard billing={detail.billing} receipt={detail.receipt} download={fileName => downloadCustomerReceipt(detail.id, fetch, fileName)} />
           <Card><CardHeader><CardTitle className="text-lg">การชำระเงิน</CardTitle></CardHeader><CardContent><p>{detail.paymentMethod === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระผ่าน Stripe'}</p><p className="mt-2 text-sm text-muted-foreground">สถานะ: {detail.payment.status === 'collected' ? detail.paymentMethod === 'stripe' ? 'Stripe ยืนยันการชำระเงินแล้ว' : 'รับเงินปลายทางแล้ว' : detail.payment.status === 'awaiting_collection' ? detail.paymentMethod === 'stripe' ? 'รอผลการชำระเงินจาก Stripe' : 'รอรับเงินปลายทาง' : 'ยกเลิกการชำระเงิน'}</p>{detail.payment.refund && <p className="mt-2 text-sm text-muted-foreground">การคืนเงิน: {refundStatusLabel(detail.payment.refund)} · {formatSatang(detail.payment.refund.amountSatang)}</p>}</CardContent></Card>
           {canCancelOrder(detail) && <Card><CardHeader><CardTitle className="text-lg">เปลี่ยนใจ?</CardTitle></CardHeader><CardContent className="gap-4"><p className="text-sm leading-7 text-muted-foreground">ยกเลิกได้จนกว่าร้านจะส่งสินค้า</p><div><CancelOrderDialog orderNumber={detail.orderNumber} cancel={key => cancelCustomerOrder(detail.id, key)} onCancelled={next => { queryClient.setQueryData(orderQueryKey(userId, detail.id), next); void queryClient.invalidateQueries({ queryKey: ordersQueryKey(userId) }) }} /></div></CardContent></Card>}
         </div>

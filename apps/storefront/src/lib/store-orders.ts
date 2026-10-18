@@ -102,6 +102,46 @@ async function guestOrderRequest(
   return data as unknown as StoreOrderDetail
 }
 
+function receiptUrl(orderId: string): URL {
+  return new URL(`/api/v1/store/orders/${encodeURIComponent(orderId)}/receipt.pdf`, defaultApiUrl)
+}
+
+async function saveReceiptBlob(url: URL, init: RequestInit, fetcher: typeof fetch, fileName: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetcher(url, init)
+  } catch {
+    throw new StoreOrderRequestError(0, 'NETWORK_ERROR')
+  }
+  if (!response.ok) {
+    let body: unknown
+    try { body = await response.json() } catch { body = null }
+    throw new StoreOrderRequestError(response.status, isRecord(body) && typeof body.code === 'string' ? body.code : 'STORE_RECEIPT_REQUEST_FAILED')
+  }
+  const objectUrl = URL.createObjectURL(await response.blob())
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = fileName
+    anchor.style.display = 'none'
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+/** `fileName` should be `<receipt number>.pdf`; the fallback keeps downloads usable if it is unknown. */
+export async function downloadCustomerReceipt(orderId: string, fetcher: typeof fetch = fetch, fileName = `receipt-${orderId}.pdf`): Promise<void> {
+  await saveReceiptBlob(receiptUrl(orderId), { method: 'GET', credentials: 'include' }, fetcher, fileName)
+}
+
+export async function downloadGuestReceipt(orderId: string, token: string, fetcher: typeof fetch = fetch, fileName = `receipt-${orderId}.pdf`): Promise<void> {
+  if (!orderId.trim() || !token.trim()) throw new StoreOrderRequestError(401, 'ORDER_ACCESS_TOKEN_REQUIRED')
+  await saveReceiptBlob(receiptUrl(orderId), { method: 'GET', credentials: 'omit', headers: { 'X-Order-Access-Token': token } }, fetcher, fileName)
+}
+
 export function storeOrderQueryKey(orderId: string) {
   return ['store-order', orderId] as const
 }
