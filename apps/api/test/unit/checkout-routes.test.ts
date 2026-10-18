@@ -609,5 +609,7 @@ describe('store checkout and order HTTP contracts', () => {
     expect(replayPlacedOrderRecord(withBilling, principal, secret).order.billing).toEqual(billing)
     const malformed = { ...operation, resultPayload: { ...operation.resultPayload, order: { ...customerOrder, billing: { name: 1 } } } }
     expect(() => replayPlacedOrderRecord(malformed, principal, secret)).toThrow()
+    const badVat = { ...operation, resultPayload: { ...operation.resultPayload, order: { ...customerOrder, items: [{ ...customerOrder.items[0], vatTreatment: 'zero' }] } } }
+    expect(() => replayPlacedOrderRecord(badVat, principal, secret)).toThrow()
   })
 })

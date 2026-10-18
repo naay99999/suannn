@@ -196,6 +196,23 @@ describe('order and reversible inventory schema migration', () => {
     `, [orderId, productId, variantId]), '23514')
   })
 
+  it('keeps billing snapshot immutable while allowing status updates', async () => {
+    const orderId = await insertOrder()
+    await expectPostgresError(() => database.client.unsafe(`
+      update commerce_order set billing_name = 'Changed' where id = $1
+    `, [orderId]), '23514')
+    await expectPostgresError(() => database.client.unsafe(`
+      update commerce_order set billing_address_line_2 = 'Floor 2' where id = $1
+    `, [orderId]), '23514')
+    await database.client.unsafe(`
+      update commerce_order set status = 'processing', updated_at = now() where id = $1
+    `, [orderId])
+    const [row] = await database.client.unsafe<{ status: string; billing_name: string }[]>(`
+      select status, billing_name from commerce_order where id = $1
+    `, [orderId])
+    expect(row).toEqual({ status: 'processing', billing_name: 'Order Recipient' })
+  })
+
   it('keeps order item snapshots independent of catalog changes and restricts catalog deletion', async () => {
     const { productId, variantId } = await insertVariant()
     const orderId = await insertOrder()
