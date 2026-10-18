@@ -183,6 +183,13 @@
       "when": 1792285216463,
       "tag": "0025_product_vat_treatment",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792286121228,
+      "tag": "0026_order_billing_snapshot",
+      "breakpoints": true
     }
   ]
 }

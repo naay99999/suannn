@@ -59,6 +59,19 @@ export interface OrderItemSnapshot {
   unitPriceSatang: number
   quantity: number
   lineTotalSatang: number
+  // Optional so replayed command results stored before VAT snapshots existed still validate.
+  vatTreatment?: 'standard' | 'exempt'
+}
+
+export interface OrderBillingSnapshot {
+  name: string
+  phone: string
+  addressLine1: string
+  addressLine2: string | null
+  subdistrict: string
+  district: string
+  province: string
+  postalCode: string
 }
 
 export interface OrderSnapshot {
@@ -75,6 +88,8 @@ export interface OrderSnapshot {
   district: string
   province: string
   postalCode: string
+  // Optional so replayed command results stored before billing snapshots existed still validate.
+  billing?: OrderBillingSnapshot
   subtotalSatang: number
   shippingSatang: number
   totalSatang: number

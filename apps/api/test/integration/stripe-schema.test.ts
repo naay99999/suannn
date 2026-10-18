@@ -28,11 +28,14 @@ async function insertOrder() {
       id, order_number, guest_access_token_hash, guest_access_token_nonce,
       guest_access_token_version, contact_email, contact_phone, recipient_name,
       address_line_1, subdistrict, district, province, postal_code,
+      billing_name, billing_phone, billing_address_line_1,
+      billing_subdistrict, billing_district, billing_province, billing_postal_code,
       subtotal_satang, shipping_satang, total_satang, currency, payment_method,
       status, reservation_id, quote_fingerprint
     ) values (
       $1, $2, $3, $4, 1, 'buyer@example.com', '+66812345678', 'Buyer',
       '12 Sample Road', 'Subdistrict', 'District', 'Bangkok', '10110',
+      'Buyer', '+66812345678', '12 Sample Road', 'Subdistrict', 'District', 'Bangkok', '10110',
       1000, 0, 1000, 'THB', 'stripe', 'pending_payment', $5, $6
     )
   `, [id, `STRIPE-${id}`, 'b'.repeat(64), crypto.randomUUID(), reservationId, 'c'.repeat(64)])

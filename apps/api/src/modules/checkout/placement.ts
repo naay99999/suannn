@@ -78,6 +78,7 @@ interface CatalogSnapshot {
   salesEnabled: boolean
   variantArchivedAt: Date | null
   priceSatang: number
+  vatTreatment: 'standard' | 'exempt'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,6 +116,20 @@ function readPlacementSnapshot(value: unknown): OrderSnapshot {
     || !Array.isArray(value.items)) {
     throw new DomainError('INVALID_ORDER_COMMAND')
   }
+  if (value.billing !== undefined) {
+    const b = value.billing
+    if (!isRecord(b)
+      || typeof b.name !== 'string'
+      || typeof b.phone !== 'string'
+      || typeof b.addressLine1 !== 'string'
+      || (b.addressLine2 !== null && typeof b.addressLine2 !== 'string')
+      || typeof b.subdistrict !== 'string'
+      || typeof b.district !== 'string'
+      || typeof b.province !== 'string'
+      || typeof b.postalCode !== 'string') {
+      throw new DomainError('INVALID_ORDER_COMMAND')
+    }
+  }
   for (const item of value.items) {
     if (!isRecord(item)
       || typeof item.id !== 'string'
@@ -126,7 +141,8 @@ function readPlacementSnapshot(value: unknown): OrderSnapshot {
       || typeof item.unit !== 'string'
       || !isSafeNonnegativeInteger(item.unitPriceSatang)
       || !Number.isSafeInteger(item.quantity) || (item.quantity as number) < 1
-      || !isSafeNonnegativeInteger(item.lineTotalSatang)) {
+      || !isSafeNonnegativeInteger(item.lineTotalSatang)
+      || (item.vatTreatment !== undefined && item.vatTreatment !== 'standard' && item.vatTreatment !== 'exempt')) {
       throw new DomainError('INVALID_ORDER_COMMAND')
     }
   }
@@ -333,6 +349,7 @@ async function readLockedCatalog(tx: DatabaseTransaction, lines: LockedCart['lin
     salesEnabled: productVariant.salesEnabled,
     variantArchivedAt: productVariant.archivedAt,
     priceSatang: productVariant.priceSatang,
+    vatTreatment: product.vatTreatment,
   }).from(productVariant).innerJoin(product, eq(productVariant.productId, product.id))
     .where(inArray(productVariant.id, variantIds)).orderBy(asc(productVariant.id))
   if (rows.length !== variantIds.length) throw new DomainError('QUOTE_STALE')
@@ -520,6 +537,15 @@ export function createPlaceOrderInTransaction(
       district: address.district,
       province: address.province,
       postalCode: address.postalCode,
+      // Task 3 replaces this copy with the billing address from checkout input.
+      billingName: address.recipientName,
+      billingPhone: input.contact.phone,
+      billingAddressLine1: address.addressLine1,
+      billingAddressLine2: address.addressLine2 ?? null,
+      billingSubdistrict: address.subdistrict,
+      billingDistrict: address.district,
+      billingProvince: address.province,
+      billingPostalCode: address.postalCode,
       subtotalSatang,
       shippingSatang,
       totalSatang,
@@ -541,6 +567,7 @@ export function createPlaceOrderInTransaction(
       unitPriceSatang: line.unitPriceSatang,
       quantity: line.quantity,
       lineTotalSatang: line.lineTotalSatang,
+      vatTreatment: line.vatTreatment,
     }))).returning({ id: orderItem.id, variantId: orderItem.variantId, quantity: orderItem.quantity })
     const itemByVariant = new Map(orderItems.map((item) => [item.variantId, item]))
 

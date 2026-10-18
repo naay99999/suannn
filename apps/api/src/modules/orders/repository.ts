@@ -36,6 +36,7 @@ async function loadOrder(tx: DatabaseTransaction, orderId: string) {
     unitPriceSatang: item.unitPriceSatang,
     quantity: item.quantity,
     lineTotalSatang: item.lineTotalSatang,
+    vatTreatment: item.vatTreatment,
   }))
   const snapshot: OrderSnapshot = {
     id: order.id,
@@ -51,6 +52,16 @@ async function loadOrder(tx: DatabaseTransaction, orderId: string) {
     district: order.district,
     province: order.province,
     postalCode: order.postalCode,
+    billing: {
+      name: order.billingName,
+      phone: order.billingPhone,
+      addressLine1: order.billingAddressLine1,
+      addressLine2: order.billingAddressLine2,
+      subdistrict: order.billingSubdistrict,
+      district: order.billingDistrict,
+      province: order.billingProvince,
+      postalCode: order.billingPostalCode,
+    },
     subtotalSatang: order.subtotalSatang,
     shippingSatang: order.shippingSatang,
     totalSatang: order.totalSatang,

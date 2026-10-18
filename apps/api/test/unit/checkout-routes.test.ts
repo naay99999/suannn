@@ -4,7 +4,7 @@ import { loadConfig } from '../../src/config/env'
 import type { Auth } from '../../src/plugins/auth/auth'
 import { DomainError } from '../../src/shared/domain-error'
 import { CheckoutService } from '../../src/modules/checkout/service'
-import { normalizeCheckoutInput } from '../../src/modules/checkout/placement'
+import { normalizeCheckoutInput, replayPlacedOrderRecord } from '../../src/modules/checkout/placement'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { testEnv } from '../fixtures'
 
@@ -594,5 +594,20 @@ describe('store checkout and order HTTP contracts', () => {
     expect(serialized).not.toContain('guestAccessTokenNonce')
     expect(serialized).not.toContain('COMMERCE_SECRET')
     expect(serialized).not.toContain('providerSecret')
+  })
+
+  it('replays a stored placement result without billing', () => {
+    const secret = new TextEncoder().encode('replay-secret-replay-secret-replay')
+    const operation = { orderId: customerOrderId, resultPayload: { orderId: customerOrderId, order: customerOrder, paymentId: 'payment-1', attemptId: null, guestAccessTokenHash: null, guestAccessTokenNonce: null, guestAccessTokenVersion: null } }
+    const principal = { kind: 'customer', userId: 'customer-1' } as CartPrincipal
+    const replayed = replayPlacedOrderRecord(operation, principal, secret)
+    expect(replayed.order.billing).toBeUndefined()
+    expect(replayed.order.items[0]?.vatTreatment).toBeUndefined()
+
+    const billing = { name: 'Somchai', phone: '+66812345678', addressLine1: '1 Main Road', addressLine2: null, subdistrict: 'Suthep', district: 'Mueang Chiang Mai', province: 'Chiang Mai', postalCode: '50200' }
+    const withBilling = { ...operation, resultPayload: { ...operation.resultPayload, order: { ...customerOrder, billing, items: [{ ...customerOrder.items[0], vatTreatment: 'exempt' }] } } }
+    expect(replayPlacedOrderRecord(withBilling, principal, secret).order.billing).toEqual(billing)
+    const malformed = { ...operation, resultPayload: { ...operation.resultPayload, order: { ...customerOrder, billing: { name: 1 } } } }
+    expect(() => replayPlacedOrderRecord(malformed, principal, secret)).toThrow()
   })
 })

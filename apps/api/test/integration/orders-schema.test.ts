@@ -107,10 +107,14 @@ async function insertOrder(input: {
       guest_access_token_hash, guest_access_token_nonce, guest_access_token_version,
       contact_email, contact_phone, recipient_name, address_line_1,
       subdistrict, district, province, postal_code,
+      billing_name, billing_phone, billing_address_line_1,
+      billing_subdistrict, billing_district, billing_province, billing_postal_code,
       subtotal_satang, shipping_satang, total_satang, currency, payment_method,
       status, reservation_id, quote_fingerprint
     ) values (
       $1, $2, $3, $4, $5, $6, $7, $8, 'Order Recipient', '12 Sample Road',
+      'Sample Subdistrict', 'Sample District', 'Bangkok', '10110',
+      'Order Recipient', $8, '12 Sample Road',
       'Sample Subdistrict', 'Sample District', 'Bangkok', '10110',
       $9, $10, $11, 'THB', $12, $13, $14, $15
     )
@@ -145,9 +149,9 @@ async function insertOrderItem(input: {
   await database.client.unsafe(`
     insert into order_item (
       id, order_id, product_id, variant_id, sku, product_name,
-      variant_name, unit, unit_price_satang, quantity, line_total_satang
+      variant_name, unit, unit_price_satang, quantity, line_total_satang, vat_treatment
     ) values ($1, $2, $3, $4, 'SNAPSHOT-SKU', 'Snapshot Product',
-      'Snapshot Variant', 'box', 100, $5, $6)
+      'Snapshot Variant', 'box', 100, $5, $6, 'exempt')
   `, [id, input.orderId, input.productId, input.variantId, quantity, 100 * quantity])
   return id
 }
@@ -167,6 +171,29 @@ describe('order and reversible inventory schema migration', () => {
     await expectPostgresError(() => insertOrder({ reservationId, contactEmail: ' ' }), '23514')
     await expectPostgresError(() => insertOrder({ reservationId, contactPhone: '' }), '23514')
     await expectPostgresError(() => insertOrder({ reservationId, status: 'pending' }), '23514')
+  })
+
+  it('backfills billing snapshot and item vat treatment', async () => {
+    const { productId, variantId } = await insertVariant()
+    const orderId = await insertOrder({ contactPhone: '081-234-5678' })
+    const itemId = await insertOrderItem({ orderId, productId, variantId })
+    const [order] = await database.client.unsafe<Record<string, string | null>[]>(`
+      select billing_name, recipient_name, billing_phone, contact_phone, billing_address_line_2,
+        billing_postal_code, postal_code from commerce_order where id = $1
+    `, [orderId])
+    expect(order?.billing_name).toBe(order?.recipient_name)
+    expect(order?.billing_phone).toBe(order?.contact_phone)
+    expect(order?.billing_postal_code).toBe(order?.postal_code)
+    expect(order?.billing_address_line_2).toBeNull()
+    const [item] = await database.client.unsafe<{ vat_treatment: string }[]>(`
+      select vat_treatment from order_item where id = $1
+    `, [itemId])
+    expect(item?.vat_treatment).toBe('exempt')
+    await expectPostgresError(() => database.client.unsafe(`
+      insert into order_item (order_id, product_id, variant_id, sku, product_name,
+        variant_name, unit, unit_price_satang, quantity, line_total_satang, vat_treatment)
+      values ($1, $2, $3, 'BAD', 'Bad', 'Bad', 'box', 100, 1, 100, 'zero')
+    `, [orderId, productId, variantId]), '23514')
   })
 
   it('keeps order item snapshots independent of catalog changes and restricts catalog deletion', async () => {
@@ -250,8 +277,8 @@ describe('order and reversible inventory schema migration', () => {
     const otherVariant = await insertVariant()
     await expectPostgresError(() => database.client.unsafe(`
       insert into order_item (order_id, product_id, variant_id, sku, product_name,
-        variant_name, unit, unit_price_satang, quantity, line_total_satang)
-      values ($1, $2, $3, 'BAD', 'Bad', 'Bad', 'box', 100, 1, 100)
+        variant_name, unit, unit_price_satang, quantity, line_total_satang, vat_treatment)
+      values ($1, $2, $3, 'BAD', 'Bad', 'Bad', 'box', 100, 1, 100, 'exempt')
     `, [orderId, crypto.randomUUID(), otherVariant.variantId]), '23503')
   })
 

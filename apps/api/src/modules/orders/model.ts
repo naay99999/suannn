@@ -23,6 +23,18 @@ const item = t.Object({
   unitPriceSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   quantity: t.Integer({ minimum: 1, maximum: 99 }),
   lineTotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  vatTreatment: t.Optional(t.Union([t.Literal('standard'), t.Literal('exempt')])),
+}, { additionalProperties: false })
+
+const billing = t.Object({
+  name: t.String(),
+  phone: t.String(),
+  addressLine1: t.String(),
+  addressLine2: t.Union([t.String(), t.Null()]),
+  subdistrict: t.String(),
+  district: t.String(),
+  province: t.String(),
+  postalCode: t.String({ pattern: '^[0-9]{5}$' }),
 }, { additionalProperties: false })
 
 const snapshot = t.Object({
@@ -39,6 +51,7 @@ const snapshot = t.Object({
   district: t.String(),
   province: t.String(),
   postalCode: t.String({ pattern: '^[0-9]{5}$' }),
+  billing: t.Optional(billing),
   subtotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   shippingSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   totalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),

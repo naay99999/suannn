@@ -102,6 +102,14 @@ export const commerceOrder = pgTable('commerce_order', {
   district: text('district').notNull(),
   province: text('province').notNull(),
   postalCode: text('postal_code').notNull(),
+  billingName: text('billing_name').notNull(),
+  billingPhone: text('billing_phone').notNull(),
+  billingAddressLine1: text('billing_address_line_1').notNull(),
+  billingAddressLine2: text('billing_address_line_2'),
+  billingSubdistrict: text('billing_subdistrict').notNull(),
+  billingDistrict: text('billing_district').notNull(),
+  billingProvince: text('billing_province').notNull(),
+  billingPostalCode: text('billing_postal_code').notNull(),
   subtotalSatang: bigint('subtotal_satang', { mode: 'number' }).notNull(),
   shippingSatang: bigint('shipping_satang', { mode: 'number' }).notNull(),
   totalSatang: bigint('total_satang', { mode: 'number' }).notNull(),
@@ -153,6 +161,16 @@ export const commerceOrder = pgTable('commerce_order', {
   check('commerce_order_district_check', sql`length(btrim(${table.district})) between 1 and 200`),
   check('commerce_order_province_check', sql`length(btrim(${table.province})) between 1 and 200`),
   check('commerce_order_postal_code_check', sql`${table.postalCode} ~ '^[0-9]{5}$'`),
+  check('commerce_order_billing_name_check', sql`length(btrim(${table.billingName})) between 1 and 200`),
+  check('commerce_order_billing_phone_check', sql`
+    ${table.billingPhone} ~ '^[+0-9][+0-9 ()-]{6,39}$'
+  `),
+  check('commerce_order_billing_address_line_1_check', sql`length(btrim(${table.billingAddressLine1})) between 1 and 300`),
+  check('commerce_order_billing_address_line_2_check', sql`${table.billingAddressLine2} is null or length(btrim(${table.billingAddressLine2})) between 1 and 300`),
+  check('commerce_order_billing_subdistrict_check', sql`length(btrim(${table.billingSubdistrict})) between 1 and 200`),
+  check('commerce_order_billing_district_check', sql`length(btrim(${table.billingDistrict})) between 1 and 200`),
+  check('commerce_order_billing_province_check', sql`length(btrim(${table.billingProvince})) between 1 and 200`),
+  check('commerce_order_billing_postal_code_check', sql`${table.billingPostalCode} ~ '^[0-9]{5}$'`),
   check('commerce_order_money_safe_range_check', sql`
     ${table.subtotalSatang} between 0 and ${maxSafeSatangSql}
     and ${table.shippingSatang} between 0 and ${maxSafeSatangSql}
@@ -192,6 +210,7 @@ export const orderItem = pgTable('order_item', {
   unitPriceSatang: bigint('unit_price_satang', { mode: 'number' }).notNull(),
   quantity: integer('quantity').notNull(),
   lineTotalSatang: bigint('line_total_satang', { mode: 'number' }).notNull(),
+  vatTreatment: text('vat_treatment', { enum: ['standard', 'exempt'] }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique('order_item_id_order_unique').on(table.id, table.orderId),
@@ -204,6 +223,7 @@ export const orderItem = pgTable('order_item', {
     and length(btrim(${table.variantName})) between 1 and 200
     and length(btrim(${table.unit})) between 1 and 80
   `),
+  check('order_item_vat_treatment_check', sql`${table.vatTreatment} in ('standard', 'exempt')`),
   check('order_item_quantity_range_check', sql`${table.quantity} between 1 and 99`),
   check('order_item_unit_price_safe_range_check', sql`${table.unitPriceSatang} between 1 and ${maxSafeSatangSql}`),
   check('order_item_line_total_safe_range_check', sql`${table.lineTotalSatang} between 1 and ${maxSafeSatangSql}`),
