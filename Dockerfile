@@ -20,7 +20,8 @@ COPY . .
 # Vite embeds these at build time.
 ARG VITE_API_URL=http://localhost:6767
 ARG VITE_ADMIN_URL=http://localhost:4184
-ENV VITE_API_URL=$VITE_API_URL VITE_ADMIN_URL=$VITE_ADMIN_URL
+ARG VITE_SITE_URL=http://localhost:4183
+ENV VITE_API_URL=$VITE_API_URL VITE_ADMIN_URL=$VITE_ADMIN_URL VITE_SITE_URL=$VITE_SITE_URL
 RUN bun --filter storefront build && bun --filter admin build
 
 FROM caddy:2-alpine AS web
