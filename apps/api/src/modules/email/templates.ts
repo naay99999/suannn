@@ -144,3 +144,20 @@ export function orderRefundedEmail(
     `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
   ], orderUrl(orderId, storefrontUrl, guest), 'ดูคำสั่งซื้อ')
 }
+
+export function receiptIssuedEmail(
+  orderId: string,
+  orderNumber: string,
+  receiptNumber: string,
+  storefrontUrl: string,
+  guestAccessToken?: string,
+): EmailContent {
+  const url = orderUrl(orderId, storefrontUrl, Boolean(guestAccessToken))
+  // Same as the confirmation email: the guest token rides in the fragment, never in the query.
+  const actionUrl = guestAccessToken ? `${url}#${new URLSearchParams({ token: guestAccessToken })}` : url
+  return orderEmail(`ใบเสร็จรับเงิน คำสั่งซื้อ ${orderNumber}`, [
+    `ร้านออกใบเสร็จรับเงินเลขที่ ${receiptNumber} ให้คำสั่งซื้อของคุณแล้ว`,
+    'แนบไฟล์ PDF มาพร้อมอีเมลนี้ และดาวน์โหลดได้อีกครั้งจากหน้าคำสั่งซื้อ',
+    `หมายเลขคำสั่งซื้อ: ${orderNumber}`,
+  ], actionUrl, 'ดูคำสั่งซื้อ')
+}

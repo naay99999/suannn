@@ -1,14 +1,17 @@
 import { and, asc, desc, eq, inArray, lte, or, sql, lt } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
-import { commerceOrder, orderOutbox, payment, stripeRefund } from '../../database/schema'
-import type { EmailSender, EmailTemplate } from '../email/sender'
+import { commerceOrder, orderOutbox, payment, receipt, stripeRefund } from '../../database/schema'
+import type { EmailMessage, EmailSender, EmailTemplate } from '../email/sender'
 import {
   orderCancelledEmail,
   orderConfirmationEmail,
   orderRefundedEmail,
   orderShippedEmail,
+  receiptIssuedEmail,
   type EmailContent,
 } from '../email/templates'
+import { renderReceiptPdf } from '../receipts/pdf'
+import type { ReceiptSnapshot } from '../receipts/types'
 import type { ShipmentCarrier } from './types'
 import { deriveGuestOrderToken, guestOrderTokenVerifierMatches } from './access'
 
@@ -16,13 +19,14 @@ const maximumBatchSize = 100
 const initialRetryDelayMs = 30 * 1000
 const maximumRetryDelayMs = 24 * 60 * 60 * 1000
 
-export type OrderOutboxTemplate = 'order_confirmation' | 'order_shipped' | 'order_cancelled' | 'order_refunded'
+export type OrderOutboxTemplate = 'order_confirmation' | 'order_shipped' | 'order_cancelled' | 'order_refunded' | 'receipt_issued'
 
 const emailTemplates: Record<OrderOutboxTemplate, EmailTemplate> = {
   order_confirmation: 'order-confirmation',
   order_shipped: 'order-shipped',
   order_cancelled: 'order-cancelled',
   order_refunded: 'order-refunded',
+  receipt_issued: 'receipt-issued',
 }
 
 const carrierLabels: Record<ShipmentCarrier, string> = {
@@ -165,6 +169,7 @@ export class OrderOutbox {
 
     const guest = order.customerId === null
     let content: EmailContent
+    let attachments: EmailMessage['attachments']
     if (templateId === 'order_confirmation') {
       const accessToken = this.accessTokenFor(row.orderId, order)
       if (guest && !accessToken) {
@@ -185,6 +190,29 @@ export class OrderOutbox {
       })
     } else if (templateId === 'order_cancelled') {
       content = orderCancelledEmail(row.orderId, order.orderNumber, this.storefrontUrl, guest)
+    } else if (templateId === 'receipt_issued') {
+      const accessToken = this.accessTokenFor(row.orderId, order)
+      if (guest && !accessToken) {
+        await this.markFailed(row, 'GUEST_TOKEN_UNAVAILABLE')
+        return
+      }
+      const [saved] = await this.db.select({
+        receiptNumber: receipt.receiptNumber,
+        status: receipt.status,
+        snapshot: receipt.snapshot,
+      }).from(receipt).where(eq(receipt.orderId, row.orderId)).limit(1)
+      if (!saved) {
+        await this.markFailed(row, 'OUTBOX_RECEIPT_MISSING')
+        return
+      }
+      content = receiptIssuedEmail(row.orderId, order.orderNumber, saved.receiptNumber, this.storefrontUrl, accessToken ?? undefined)
+      try {
+        const pdf = await renderReceiptPdf(saved.snapshot as unknown as ReceiptSnapshot, saved.status)
+        attachments = [{ filename: `${saved.receiptNumber}.pdf`, content: pdf }]
+      } catch {
+        await this.markFailed(row, 'OUTBOX_RECEIPT_RENDER_FAILED')
+        return
+      }
     } else {
       const [refund] = await this.db.select({ amountSatang: stripeRefund.amountSatang })
         .from(stripeRefund)
@@ -199,7 +227,7 @@ export class OrderOutbox {
     }
 
     try {
-      await this.emailSender.send({ to: order.contactEmail, template: emailTemplates[templateId], ...content })
+      await this.emailSender.send({ to: order.contactEmail, template: emailTemplates[templateId], ...content, ...(attachments ? { attachments } : {}) })
       await this.db.update(orderOutbox).set({
         status: 'sent',
         sentAt: sql`transaction_timestamp()`,

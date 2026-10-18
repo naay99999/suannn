@@ -8,6 +8,7 @@ import {
   commerceSettings,
   inventoryLot,
   orderEvent,
+  orderOutbox,
   product,
   productVariant,
   receipt,
@@ -227,6 +228,11 @@ async function deliver(orders: OrderService, orderId: string) {
   return orders.advanceFulfillment(orderId, 'delivered', staffActor, `receipts-delivered-${orderId}`)
 }
 
+async function receiptOutboxFor(orderId: string) {
+  const rows = await database.db.select().from(orderOutbox).where(eq(orderOutbox.orderId, orderId))
+  return rows.filter(({ templateId }) => templateId === 'receipt_issued')
+}
+
 function receiptsFor(orderId: string) {
   return database.db.select().from(receipt).where(eq(receipt.orderId, orderId))
 }
@@ -338,6 +344,9 @@ describe('receipt issuance', () => {
     const events = await receiptEvents(order.id)
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ eventType: 'receipt.issued', actorType: 'system', actorId: null, metadata: { receiptId: saved.id } })
+    const queued = await receiptOutboxFor(order.id)
+    expect(queued).toHaveLength(1)
+    expect(queued[0]).toMatchObject({ orderEventId: events[0]!.id, eventType: 'receipt.issued', status: 'pending' })
     const audits = await database.db.select().from(auditLog).where(eq(auditLog.action, 'order.receipt-issued'))
     expect(audits).toHaveLength(1)
     expect(audits[0]).toMatchObject({ targetId: order.id, actorUserId: null, metadata: { receiptId: saved.id } })
@@ -351,6 +360,7 @@ describe('receipt issuance', () => {
 
     expect(await receiptsFor(order.id)).toHaveLength(1)
     expect((await receiptEvents(order.id)).map(({ eventType }) => eventType)).toEqual(['receipt.issued'])
+    expect(await receiptOutboxFor(order.id)).toHaveLength(1)
     const [counter] = await database.db.select().from(receiptCounter)
     expect(counter?.lastValue).toBe(1)
   })
@@ -414,6 +424,7 @@ describe('receipt issuance', () => {
 
     expect(await receiptsFor(order.id)).toHaveLength(1)
     expect(await receiptEvents(order.id)).toHaveLength(1)
+    expect(await receiptOutboxFor(order.id)).toHaveLength(1)
   })
 
   it('cancelled order never gets a receipt', async () => {

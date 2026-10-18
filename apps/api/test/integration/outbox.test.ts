@@ -11,6 +11,7 @@ import {
   orderOutbox,
   product,
   productVariant,
+  receipt,
   user,
   warehouse,
 } from '../../src/database/schema'
@@ -30,6 +31,8 @@ import { InventoryReadRepository } from '../../src/modules/inventory/read-reposi
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 import * as orderAccessModule from '../../src/modules/orders/access'
 import { OrderService } from '../../src/modules/orders/service'
+import { enqueueOrderEmail } from '../../src/modules/orders/outbox'
+import type { ReceiptSnapshot } from '../../src/modules/receipts/types'
 import type { EmailMessage, EmailSender } from '../../src/modules/email/sender'
 
 const database = createTestDatabase()
@@ -476,5 +479,84 @@ describe('guest order access and confirmation outbox', () => {
     expect(cancelledMail?.subject).toContain('ยกเลิก')
     const outbox = await database.db.select().from(orderOutbox)
     expect(outbox.every(row => row.status === 'sent')).toBe(true)
+  })
+
+  async function queueReceipt(orderId: string, orderNumber: string, withReceipt: boolean, status: 'issued' | 'cancelled' = 'issued') {
+    const eventId = crypto.randomUUID()
+    await database.db.transaction(async (tx) => {
+      await tx.insert(orderEvent).values({
+        id: eventId, orderId, eventType: 'receipt.issued', actorType: 'system', actorId: null, metadata: {},
+      })
+      if (withReceipt) {
+        const snapshot: ReceiptSnapshot = {
+          version: 1,
+          kind: 'receipt',
+          receiptNumber: 'RC202610-00001',
+          issuedAt: new Date().toISOString(),
+          paidAt: null,
+          seller: {
+            name: 'Seller Co', taxId: '0105536092641', branch: '00000',
+            addressLine1: '99 Road', addressLine2: null, subdistrict: 'A', district: 'B', province: 'C', postalCode: '10110', phone: null,
+          },
+          billing: {
+            name: 'Buyer', phone: '0812345678', addressLine1: '1 St', addressLine2: null,
+            subdistrict: 'A', district: 'B', province: 'C', postalCode: '10100',
+          },
+          orderNumber,
+          paymentMethod: 'stripe',
+          lines: [{
+            productName: 'Fruit', variantName: 'Box', unit: 'box', quantity: 1,
+            unitPriceSatang: 1200, lineTotalSatang: 1200, vatTreatment: 'exempt',
+          }],
+          shippingSatang: 0,
+          totals: { exemptSatang: 1200, vatableSatang: 0, vatSatang: 0, preVatSatang: 0, totalSatang: 1200, vatRateBasisPoints: 700 },
+        }
+        await tx.insert(receipt).values({
+          orderId, receiptNumber: 'RC202610-00001', kind: 'receipt', status,
+          issuedAt: new Date(), snapshot: snapshot as unknown as Record<string, unknown>,
+          ...(status === 'cancelled' ? { cancelledAt: new Date(), cancelledBy: staffId, cancelReason: 'test' } : {}),
+        })
+      }
+      await enqueueOrderEmail(tx, { orderId, orderEventId: eventId, eventType: 'receipt.issued', templateId: 'receipt_issued' })
+    })
+  }
+
+  it('delivers receipt_issued with one pdf attachment', async () => {
+    const placed = await placeOrder({ kind: 'customer', userId: customerId })
+    await database.db.delete(orderOutbox)
+    await queueReceipt(placed.result.order.id, placed.result.order.orderNumber, true)
+
+    const messages: EmailMessage[] = []
+    await makeOutbox(makeSender(async (message) => {
+      messages.push(message)
+      return { id: 'r1' }
+    })).processBatch(10)
+
+    expect(messages).toHaveLength(1)
+    const message = messages[0]!
+    expect(message.template).toBe('receipt-issued')
+    expect(message.subject).toBe(`ใบเสร็จรับเงิน คำสั่งซื้อ ${placed.result.order.orderNumber}`)
+    expect(message.text).toContain(`https://shop.example.test/account/orders/${placed.result.order.id}`)
+    expect(message.attachments).toHaveLength(1)
+    expect(message.attachments![0]!.filename).toBe('RC202610-00001.pdf')
+    expect(Buffer.from(message.attachments![0]!.content.subarray(0, 5)).toString()).toBe('%PDF-')
+    const [row] = await database.db.select().from(orderOutbox)
+    expect(row?.status).toBe('sent')
+  })
+
+  it('receipt_issued for a missing receipt marks the row failed with OUTBOX_RECEIPT_MISSING', async () => {
+    const placed = await placeOrder({ kind: 'customer', userId: customerId })
+    await database.db.delete(orderOutbox)
+    await queueReceipt(placed.result.order.id, placed.result.order.orderNumber, false)
+
+    const messages: EmailMessage[] = []
+    await makeOutbox(makeSender(async (message) => {
+      messages.push(message)
+      return { id: 'r1' }
+    })).processBatch(10)
+
+    expect(messages).toHaveLength(0)
+    const [row] = await database.db.select().from(orderOutbox)
+    expect(row).toMatchObject({ status: 'failed', lastErrorCode: 'OUTBOX_RECEIPT_MISSING' })
   })
 })

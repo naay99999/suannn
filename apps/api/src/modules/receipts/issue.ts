@@ -10,6 +10,7 @@ import {
   receiptCounter,
 } from '../../database/schema'
 import { assertAuditMetadata, type AuditContext, type AuditEvent } from '../audit/model'
+import { enqueueOrderEmail } from '../orders/outbox'
 import { formatReceiptNumber, receiptPeriod } from './number'
 import { readCompleteSeller } from './settings'
 import type { ReceiptIssueActor, ReceiptIssueResult, ReceiptSnapshot } from './types'
@@ -168,13 +169,15 @@ export async function issueReceiptInTransaction(
     issuedAt,
     snapshot: snapshot as unknown as Record<string, unknown>,
   })
+  const issuedEventId = crypto.randomUUID()
   await tx.insert(orderEvent).values({
-    id: crypto.randomUUID(),
+    id: issuedEventId,
     orderId,
     eventType: 'receipt.issued',
     ...eventActor(actor),
     metadata: { receiptId },
   })
+  await enqueueOrderEmail(tx, { orderId, orderEventId: issuedEventId, eventType: 'receipt.issued', templateId: 'receipt_issued' })
   await recordReceiptAudit(tx, {
     id: crypto.randomUUID(),
     actorUserId: actor.type === 'staff' ? actor.userId : null,

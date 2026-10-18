@@ -12,10 +12,12 @@ export type EmailTemplate =
   | 'order-shipped'
   | 'order-cancelled'
   | 'order-refunded'
+  | 'receipt-issued'
 
 export interface EmailMessage extends EmailContent {
   to: string
   template: EmailTemplate
+  attachments?: Array<{ filename: string; content: Uint8Array }>
 }
 
 export interface EmailSender {
@@ -30,6 +32,7 @@ interface ResendLike {
       subject: string
       text: string
       html: string
+      attachments?: Array<{ filename: string; content: Buffer }>
     }): Promise<{
       data: { id: string } | null
       error: { name?: string; message: string } | null
@@ -119,6 +122,9 @@ export function createResendEmailSender(
         subject: message.subject,
         text: message.text,
         html: message.html,
+        ...(message.attachments?.length ? {
+          attachments: message.attachments.map(({ filename, content }) => ({ filename, content: Buffer.from(content) })),
+        } : {}),
       })
 
       if (result.error) {

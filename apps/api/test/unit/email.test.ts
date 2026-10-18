@@ -10,6 +10,7 @@ import {
   orderConfirmationEmail,
   orderRefundedEmail,
   orderShippedEmail,
+  receiptIssuedEmail,
   resetPasswordEmail,
   verificationEmail,
 } from '../../src/modules/email/templates'
@@ -155,3 +156,41 @@ describe('order status emails', () => {
   })
 })
 
+
+describe('receipt email', () => {
+  it('receiptIssuedEmail links guest orders with the fragment token', () => {
+    const guest = receiptIssuedEmail('order-9', 'S-9', 'RC202610-00001', 'https://shop.example.test', 'guest/secret+1')
+    expect(guest.subject).toBe('ใบเสร็จรับเงิน คำสั่งซื้อ S-9')
+    expect(guest.text).toContain('RC202610-00001')
+    expect(guest.text).toContain('https://shop.example.test/orders/guest/order-9#token=guest%2Fsecret%2B1')
+    const links = [...guest.html.matchAll(/href="([^"]+)"/g)].map(match => match[1]!.replaceAll('&amp;', '&'))
+    expect(links).toEqual(['https://shop.example.test/orders/guest/order-9#token=guest%2Fsecret%2B1'])
+    expect(new URL(links[0]!).pathname).toBe('/orders/guest/order-9')
+
+    const customer = receiptIssuedEmail('order-9', 'S-9', 'RC202610-00001', 'https://shop.example.test')
+    expect(customer.text).toContain('https://shop.example.test/account/orders/order-9')
+    expect(customer.text).not.toContain('token')
+  })
+
+  it('sender forwards attachments to Resend', async () => {
+    const sent: Array<Record<string, unknown>> = []
+    const sender = createResendEmailSender(
+      { apiKey: 're_test', from: 'Suannn <auth@example.com>' },
+      { emails: { send: async (message) => { sent.push(message); return { data: { id: 'p1' }, error: null } } } },
+    )
+    await sender.send({
+      to: 'customer@example.com',
+      template: 'receipt-issued',
+      ...receiptIssuedEmail('order-9', 'S-9', 'RC202610-00001', 'https://shop.example.test'),
+      attachments: [{ filename: 'RC202610-00001.pdf', content: new Uint8Array([37, 80, 68, 70]) }],
+    })
+    const attachments = sent[0]!.attachments as Array<{ filename: string; content: unknown }>
+    expect(attachments).toHaveLength(1)
+    expect(attachments[0]!.filename).toBe('RC202610-00001.pdf')
+    expect(Buffer.isBuffer(attachments[0]!.content)).toBe(true)
+    expect((attachments[0]!.content as Buffer).toString()).toBe('%PDF')
+
+    await sender.send({ to: 'a@example.com', template: 'reset-password', ...resetPasswordEmail('https://x.test/r') })
+    expect('attachments' in sent[1]!).toBe(false)
+  })
+})
