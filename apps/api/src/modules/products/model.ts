@@ -4,6 +4,7 @@ const uuid = t.String({ format: 'uuid' })
 const nullableString = t.Union([t.String(), t.Null()])
 const nullableDate = t.Union([t.Date(), t.Null()])
 const category = t.Union([t.Literal('fresh'), t.Literal('processed')])
+const vatTreatment = t.Union([t.Literal('standard'), t.Literal('exempt')])
 const status = t.Union([t.Literal('draft'), t.Literal('published'), t.Literal('archived')])
 const farmStatus = status
 const productSlug = t.String({ minLength: 1, maxLength: 100, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' })
@@ -83,6 +84,7 @@ const adminVariant = t.Object({
 
 const adminProductFields = {
   ...productIdentity,
+  vatTreatment,
   description: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   originStory: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   storageInstructions: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
@@ -129,6 +131,7 @@ const createProductBody = t.Object({
   slug: inputSlug,
   name: t.String({ minLength: 1, maxLength: 160 }),
   category,
+  vatTreatment: t.Optional(vatTreatment),
   englishName: t.Optional(t.Union([t.String({ maxLength: 160 }), t.Null()])),
   description: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   originStory: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
@@ -140,6 +143,7 @@ const createProductBody = t.Object({
 const updateProductBody = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
   category: t.Optional(category),
+  vatTreatment: t.Optional(vatTreatment),
   englishName: t.Optional(t.Union([t.String({ maxLength: 160 }), t.Null()])),
   description: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   originStory: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -13,6 +13,7 @@ import { Link } from 'react-router'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { catalogApi, type ProductDetail } from '@/lib/catalog/api'
 import {
+  defaultVatTreatment,
   productCreateSchema,
   productEditSchema,
   toProductCreateInput,
@@ -27,6 +28,7 @@ const emptyValues: ProductCreateValues = {
   slug: '',
   name: '',
   category: 'fresh',
+  vatTreatment: 'exempt',
   englishName: '',
   description: '',
   originStory: '',
@@ -34,6 +36,11 @@ const emptyValues: ProductCreateValues = {
   imageUrl: '',
   imageAlt: '',
 }
+
+const vatItems = [
+  { label: 'ยกเว้น VAT (สินค้าเกษตรสด)', value: 'exempt' },
+  { label: 'VAT 7%', value: 'standard' },
+]
 
 type ProductFormProps =
   | { mode: 'create'; onCreated: (productId: string) => void; onDirtyChange: (dirty: boolean) => void }
@@ -56,6 +63,7 @@ function fromProduct(product: ProductDetail): ProductEditValues {
     slug: product.slug,
     name: product.name,
     category: product.category,
+    vatTreatment: product.vatTreatment,
     englishName: product.englishName ?? '',
     description: product.description ?? '',
     originStory: product.originStory ?? '',
@@ -73,6 +81,7 @@ export function ProductForm(props: ProductFormProps) {
     resolver: zodResolver(schema),
     defaultValues: isCreate ? emptyValues : fromProduct(props.product),
   })
+  const vatTouched = useRef(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const [createdProductId, setCreatedProductId] = useState<string | null>(null)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
@@ -165,7 +174,12 @@ export function ProductForm(props: ProductFormProps) {
               control={form.control}
               name="category"
               render={({ field }) => (
-                <Select disabled={pending} items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={field.onChange} value={field.value}>
+                <Select disabled={pending} items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={(value) => {
+                  field.onChange(value)
+                  if (isCreate && !vatTouched.current && (value === 'fresh' || value === 'processed')) {
+                    form.setValue('vatTreatment', defaultVatTreatment(value))
+                  }
+                }} value={field.value}>
                   <SelectTrigger aria-describedby={errors.category ? 'product-category-error' : undefined} aria-invalid={Boolean(errors.category)} aria-required="true" id="product-category">
                     <SelectValue />
                   </SelectTrigger>
@@ -177,6 +191,27 @@ export function ProductForm(props: ProductFormProps) {
               )}
             />
             <FieldError id="product-category-error">{errors.category?.message}</FieldError>
+          </Field>
+          <Field data-invalid={Boolean(errors.vatTreatment)}>
+            <FieldLabel htmlFor="product-vat-treatment">ภาษีมูลค่าเพิ่ม</FieldLabel>
+            <Controller
+              control={form.control}
+              name="vatTreatment"
+              render={({ field }) => (
+                <Select disabled={pending} items={vatItems} onValueChange={(value) => {
+                  vatTouched.current = true
+                  field.onChange(value)
+                }} value={field.value}>
+                  <SelectTrigger aria-describedby={errors.vatTreatment ? 'product-vat-treatment-error' : undefined} aria-invalid={Boolean(errors.vatTreatment)} aria-required="true" id="product-vat-treatment">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent><SelectGroup>
+                    {vatItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                  </SelectGroup></SelectContent>
+                </Select>
+              )}
+            />
+            <FieldError id="product-vat-treatment-error">{errors.vatTreatment?.message}</FieldError>
           </Field>
           <FormInput disabled={pending} id="product-english-name" label="ชื่อภาษาอังกฤษ" error={errors.englishName?.message} {...form.register('englishName')} />
           <FormTextarea disabled={pending} id="product-description" label="คำอธิบาย" description="ข้อมูลนี้จำเป็นก่อนเผยแพร่สินค้า" error={errors.description?.message} {...form.register('description')} />

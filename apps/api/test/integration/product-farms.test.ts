@@ -22,7 +22,7 @@ beforeEach(async () => {
   await database.db.delete(productFarm)
   await database.db.delete(product)
   await database.db.delete(farm)
-  await database.db.insert(product).values({ id: productId, slug: 'mango-test', name: 'มะม่วง', category: 'fresh', status: 'published' })
+  await database.db.insert(product).values({ id: productId, slug: 'mango-test', name: 'มะม่วง', category: 'fresh', vatTreatment: 'exempt', status: 'published' })
   await database.db.insert(farm).values(farmIds.map((id, index) => ({
     id, slug: `orchard-${index}`, name: `สวน ${index}`, status: index === 0 ? 'published' as const : 'draft' as const,
   })))

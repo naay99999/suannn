@@ -6,6 +6,7 @@ import {
   parseBahtToSatang,
 } from '../src/lib/format'
 import {
+  defaultVatTreatment,
   productCreateSchema,
   productEditSchema,
   toProductCreateInput,
@@ -42,6 +43,7 @@ test('normalizes blank product create fields to null and keeps slug create-only'
     slug: 'nam-dok-mai',
     name: 'มะม่วงน้ำดอกไม้',
     category: 'fresh',
+    vatTreatment: 'exempt',
     englishName: '',
     description: '',
     originStory: '  ',
@@ -54,6 +56,7 @@ test('normalizes blank product create fields to null and keeps slug create-only'
     slug: 'nam-dok-mai',
     name: 'มะม่วงน้ำดอกไม้',
     category: 'fresh',
+    vatTreatment: 'exempt',
     englishName: null,
     description: null,
     originStory: null,
@@ -68,6 +71,7 @@ test('clears optional product fields with null and never sends an edit slug', ()
     slug: 'unchangeable-slug',
     name: 'สินค้าใหม่',
     category: 'processed',
+    vatTreatment: 'standard',
     englishName: '',
     description: '',
     originStory: 'เรื่องราว',
@@ -79,6 +83,7 @@ test('clears optional product fields with null and never sends an edit slug', ()
   expect(toProductUpdateInput(values)).toEqual({
     name: 'สินค้าใหม่',
     category: 'processed',
+    vatTreatment: 'standard',
     englishName: null,
     description: null,
     originStory: 'เรื่องราว',
@@ -89,10 +94,21 @@ test('clears optional product fields with null and never sends an edit slug', ()
   expect(toProductUpdateInput(values)).not.toHaveProperty('slug')
 })
 
+test('maps vatTreatment into create and update inputs', () => {
+  const base = { slug: 'jam', name: 'แยม', category: 'fresh', englishName: '', description: '', originStory: '', storageInstructions: '', imageUrl: '', imageAlt: '' }
+  const created = productCreateSchema.parse({ ...base, vatTreatment: 'standard' })
+  expect(toProductCreateInput(created).vatTreatment).toBe('standard')
+  const edited = productEditSchema.parse({ ...base, vatTreatment: 'exempt' })
+  expect(toProductUpdateInput(edited).vatTreatment).toBe('exempt')
+  expect(defaultVatTreatment('fresh')).toBe('exempt')
+  expect(defaultVatTreatment('processed')).toBe('standard')
+  expect(() => productCreateSchema.parse({ ...base, vatTreatment: 'zero' })).toThrow()
+})
+
 test('validates HTTPS images and product field limits', () => {
-  expect(() => productCreateSchema.parse({ slug: 'sample', name: 'สินค้า', category: 'fresh', imageUrl: 'http://example.test/image.jpg' })).toThrow()
-  expect(() => productCreateSchema.parse({ slug: 'bad slug', name: 'สินค้า', category: 'fresh' })).toThrow()
-  expect(() => productCreateSchema.parse({ slug: 'sample', name: '', category: 'fresh' })).toThrow()
+  expect(() => productCreateSchema.parse({ slug: 'sample', name: 'สินค้า', category: 'fresh', vatTreatment: 'exempt', imageUrl: 'http://example.test/image.jpg' })).toThrow()
+  expect(() => productCreateSchema.parse({ slug: 'bad slug', name: 'สินค้า', category: 'fresh', vatTreatment: 'exempt' })).toThrow()
+  expect(() => productCreateSchema.parse({ slug: 'sample', name: '', category: 'fresh', vatTreatment: 'exempt' })).toThrow()
 })
 
 test('converts variant baht input to satang and excludes SKU from updates', () => {

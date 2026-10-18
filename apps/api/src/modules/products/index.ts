@@ -116,7 +116,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       return service.createProduct(body as CreateProductInput, productActor(user.id, requestContext))
     }, {
       parse: [parseStrictJsonBody([
-        'slug', 'name', 'category', 'englishName', 'description', 'originStory',
+        'slug', 'name', 'category', 'vatTreatment', 'englishName', 'description', 'originStory',
         'storageInstructions', 'imageUrl', 'imageAlt',
       ]), 'json'],
       browserMutation: 'admin',
@@ -133,7 +133,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       params.id, body as UpdateProductInput, productActor(user.id, requestContext),
     ), {
       parse: [parseStrictJsonBody([
-        'name', 'category', 'englishName', 'description', 'originStory',
+        'name', 'category', 'vatTreatment', 'englishName', 'description', 'originStory',
         'storageInstructions', 'imageUrl', 'imageAlt',
       ]), 'json'],
       browserMutation: 'admin',

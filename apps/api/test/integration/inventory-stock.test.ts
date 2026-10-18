@@ -87,7 +87,7 @@ async function seedVariant(status: 'draft' | 'published' = 'published') {
     id: productId,
     slug: `inventory-${suffix}`,
     name: 'Inventory test product',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status,
   })
   await database.db.insert(productVariant).values({

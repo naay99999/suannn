@@ -154,7 +154,7 @@ async function seedVariant(quantity: number | number[] = 8) {
     id: productId,
     slug: `order-lifecycle-${suffix}`,
     name: 'Lifecycle Fruit Box',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

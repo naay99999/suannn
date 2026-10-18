@@ -83,7 +83,7 @@ async function seedLot(expiryDate = futureDate()) {
     id: productId,
     slug: `inventory-adjustment-${suffix}`,
     name: 'Inventory adjustment test product',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

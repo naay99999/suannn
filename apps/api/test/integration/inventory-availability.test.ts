@@ -98,7 +98,7 @@ async function seedCatalog(options: { salesEnabled?: boolean } = {}) {
     id: productId,
     slug: `availability-${suffix}`,
     name: 'Availability product',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

@@ -176,6 +176,13 @@
       "when": 1792281276205,
       "tag": "0024_stripe_payment_method",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792285216463,
+      "tag": "0025_product_vat_treatment",
+      "breakpoints": true
     }
   ]
 }

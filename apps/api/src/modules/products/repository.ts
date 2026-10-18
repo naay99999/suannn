@@ -14,7 +14,7 @@ import type {
   AdminProductSummary,
   AdminProduct,
   AdminVariant,
-  CreateProductInput,
+  NormalizedProductCreate,
   CreateVariantInput,
   CursorPage,
   ProductActor,
@@ -34,6 +34,7 @@ const productProjection = {
   englishName: product.englishName,
   description: product.description,
   category: product.category,
+  vatTreatment: product.vatTreatment,
   originStory: product.originStory,
   storageInstructions: product.storageInstructions,
   imageUrl: product.imageUrl,
@@ -433,7 +434,7 @@ export class ProductRepository {
     })
   }
 
-  createProduct(input: CreateProductInput, actor: ProductActor): Promise<AdminProduct> {
+  createProduct(input: NormalizedProductCreate, actor: ProductActor): Promise<AdminProduct> {
     return this.transaction(async (tx) => {
       const [created] = await tx.insert(product).values({
         id: crypto.randomUUID(),

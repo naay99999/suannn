@@ -4,10 +4,12 @@ import type {
   AdminVariant,
   CreateProductInput,
   CreateVariantInput,
+  NormalizedProductCreate,
   ProductCategory,
   ProductStatus,
   UpdateProductInput,
   UpdateVariantInput,
+  VatTreatment,
 } from './types'
 
 const productTextLimits = {
@@ -20,8 +22,8 @@ const productTextLimits = {
 } as const
 
 const variantTextLimits = { name: 120, unit: 40 } as const
-const productCreateFields = ['slug', 'name', 'category', ...Object.keys(productTextLimits), 'imageUrl']
-const productUpdateFields = ['name', 'category', ...Object.keys(productTextLimits), 'imageUrl']
+const productCreateFields = ['slug', 'name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageUrl']
+const productUpdateFields = ['name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageUrl']
 const variantCreateFields = ['sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
 const variantUpdateFields = ['name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
 
@@ -77,6 +79,10 @@ function assertCategory(value: unknown): asserts value is ProductCategory {
   if (value !== 'fresh' && value !== 'processed') invalidProduct()
 }
 
+function assertVatTreatment(value: unknown): asserts value is VatTreatment {
+  if (value !== 'standard' && value !== 'exempt') invalidProduct()
+}
+
 function assertPrice(value: unknown) {
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 1_000_000_000) invalidProduct()
 }
@@ -103,20 +109,23 @@ export function normalizeSku(value: string): string {
   return sku
 }
 
-export function normalizeProductCreate(input: CreateProductInput): CreateProductInput {
+export function normalizeProductCreate(input: CreateProductInput): NormalizedProductCreate {
   assertKnownFields(input, productCreateFields)
   const slug = normalizeSlug(input.slug)
   const name = normalizeText(input.name, productTextLimits.name, true)
   assertCategory(input.category)
+  if (input.vatTreatment !== undefined) assertVatTreatment(input.vatTreatment)
+  const vatTreatment: VatTreatment = input.vatTreatment ?? (input.category === 'fresh' ? 'exempt' : 'standard')
   const imageUrl = normalizeImageUrl(input.imageUrl)
   const optionalText = normalizeOptionalTextFields(input, productTextLimits)
   return {
     slug,
     name: name as string,
     category: input.category,
+    vatTreatment,
     ...optionalText,
     ...(imageUrl !== undefined ? { imageUrl } : {}),
-  } as CreateProductInput
+  } as NormalizedProductCreate
 }
 
 export function normalizeProductUpdate(input: UpdateProductInput): UpdateProductInput {
@@ -125,10 +134,12 @@ export function normalizeProductUpdate(input: UpdateProductInput): UpdateProduct
   const optionalText = normalizeOptionalTextFields(input, productTextLimits)
   if (input.name !== undefined) optionalText.name = normalizeText(input.name, productTextLimits.name, true) as string
   if (input.category !== undefined) assertCategory(input.category)
+  if (input.vatTreatment !== undefined) assertVatTreatment(input.vatTreatment)
   const imageUrl = normalizeImageUrl(input.imageUrl)
   return {
     ...optionalText,
     ...(input.category !== undefined ? { category: input.category } : {}),
+    ...(input.vatTreatment !== undefined ? { vatTreatment: input.vatTreatment } : {}),
     ...(imageUrl !== undefined ? { imageUrl } : {}),
   }
 }

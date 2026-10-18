@@ -121,7 +121,7 @@ async function seedVariant(options: { priceSatang?: number; quantities?: number[
     id: productId,
     slug: `checkout-${suffix}`,
     name: 'Checkout Fruit Box',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

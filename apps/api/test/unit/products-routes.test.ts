@@ -31,6 +31,7 @@ const adminProduct = {
   name: storeProduct.name,
   englishName: storeProduct.englishName,
   category: storeProduct.category,
+  vatTreatment: 'exempt' as const,
   imageUrl: storeProduct.imageUrl,
   imageAlt: storeProduct.imageAlt,
   description: 'Fresh coconut water',

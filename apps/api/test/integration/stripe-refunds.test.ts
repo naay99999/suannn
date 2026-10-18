@@ -153,7 +153,7 @@ async function prepareCancelledOrder(paymentMethod: 'stripe' | 'cod' = 'stripe')
     id: productId,
     slug: `stripe-refund-${suffix}`,
     name: 'Refund Fruit Box',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

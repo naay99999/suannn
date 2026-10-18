@@ -27,8 +27,8 @@ async function insertVariant() {
   const variantId = crypto.randomUUID()
 
   await database.client.unsafe(`
-    insert into product (id, slug, name, category)
-    values ($1, $2, 'Inventory test product', 'fresh')
+    insert into product (id, slug, name, category, vat_treatment)
+    values ($1, $2, 'Inventory test product', 'fresh', 'exempt')
   `, [productId, `inventory-test-${productId}`])
   await database.client.unsafe(`
     insert into product_variant (id, product_id, sku, name, unit, price_satang)

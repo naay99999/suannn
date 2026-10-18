@@ -35,6 +35,7 @@ function publishedProduct(overrides: Partial<AdminProduct> = {}): AdminProduct {
     updatedAt: new Date('2026-01-01T00:00:00Z'),
     publishedAt: new Date('2026-01-01T00:00:00Z'),
     archivedAt: null,
+    vatTreatment: 'exempt',
     ...overrides,
   }
 }
@@ -58,6 +59,22 @@ function activeVariant(overrides: Partial<AdminVariant> = {}): AdminVariant {
 }
 
 describe('product catalog policy', () => {
+  it('defaults vatTreatment from category on create', () => {
+    expect(normalizeProductCreate(createProductInput).vatTreatment).toBe('exempt')
+    expect(normalizeProductCreate({ ...createProductInput, category: 'processed' }).vatTreatment).toBe('standard')
+  })
+
+  it('keeps explicit vatTreatment on create', () => {
+    expect(normalizeProductCreate({ ...createProductInput, vatTreatment: 'standard' }).vatTreatment).toBe('standard')
+    expect(normalizeProductUpdate({ vatTreatment: 'exempt' })).toEqual({ vatTreatment: 'exempt' })
+  })
+
+  it('rejects unknown vatTreatment', () => {
+    expect(() => normalizeProductCreate({ ...createProductInput, vatTreatment: 'zero' as never }))
+      .toThrow('INVALID_PRODUCT')
+    expect(() => normalizeProductUpdate({ vatTreatment: 'zero' as never })).toThrow('INVALID_PRODUCT')
+  })
+
   it('maps catalog errors to safe not-found, conflict, and validation responses', () => {
     const cases = [
       ['PRODUCT_NOT_FOUND', 404],

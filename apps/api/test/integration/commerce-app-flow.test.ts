@@ -129,7 +129,7 @@ async function seedVariant() {
   const productId = crypto.randomUUID()
   const variantId = crypto.randomUUID()
   const lotId = crypto.randomUUID()
-  await database.db.insert(product).values({ id: productId, slug: `flow-${productId}`, name: 'Fruit Box', category: 'fresh', status: 'published' })
+  await database.db.insert(product).values({ id: productId, slug: `flow-${productId}`, name: 'Fruit Box', category: 'fresh', vatTreatment: 'exempt', status: 'published' })
   await database.db.insert(productVariant).values({
     id: variantId, productId, sku: `FLOW-${variantId}`, name: 'Small box', unit: 'box',
     priceSatang: 1200, salesEnabled: true,

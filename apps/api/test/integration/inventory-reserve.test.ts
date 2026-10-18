@@ -90,7 +90,7 @@ async function seedVariants(count: number, minRemainingShelfLifeDays = 0) {
       id: productId,
       slug: `inventory-reservation-${suffix}-${index}`,
       name: `Reservation product ${index}`,
-      category: 'fresh',
+      category: 'fresh', vatTreatment: 'exempt',
       status: 'published',
     })
     await database.db.insert(productVariant).values({

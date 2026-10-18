@@ -2,6 +2,7 @@ import type { AuditContext } from '../audit/model'
 import type { AdminProductFarm, StoreProductFarm } from '../farms/types'
 
 export type ProductCategory = 'fresh' | 'processed'
+export type VatTreatment = 'standard' | 'exempt'
 export type ProductStatus = 'draft' | 'published' | 'archived'
 
 export interface ProductActor {
@@ -13,6 +14,7 @@ export interface CreateProductInput {
   slug: string
   name: string
   category: ProductCategory
+  vatTreatment?: VatTreatment
   englishName?: string | null
   description?: string | null
   originStory?: string | null
@@ -20,6 +22,8 @@ export interface CreateProductInput {
   imageUrl?: string | null
   imageAlt?: string | null
 }
+
+export type NormalizedProductCreate = CreateProductInput & { vatTreatment: VatTreatment }
 
 export type UpdateProductInput = Partial<Omit<CreateProductInput, 'slug'>>
 
@@ -42,6 +46,7 @@ export interface AdminProduct {
   englishName: string | null
   description: string | null
   category: ProductCategory
+  vatTreatment: VatTreatment
   originStory: string | null
   storageInstructions: string | null
   imageUrl: string | null

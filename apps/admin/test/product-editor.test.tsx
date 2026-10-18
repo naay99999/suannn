@@ -52,6 +52,7 @@ const variant: Variant = {
 
 const detail: ProductDetail = {
   ...product,
+  vatTreatment: 'exempt',
   description: 'มะม่วงสุกหวานจากสวน',
   originStory: 'ปลูกในสวนครอบครัว',
   storageInstructions: 'เก็บในที่เย็น',

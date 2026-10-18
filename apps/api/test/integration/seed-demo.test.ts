@@ -229,7 +229,7 @@ describe('catalog and stock demo seed', () => {
         id: productId,
         slug: kind === 'slug' ? 'demo-v1-product-01' : 'demo-collision-product',
         name: 'Existing user product',
-        category: 'fresh',
+        category: 'fresh', vatTreatment: 'exempt',
       })
       if (kind !== 'slug') {
         await database.db.insert(productVariant).values({

@@ -135,7 +135,7 @@ async function preparePendingOrder() {
     id: productId,
     slug: `stripe-lifecycle-${suffix}`,
     name: 'Checkout Fruit Box',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

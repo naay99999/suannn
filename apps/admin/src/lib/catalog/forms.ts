@@ -11,6 +11,7 @@ const productFields = {
   slug: z.string().trim().min(1, 'กรุณาระบุชื่อ URL สินค้า').max(100, 'ชื่อ URL ต้องไม่เกิน 100 ตัวอักษร').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลาง'),
   name: z.string().trim().min(1, 'กรุณาระบุชื่อสินค้า').max(160, 'ชื่อต้องไม่เกิน 160 ตัวอักษร'),
   category: z.enum(['fresh', 'processed'], { error: 'กรุณาเลือกหมวดหมู่' }),
+  vatTreatment: z.enum(['standard', 'exempt'], { error: 'กรุณาเลือกภาษีมูลค่าเพิ่ม' }),
   englishName: z.string().trim().max(160, 'ชื่อต้องไม่เกิน 160 ตัวอักษร'),
   description: z.string().trim().max(5000, 'คำอธิบายต้องไม่เกิน 5,000 ตัวอักษร'),
   originStory: z.string().trim().max(5000, 'เรื่องราวต้องไม่เกิน 5,000 ตัวอักษร'),
@@ -50,6 +51,12 @@ export const variantEditSchema = z.object({
   ...variantCreateSchema.shape,
 })
 
+export type VatTreatmentValue = ProductCreateValues['vatTreatment']
+
+export function defaultVatTreatment(category: ProductCreateValues['category']): VatTreatmentValue {
+  return category === 'fresh' ? 'exempt' : 'standard'
+}
+
 export type ProductCreateValues = z.infer<typeof productCreateSchema>
 export type ProductEditValues = z.infer<typeof productEditSchema>
 export type VariantCreateValues = z.infer<typeof variantCreateSchema>
@@ -64,6 +71,7 @@ export function toProductCreateInput(values: ProductCreateValues): ProductCreate
     slug: values.slug,
     name: values.name,
     category: values.category,
+    vatTreatment: values.vatTreatment,
     englishName: optionalText(values.englishName),
     description: optionalText(values.description),
     originStory: optionalText(values.originStory),
@@ -77,6 +85,7 @@ export function toProductUpdateInput(values: ProductEditValues): ProductUpdateIn
   return {
     name: values.name,
     category: values.category,
+    vatTreatment: values.vatTreatment,
     englishName: optionalText(values.englishName),
     description: optionalText(values.description),
     originStory: optionalText(values.originStory),

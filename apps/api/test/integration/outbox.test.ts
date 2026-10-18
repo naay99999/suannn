@@ -117,7 +117,7 @@ async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
     id: productId,
     slug: `outbox-${suffix}`,
     name: 'Outbox Fruit Box',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
   })
   await database.db.insert(productVariant).values({

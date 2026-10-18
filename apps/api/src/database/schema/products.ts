@@ -18,6 +18,7 @@ export const product = pgTable('product', {
   englishName: text('english_name'),
   description: text('description'),
   category: text('category', { enum: ['fresh', 'processed'] }).notNull(),
+  vatTreatment: text('vat_treatment', { enum: ['standard', 'exempt'] }).notNull(),
   originStory: text('origin_story'),
   storageInstructions: text('storage_instructions'),
   imageUrl: text('image_url'),
@@ -31,6 +32,7 @@ export const product = pgTable('product', {
   uniqueIndex('product_slug_unique').on(table.slug),
   index('product_status_created_id_idx').on(table.status, table.createdAt, table.id),
   check('product_category_check', sql`${table.category} in ('fresh', 'processed')`),
+  check('product_vat_treatment_check', sql`${table.vatTreatment} in ('standard', 'exempt')`),
   check('product_status_check', sql`${table.status} in ('draft', 'published', 'archived')`),
 ])
 

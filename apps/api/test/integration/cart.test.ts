@@ -51,7 +51,7 @@ beforeEach(async () => {
     id: catalogProductId,
     slug: `cart-${crypto.randomUUID()}`,
     name: 'Cart tomato',
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
     status: 'published',
     createdAt: now,
     updatedAt: now,

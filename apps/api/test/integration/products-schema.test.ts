@@ -27,7 +27,7 @@ async function insertProduct(id: string, slug: string) {
     id,
     slug,
     name: `Product ${id}`,
-    category: 'fresh',
+    category: 'fresh', vatTreatment: 'exempt',
   })
 }
 
@@ -128,14 +128,14 @@ describe('product and variant schema constraints', () => {
   it('rejects invalid status, category, and nonpositive price values', async () => {
     await expect((async () => {
       await database.client.unsafe(`
-        insert into product (id, slug, name, category, status)
-        values ('00000000-0000-4000-8000-000000000008', 'invalid-status', 'Invalid', 'fresh', 'hidden')
+        insert into product (id, slug, name, category, vat_treatment, status)
+        values ('00000000-0000-4000-8000-000000000008', 'invalid-status', 'Invalid', 'fresh', 'exempt', 'hidden')
       `)
     })()).rejects.toThrow()
     await expect((async () => {
       await database.client.unsafe(`
-        insert into product (id, slug, name, category)
-        values ('00000000-0000-4000-8000-000000000009', 'invalid-category', 'Invalid', 'frozen')
+        insert into product (id, slug, name, category, vat_treatment)
+        values ('00000000-0000-4000-8000-000000000009', 'invalid-category', 'Invalid', 'frozen', 'exempt')
       `)
     })()).rejects.toThrow()
 

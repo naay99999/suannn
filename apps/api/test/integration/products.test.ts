@@ -103,6 +103,21 @@ describe('product catalog write persistence', () => {
     expect(storedVariant?.sku).toBe('FRESH-TOMATO-500G')
   })
 
+  it('migration-backed default: fresh product reads exempt', async () => {
+    const service = serviceWith()
+    const fresh = await service.createProduct({ slug: 'vat-fresh', name: 'Fresh', category: 'fresh' }, actor)
+    const processed = await service.createProduct({ slug: 'vat-processed', name: 'Jam', category: 'processed' }, actor)
+    expect(fresh.vatTreatment).toBe('exempt')
+    expect(processed.vatTreatment).toBe('standard')
+    const updated = await service.updateProduct(fresh.id, { vatTreatment: 'standard' }, actor)
+    expect(updated.vatTreatment).toBe('standard')
+    const [stored] = await database.db.select().from(product).where(eq(product.id, fresh.id))
+    expect(stored?.vatTreatment).toBe('standard')
+    await expect((async () => {
+      await database.client.unsafe(`update product set vat_treatment = 'zero' where id = '${fresh.id}'`)
+    })()).rejects.toThrow()
+  })
+
   it('returns and persists variant shelf-life limits on staff create and update', async () => {
     const service = serviceWith()
     const createdProduct = await createProduct(service, 'shelf-life-product')
@@ -240,6 +255,7 @@ describe('product catalog read queries', () => {
       englishName: input.englishName ?? null,
       description: input.description ?? 'A locally grown product.',
       category: input.category ?? 'fresh',
+      vatTreatment: (input.category ?? 'fresh') === 'fresh' ? 'exempt' : 'standard',
       originStory: 'From our farm.',
       storageInstructions: 'Keep chilled.',
       imageUrl: 'https://images.example.test/catalog.jpg',
@@ -367,6 +383,7 @@ describe('product catalog read queries', () => {
         slug: `page-item-${index + 1}`,
         name: `Page item ${index + 1}`,
         category: 'fresh' as const,
+        vatTreatment: 'exempt' as const,
         status: 'published' as const,
         createdAt: new Date(2026, 0, 1, 0, 0, index),
         updatedAt: new Date(2026, 0, 1, 0, 0, index),
