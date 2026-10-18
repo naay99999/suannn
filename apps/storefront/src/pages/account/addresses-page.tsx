@@ -112,8 +112,8 @@ export function Component() {
               <CardContent className="gap-2"><p className="font-medium">{address.recipientName}</p><p className="text-muted-foreground">{address.phone}</p><p className="text-muted-foreground"><AddressText address={address} /></p></CardContent>
               <CardFooter className="mt-auto flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(address.id)}>แก้ไข</Button>
-                {!address.isDefaultShipping && <Button type="button" variant="ghost" size="sm" disabled={defaultMutation.isPending} onClick={() => defaultMutation.mutate({ id: address.id, kind: 'shipping' })}>ใช้จัดส่งหลัก</Button>}
-                {!address.isDefaultBilling && <Button type="button" variant="ghost" size="sm" disabled={defaultMutation.isPending} onClick={() => defaultMutation.mutate({ id: address.id, kind: 'billing' })}>ใช้ออกใบเสร็จหลัก</Button>}
+                {!address.isDefaultShipping && <Button type="button" variant="ghost" size="sm" disabled={defaultMutation.isPending} onClick={() => defaultMutation.mutate({ id: address.id, kind: 'shipping' })}>ตั้งเป็นที่อยู่จัดส่งหลัก</Button>}
+                {!address.isDefaultBilling && <Button type="button" variant="ghost" size="sm" disabled={defaultMutation.isPending} onClick={() => defaultMutation.mutate({ id: address.id, kind: 'billing' })}>ตั้งเป็นที่อยู่ออกใบเสร็จหลัก</Button>}
                 <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(address.id)}>ลบ</Button>
               </CardFooter>
             </Card>)}

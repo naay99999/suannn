@@ -9,7 +9,7 @@ export type CheckoutPaymentMethod = PlaceOrderBody['paymentMethod']
 export type StripePaymentMethod = NonNullable<PlaceOrderBody['stripePaymentMethod']>
 // What the customer picks on /checkout; card and PromptPay both settle through Stripe Checkout.
 export type CheckoutPaymentChoice = 'cod' | StripePaymentMethod
-export type CheckoutAddress = PlaceOrderBody['address']
+export type CheckoutAddress = PlaceOrderBody['billingAddress']
 export type CheckoutContact = PlaceOrderBody['contact']
 
 export interface StoreCheckoutTransport {
@@ -63,12 +63,18 @@ export function buildCheckoutOrderBody(
   quote: CheckoutQuote,
   choice: CheckoutPaymentChoice,
   contact: CheckoutContact,
-  address: CheckoutAddress,
+  billingAddress: CheckoutAddress,
+  shippingAddress?: CheckoutAddress,
 ): PlaceOrderBody {
   const payment = choice === 'cod'
     ? { paymentMethod: 'cod' as const }
     : { paymentMethod: 'stripe' as const, stripePaymentMethod: choice }
-  return { quoteToken: quote.quoteToken, ...payment, contact, address }
+  return { quoteToken: quote.quoteToken, ...payment, contact, billingAddress, ...(shippingAddress ? { shippingAddress } : {}) }
+}
+
+// Customers type phones as 081-234-5678; the API only accepts bare digits.
+export function normalizeThaiPhone(value: string): string {
+  return value.replace(/[\s()-]/g, '')
 }
 
 export function isStripeChoice(choice: CheckoutPaymentChoice): choice is StripePaymentMethod {

@@ -26,9 +26,9 @@ describe('checkout idempotency', () => {
   })
 
   test('fingerprints normalized input without storing raw contact details', async () => {
-    const input = { quoteToken: 'q1', paymentMethod: 'stripe' as const, contact: { email: ' PERSON@example.com ', phone: ' 08123 ' }, address: { addressId: 'address-1' } }
+    const input = { quoteToken: 'q1', paymentMethod: 'stripe' as const, contact: { email: ' PERSON@example.com ' }, billingAddress: { addressId: 'address-1' } }
     const first = await fingerprintCheckoutInput(input)
-    const same = await fingerprintCheckoutInput({ ...input, contact: { email: 'person@example.com', phone: '08123' } })
+    const same = await fingerprintCheckoutInput({ ...input, contact: { email: 'person@example.com' } })
     expect(first).toBe(same)
     expect(first).not.toContain('person@example.com')
   })

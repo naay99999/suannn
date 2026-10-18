@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CheckoutQuoteSummary } from '../src/pages/checkout/order-summary'
-import { availablePaymentMethods, buildCheckoutOrderBody, effectivePaymentMethod, checkoutQuoteQueryKey, refreshAfterStaleQuote, type CheckoutQuote } from '../src/lib/store-checkout'
+import { availablePaymentMethods, buildCheckoutOrderBody, effectivePaymentMethod, normalizeThaiPhone, checkoutQuoteQueryKey, refreshAfterStaleQuote, type CheckoutQuote } from '../src/lib/store-checkout'
 
 const quote: CheckoutQuote = {
   cartVersion: 5,
@@ -37,8 +37,20 @@ describe('store checkout API', () => {
   })
 
   test('saved delivery address is submitted by addressId', () => {
-    expect(buildCheckoutOrderBody(quote, 'cod', { email: 'shopper@example.com', phone: '0812345678' }, { addressId: 'address-1' }).address)
+    expect(buildCheckoutOrderBody(quote, 'cod', { email: 'shopper@example.com' }, { addressId: 'address-1' }).billingAddress)
       .toEqual({ addressId: 'address-1' })
+  })
+
+  test('buildCheckoutOrderBody omits shippingAddress when not shipping elsewhere', () => {
+    const body = buildCheckoutOrderBody(quote, 'cod', { email: 'shopper@example.com' }, { addressId: 'billing-1' })
+    expect(body).not.toHaveProperty('shippingAddress')
+    expect(buildCheckoutOrderBody(quote, 'cod', { email: 'shopper@example.com' }, { addressId: 'billing-1' }, { addressId: 'shipping-1' }).shippingAddress)
+      .toEqual({ addressId: 'shipping-1' })
+  })
+
+  test('normalizeThaiPhone strips spaces, dashes and parentheses', () => {
+    expect(normalizeThaiPhone('081-234 5678')).toBe('0812345678')
+    expect(normalizeThaiPhone('(02) 123-4567')).toBe('021234567')
   })
 
   test('guest checkout offers card and PromptPay only', () => {
@@ -47,7 +59,7 @@ describe('store checkout API', () => {
   })
 
   test('card and PromptPay choices are sent as Stripe orders with the chosen method', () => {
-    const contact = { email: 'shopper@example.com', phone: '0812345678' }
+    const contact = { email: 'shopper@example.com' }
     const address = { addressId: 'address-1' }
     expect(buildCheckoutOrderBody(quote, 'cod', contact, address)).not.toHaveProperty('stripePaymentMethod')
     expect(buildCheckoutOrderBody(quote, 'card', contact, address)).toMatchObject({ paymentMethod: 'stripe', stripePaymentMethod: 'card' })
