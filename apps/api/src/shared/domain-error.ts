@@ -33,6 +33,8 @@ export type DomainErrorCode =
   | 'CART_QUANTITY_LIMIT_REACHED'
   | 'INVALID_COMMERCE_SETTINGS'
   | 'COMMERCE_SETTINGS_UNAVAILABLE'
+  | 'INVALID_RECEIPT_SETTINGS'
+  | 'RECEIPT_SETTINGS_UNAVAILABLE'
   | 'CHECKOUT_DISABLED'
   | 'SHIPPING_FEE_UNSET'
   | 'CART_NOT_PURCHASABLE'
@@ -91,6 +93,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   CART_QUANTITY_LIMIT_REACHED: { status: 422, message: 'Cart item quantity is above the allowed limit' },
   INVALID_COMMERCE_SETTINGS: { status: 422, message: 'Commerce settings are invalid' },
   COMMERCE_SETTINGS_UNAVAILABLE: { status: 503, message: 'Commerce settings are unavailable' },
+  INVALID_RECEIPT_SETTINGS: { status: 422, message: 'Receipt settings are invalid' },
+  RECEIPT_SETTINGS_UNAVAILABLE: { status: 503, message: 'Receipt settings are unavailable' },
   CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },
   SHIPPING_FEE_UNSET: { status: 409, message: 'Shipping fee is not configured' },
   CART_NOT_PURCHASABLE: { status: 409, message: 'One or more cart items cannot be purchased' },

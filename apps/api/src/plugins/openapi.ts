@@ -25,6 +25,7 @@ export const apiTags = [
   { name: 'Store Orders', description: 'Read and cancel orders owned by the current customer or guest token.' },
   { name: 'Admin Orders', description: 'Staff order processing, COD collection, and guest order access recovery.' },
   { name: 'Admin Commerce Settings', description: 'Staff controls for the shipping fee and checkout switch.' },
+  { name: 'Admin Receipt Settings', description: 'Staff controls for the seller details and VAT rate printed on receipts.' },
   { name: 'Admin Products', description: 'Staff catalog management for products and variants.' },
   { name: 'Admin Farms', description: 'Staff management for farm profiles and product sources.' },
   { name: 'Admin Inventory', description: 'Staff inventory lots, stock movements, and reservations.' },

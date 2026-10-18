@@ -39,6 +39,7 @@ import { CartRepository } from '../../src/modules/cart/repository'
 import { CartService } from '../../src/modules/cart/service'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
+import { ReceiptSettingsRepository, ReceiptSettingsService } from '../../src/modules/receipts/settings'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -94,6 +95,7 @@ const app = await createApp(config, {
   checkout: new CheckoutService(database.db, config.commerceSecret),
   orders: new OrderService(database.db, config.commerceSecret),
   commerceSettings: settings,
+  receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   staffMfaRequired: async () => false,
   identityReservations: claims,
   limiter,

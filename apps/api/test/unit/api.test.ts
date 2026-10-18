@@ -37,6 +37,7 @@ import { CartRepository } from '../../src/modules/cart/repository'
 import { CartService } from '../../src/modules/cart/service'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
+import { ReceiptSettingsRepository, ReceiptSettingsService } from '../../src/modules/receipts/settings'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -105,6 +106,7 @@ const app = await createApp(config, {
   checkout: new CheckoutService(database.db, config.commerceSecret),
   orders: new OrderService(database.db, config.commerceSecret),
   commerceSettings,
+  receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -223,6 +225,7 @@ describe('API routes', () => {
       'Store Orders',
       'Admin Orders',
       'Admin Commerce Settings',
+      'Admin Receipt Settings',
       'Admin Products',
       'Admin Farms',
       'Admin Inventory',
@@ -372,7 +375,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(108)
+    expect(operations).toHaveLength(110)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

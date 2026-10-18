@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@workspace/ui/componen
 import { StaffManagement } from './_components/staff-management'
 import { FeatureControls } from './_components/feature-controls'
 import { CommerceSettings } from './_components/commerce-settings'
+import { ReceiptSettings } from './_components/receipt-settings'
 
 export function Component() {
   return (
@@ -12,10 +13,12 @@ export function Component() {
           <TabsTrigger value="admin-users">Admin users</TabsTrigger>
           <TabsTrigger value="feature-controls">Feature controls</TabsTrigger>
           <TabsTrigger value="commerce">Commerce</TabsTrigger>
+          <TabsTrigger value="receipts">Receipts</TabsTrigger>
         </TabsList>
         <TabsContent value="admin-users"><StaffManagement /></TabsContent>
         <TabsContent value="feature-controls"><FeatureControls /></TabsContent>
         <TabsContent value="commerce"><CommerceSettings /></TabsContent>
+        <TabsContent value="receipts"><ReceiptSettings /></TabsContent>
       </Tabs>
     </section>
   )

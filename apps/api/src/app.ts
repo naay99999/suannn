@@ -20,6 +20,7 @@ import { createStoreCheckoutModule } from './modules/checkout'
 import { createStripeWebhookModule } from './modules/payments/stripe'
 import { createAdminOrdersModule, createStoreOrdersModule } from './modules/orders'
 import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
+import { createAdminReceiptSettingsModule } from './modules/receipts'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
@@ -41,6 +42,7 @@ import type { StripeEventService } from './modules/payments/stripe/events'
 import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
+import type { ReceiptSettingsService } from './modules/receipts/settings'
 import type { FarmService } from './modules/farms/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
@@ -75,6 +77,7 @@ export interface AppDependencies {
   stripeRefunds?: StripeRefundService
   orders: OrderService
   commerceSettings: CommerceSettingsService
+  receiptSettings: ReceiptSettingsService
   staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
@@ -136,7 +139,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
     .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))
-    .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
+    .use(new Elysia({ name: 'admin-checkout-and-receipt-settings' })
+      .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
+      .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

@@ -471,3 +471,26 @@ export const orderOutbox = pgTable('order_outbox', {
   `),
   check('order_outbox_error_code_check', sql`${table.lastErrorCode} is null or ${table.lastErrorCode} ~ '^[A-Z0-9_]{1,100}$'`),
 ])
+
+export const receiptSettings = pgTable('receipt_settings', {
+  id: integer('id').primaryKey(),
+  sellerName: text('seller_name'),
+  sellerTaxId: text('seller_tax_id'),
+  sellerBranch: text('seller_branch'),
+  sellerAddressLine1: text('seller_address_line1'),
+  sellerAddressLine2: text('seller_address_line2'),
+  sellerSubdistrict: text('seller_subdistrict'),
+  sellerDistrict: text('seller_district'),
+  sellerProvince: text('seller_province'),
+  sellerPostalCode: text('seller_postal_code'),
+  sellerPhone: text('seller_phone'),
+  vatRateBasisPoints: integer('vat_rate_basis_points').notNull().default(700),
+  version: integer('version').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  check('receipt_settings_singleton_check', sql`${table.id} = 1`),
+  check('receipt_settings_vat_rate_check', sql`${table.vatRateBasisPoints} between 0 and 10000`),
+  check('receipt_settings_branch_check', sql`${table.sellerBranch} is null or ${table.sellerBranch} ~ '^[0-9]{5}$'`),
+  check('receipt_settings_tax_id_check', sql`${table.sellerTaxId} is null or ${table.sellerTaxId} ~ '^[0-9]{13}$'`),
+  check('receipt_settings_version_positive_check', sql`${table.version} > 0`),
+])

@@ -40,6 +40,7 @@ import { CartService } from './modules/cart/service'
 import { startCommerceMaintenanceLoop } from './modules/commerce/maintenance'
 import { CommerceSettingsRepository } from './modules/commerce-settings/repository'
 import { CommerceSettingsService } from './modules/commerce-settings/service'
+import { ReceiptSettingsRepository, ReceiptSettingsService } from './modules/receipts/settings'
 import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
 import { StripeCheckoutService } from './modules/checkout/stripe-service'
@@ -86,6 +87,7 @@ const farms = new FarmService(new FarmRepository(database.db, audit), productRep
 const cartRepository = new CartRepository(database.db, inventoryReadRepository)
 const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
+const receiptSettings = new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit))
 const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
 const checkout = new CheckoutService(database.db, config.commerceSecret)
 const stripeGateway = config.stripe ? createStripeGateway(config.stripe) : null
@@ -156,6 +158,7 @@ const app = await createApp(config, {
   stripeRefunds,
   orders,
   commerceSettings,
+  receiptSettings,
   staffMfaRequired,
   identityReservations: claims,
   limiter,
