@@ -51,6 +51,7 @@ const inlineAddress = {
   district: '  Samphanthawong  ',
   province: '  Bangkok  ',
   postalCode: '10100',
+  phone: '0812345678',
 }
 
 beforeAll(async () => {
@@ -166,8 +167,8 @@ async function prepareCheckout(
   const input = {
     quoteToken: displayQuote.quoteToken,
     paymentMethod: 'cod' as const,
-    contact: { email: '  buyer@example.test ', phone: ' 081-234-5678 ' },
-    address: inlineAddress,
+    contact: { email: '  buyer@example.test ' },
+    billingAddress: inlineAddress,
   }
   return { ...seeded, principal, input, displayQuote, cartService, checkout }
 }
@@ -237,7 +238,7 @@ describe('atomic COD checkout', () => {
       customerId: actorId,
       status: 'placed',
       contactEmail: 'buyer@example.test',
-      contactPhone: '081-234-5678',
+      contactPhone: '0812345678',
       recipientName: 'Somchai Buyer',
       addressLine1: '12 Orchard Road',
       addressLine2: 'Building A',
@@ -476,7 +477,7 @@ describe('atomic COD checkout', () => {
 
     const result = await prepared.checkout.placeCod({
       ...prepared.input,
-      address: { addressId },
+      billingAddress: { addressId },
     }, principal, 'checkout-saved-address-1')
     const [savedOrder] = await database.db.select().from(commerceOrder)
       .where(eq(commerceOrder.id, result.order.id))
@@ -484,11 +485,87 @@ describe('atomic COD checkout', () => {
     expect(savedOrder).toMatchObject({
       customerId: actorId,
       recipientName: 'Saved Buyer',
-      contactPhone: '081-234-5678',
+      contactPhone: '0812345678',
       addressLine1: '9 Saved Road',
       district: 'Bang Rak',
       postalCode: '10500',
     })
+  })
+
+  checkoutBehavior('saved addressId resolves its own phone into the snapshot', async () => {
+    const principal = { kind: 'customer', userId: actorId } as const
+    const prepared = await prepareCheckout(principal, { quantity: 1 })
+    const savedAddress = (id: string, label: string, name: string, phone: string) => ({
+      id, userId: actorId, label, recipientName: name, phone,
+      addressLine1: `${label} Road`, addressLine2: null, subdistrict: 'Bang Rak', district: 'Bang Rak',
+      province: 'Bangkok', postalCode: '10500', country: 'TH' as const,
+    })
+    const billingId = crypto.randomUUID()
+    const shippingId = crypto.randomUUID()
+    await database.db.insert(customerAddress).values([
+      savedAddress(billingId, 'Billing', 'Billing Person', '0811111111'),
+      savedAddress(shippingId, 'Shipping', 'Shipping Person', '0822222222'),
+    ])
+
+    const result = await prepared.checkout.placeCod({
+      ...prepared.input,
+      billingAddress: { addressId: billingId },
+      shippingAddress: { addressId: shippingId },
+    }, principal, 'checkout-saved-both-1')
+    const [saved] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, result.order.id))
+
+    expect(saved).toMatchObject({
+      contactPhone: '0822222222',
+      recipientName: 'Shipping Person',
+      addressLine1: 'Shipping Road',
+      billingPhone: '0811111111',
+      billingName: 'Billing Person',
+      billingAddressLine1: 'Billing Road',
+    })
+  })
+
+  checkoutBehavior('omitted shipping copies billing into the shipping snapshot', async () => {
+    const prepared = await prepareCheckout({ kind: 'customer', userId: actorId }, { quantity: 1 })
+
+    const result = await prepared.checkout.placeCod(prepared.input, prepared.principal, 'checkout-no-shipping-1')
+    const [saved] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, result.order.id))
+
+    expect(saved).toMatchObject({
+      contactPhone: '0812345678',
+      recipientName: 'Somchai Buyer',
+      addressLine1: '12 Orchard Road',
+      billingPhone: '0812345678',
+      billingName: 'Somchai Buyer',
+      billingAddressLine1: '12 Orchard Road',
+      billingAddressLine2: 'Building A',
+      billingPostalCode: '10100',
+    })
+  })
+
+  checkoutBehavior('order items snapshot vat_treatment from the product', async () => {
+    const prepared = await prepareCheckout({ kind: 'customer', userId: actorId }, { quantity: 1 })
+    await database.db.update(product).set({ vatTreatment: 'exempt' }).where(eq(product.id, prepared.productId))
+    const fresh = await prepared.checkout.placeCod(
+      { ...prepared.input, quoteToken: (await createServices().quote.create(prepared.principal, new Date())).quoteToken },
+      prepared.principal,
+      'checkout-vat-1',
+    )
+    const items = await database.db.select().from(orderItem).where(eq(orderItem.orderId, fresh.order.id))
+
+    expect(items.map((item) => item.vatTreatment)).toEqual(['exempt'])
+  })
+
+  checkoutBehavior('same idempotency key with a different shipping address returns 409', async () => {
+    const prepared = await prepareCheckout({ kind: 'customer', userId: actorId }, { quantity: 1 })
+    const withShipping = (name: string) => ({
+      ...prepared.input,
+      shippingAddress: { ...inlineAddress, recipientName: name, phone: '0899999999' },
+    })
+
+    await prepared.checkout.placeCod(withShipping('Malee'), prepared.principal, 'checkout-ship-idem-1')
+    await expect(prepared.checkout.placeCod(withShipping('Different'), prepared.principal, 'checkout-ship-idem-1'))
+      .rejects.toMatchObject({ code: 'ORDER_OPERATION_CONFLICT', status: 409 })
+    expect(await countRows('commerce_order')).toBe(1)
   })
 
   checkoutBehavior('does not snapshot another customer’s saved address', async () => {
@@ -513,7 +590,7 @@ describe('atomic COD checkout', () => {
 
     await expect(prepared.checkout.placeCod({
       ...prepared.input,
-      address: { addressId },
+      billingAddress: { addressId },
     }, principal, 'checkout-foreign-address-1'))
       .rejects.toMatchObject({ code: 'ORDER_ADDRESS_NOT_FOUND', status: 404 })
     expect(await countRows('commerce_order')).toBe(0)
@@ -535,8 +612,8 @@ describe('atomic COD checkout', () => {
     const makeInput = (quoteToken: string) => ({
       quoteToken,
       paymentMethod: 'cod' as const,
-      contact: { email: 'buyer@example.test', phone: '0812345678' },
-      address: inlineAddress,
+      contact: { email: 'buyer@example.test' },
+      billingAddress: inlineAddress,
     })
 
     const results = await Promise.allSettled([

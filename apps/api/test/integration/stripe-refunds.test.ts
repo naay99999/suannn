@@ -75,6 +75,7 @@ const address = {
   district: 'Samphanthawong',
   province: 'Bangkok',
   postalCode: '10100',
+  phone: '0812345678',
 }
 
 function makeGateway(options: {
@@ -189,8 +190,8 @@ async function prepareCancelledOrder(paymentMethod: 'stripe' | 'cod' = 'stripe')
   const quoteResult = await quote.create(principal, new Date())
   const input = {
     quoteToken: quoteResult.quoteToken,
-    contact: { email: 'buyer@example.test', phone: '081-234-5678' },
-    address,
+    contact: { email: 'buyer@example.test' },
+    billingAddress: address,
   }
   const placed = paymentMethod === 'stripe'
     ? await new StripeCheckoutService(database.db, secret, makeGateway()).place({ ...input, paymentMethod }, principal, `stripe-refund-${suffix}`)

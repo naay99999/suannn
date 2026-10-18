@@ -147,14 +147,15 @@ async function placeOrder(principal: CartPrincipal = guestPrincipal()) {
   const input = {
     quoteToken: currentQuote.quoteToken,
     paymentMethod: 'cod' as const,
-    contact: { email: 'buyer@example.test', phone: '081-234-5678' },
-    address: {
+    contact: { email: 'buyer@example.test' },
+    billingAddress: {
       recipientName: 'Somchai Buyer',
       addressLine1: '12 Orchard Road',
       subdistrict: 'Talat Noi',
       district: 'Samphanthawong',
       province: 'Bangkok',
       postalCode: '10100',
+      phone: '0812345678',
     },
   }
   const idempotencyKey = `outbox-checkout-${crypto.randomUUID()}`

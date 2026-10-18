@@ -35,7 +35,7 @@ import type {
   OrderSnapshot,
   PlaceCheckoutInput,
   StripePaymentMethod,
-  ThaiAddress,
+  ThaiAddressWithPhone,
 } from '../orders/types'
 
 const maximumSatang = Number.MAX_SAFE_INTEGER
@@ -47,7 +47,8 @@ export interface NormalizedCheckoutInput {
   paymentMethod: 'cod' | 'stripe'
   stripePaymentMethod?: StripePaymentMethod
   contact: CheckoutContact
-  address: ThaiAddress | { addressId: string }
+  billingAddress: ThaiAddressWithPhone | { addressId: string }
+  shippingAddress?: ThaiAddressWithPhone | { addressId: string }
 }
 
 export interface PlacedOrderRecord {
@@ -156,7 +157,7 @@ function exactKeys(value: Record<string, unknown>, required: readonly string[], 
 }
 
 export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedCheckoutInput {
-  if (!isRecord(input) || !exactKeys(input, ['quoteToken', 'paymentMethod', 'contact', 'address'], ['stripePaymentMethod'])
+  if (!isRecord(input) || !exactKeys(input, ['quoteToken', 'paymentMethod', 'contact', 'billingAddress'], ['stripePaymentMethod', 'shippingAddress'])
     || typeof input.quoteToken !== 'string' || input.quoteToken.length < 1 || input.quoteToken.length > 8192
     || (input.paymentMethod !== 'cod' && input.paymentMethod !== 'stripe')) {
     throw new DomainError('INVALID_ORDER_INPUT')
@@ -169,49 +170,51 @@ export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedChe
   const payment = input.paymentMethod === 'stripe'
     ? { paymentMethod: input.paymentMethod, stripePaymentMethod: (requestedStripeMethod ?? 'card') as StripePaymentMethod }
     : { paymentMethod: input.paymentMethod }
-  if (!isRecord(input.contact) || !exactKeys(input.contact, ['email', 'phone'])
-    || typeof input.contact.email !== 'string' || typeof input.contact.phone !== 'string') {
+  if (!isRecord(input.contact) || !exactKeys(input.contact, ['email']) || typeof input.contact.email !== 'string') {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
-  const contact = {
-    email: input.contact.email.trim(),
-    phone: input.contact.phone.trim(),
-  }
+  const contact = { email: input.contact.email.trim() }
   if (contact.email.length < 3 || contact.email.length > 320
-    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)
-    || !/^[+0-9][+0-9 ()-]{6,39}$/.test(contact.phone)) {
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
 
-  if (!isRecord(input.address)) throw new DomainError('INVALID_ORDER_INPUT')
-  if (exactKeys(input.address, ['addressId']) && typeof input.address.addressId === 'string'
-    && input.address.addressId.trim().length > 0 && input.address.addressId.trim().length <= 200) {
-    return {
-      quoteToken: input.quoteToken,
-      ...payment,
-      contact,
-      address: { addressId: input.address.addressId.trim() },
-    }
+  const billingAddress = normalizeAddressInput(input.billingAddress)
+  const shippingInput = (input as Record<string, unknown>).shippingAddress
+  return {
+    quoteToken: input.quoteToken,
+    ...payment,
+    contact,
+    billingAddress,
+    ...(shippingInput === undefined ? {} : { shippingAddress: normalizeAddressInput(shippingInput) }),
   }
-  const address = input.address as Record<string, unknown>
-  if (!exactKeys(address, ['recipientName', 'addressLine1', 'subdistrict', 'district', 'province', 'postalCode'], ['addressLine2'])) {
+}
+
+function normalizeAddressInput(value: unknown): ThaiAddressWithPhone | { addressId: string } {
+  if (!isRecord(value)) throw new DomainError('INVALID_ORDER_INPUT')
+  if (exactKeys(value, ['addressId']) && typeof value.addressId === 'string'
+    && value.addressId.trim().length > 0 && value.addressId.trim().length <= 200) {
+    return { addressId: value.addressId.trim() }
+  }
+  const address = value as Record<string, unknown>
+  if (!exactKeys(address, ['recipientName', 'addressLine1', 'subdistrict', 'district', 'province', 'postalCode', 'phone'], ['addressLine2'])) {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
-  const textField = (key: keyof ThaiAddress, maximum: number): string => {
-    const value = address[key]
-    if (typeof value !== 'string') throw new DomainError('INVALID_ORDER_INPUT')
-    const normalized = value.trim()
+  const textField = (key: keyof ThaiAddressWithPhone, maximum: number): string => {
+    const field = address[key]
+    if (typeof field !== 'string') throw new DomainError('INVALID_ORDER_INPUT')
+    const normalized = field.trim()
     if (!normalized || normalized.length > maximum) throw new DomainError('INVALID_ORDER_INPUT')
     return normalized
   }
   let addressLine2: string | null = null
   if (Object.hasOwn(address, 'addressLine2')) {
-    const value = address.addressLine2
-    if (value !== null && typeof value !== 'string') throw new DomainError('INVALID_ORDER_INPUT')
-    addressLine2 = typeof value === 'string' ? value.trim() || null : null
+    const line2 = address.addressLine2
+    if (line2 !== null && typeof line2 !== 'string') throw new DomainError('INVALID_ORDER_INPUT')
+    addressLine2 = typeof line2 === 'string' ? line2.trim() || null : null
     if (addressLine2 && addressLine2.length > 300) throw new DomainError('INVALID_ORDER_INPUT')
   }
-  const normalizedAddress: ThaiAddress = {
+  const normalizedAddress: ThaiAddressWithPhone = {
     recipientName: textField('recipientName', 200),
     addressLine1: textField('addressLine1', 300),
     addressLine2,
@@ -219,14 +222,12 @@ export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedChe
     district: textField('district', 200),
     province: textField('province', 200),
     postalCode: textField('postalCode', 5),
+    phone: textField('phone', 10),
   }
-  if (!/^[0-9]{5}$/.test(normalizedAddress.postalCode)) throw new DomainError('INVALID_ORDER_INPUT')
-  return {
-    quoteToken: input.quoteToken,
-    ...payment,
-    contact,
-    address: normalizedAddress,
+  if (!/^[0-9]{5}$/.test(normalizedAddress.postalCode) || !/^[0-9]{9,10}$/.test(normalizedAddress.phone)) {
+    throw new DomainError('INVALID_ORDER_INPUT')
   }
+  return normalizedAddress
 }
 
 function safeMoney(value: number) {
@@ -365,8 +366,8 @@ async function transactionNow(tx: DatabaseTransaction) {
 async function normalizeAddress(
   tx: DatabaseTransaction,
   principal: CartPrincipal,
-  address: NormalizedCheckoutInput['address'],
-): Promise<ThaiAddress> {
+  address: ThaiAddressWithPhone | { addressId: string },
+): Promise<ThaiAddressWithPhone> {
   if (!('addressId' in address)) return address
   if (principal.kind !== 'customer') throw new DomainError('INVALID_ORDER_INPUT')
   const [saved] = await tx.select({
@@ -377,6 +378,7 @@ async function normalizeAddress(
     district: customerAddress.district,
     province: customerAddress.province,
     postalCode: customerAddress.postalCode,
+    phone: customerAddress.phone,
   }).from(customerAddress).where(and(
     eq(customerAddress.id, address.addressId),
     eq(customerAddress.userId, principal.userId),
@@ -448,7 +450,10 @@ export function createPlaceOrderInTransaction(
       throw new DomainError('QUOTE_STALE')
     }
 
-    const address = await normalizeAddress(tx, principal, input.address)
+    const billing = await normalizeAddress(tx, principal, input.billingAddress)
+    const address = input.shippingAddress
+      ? await normalizeAddress(tx, principal, input.shippingAddress)
+      : billing
     const [mainWarehouse] = await tx.select({ id: warehouse.id }).from(warehouse)
       .where(eq(warehouse.code, 'MAIN')).limit(1)
     if (!mainWarehouse) throw new DomainError('WAREHOUSE_NOT_FOUND')
@@ -529,7 +534,7 @@ export function createPlaceOrderInTransaction(
       guestAccessTokenNonce,
       guestAccessTokenVersion,
       contactEmail: input.contact.email,
-      contactPhone: input.contact.phone,
+      contactPhone: address.phone,
       recipientName: address.recipientName,
       addressLine1: address.addressLine1,
       addressLine2: address.addressLine2 ?? null,
@@ -537,15 +542,14 @@ export function createPlaceOrderInTransaction(
       district: address.district,
       province: address.province,
       postalCode: address.postalCode,
-      // Task 3 replaces this copy with the billing address from checkout input.
-      billingName: address.recipientName,
-      billingPhone: input.contact.phone,
-      billingAddressLine1: address.addressLine1,
-      billingAddressLine2: address.addressLine2 ?? null,
-      billingSubdistrict: address.subdistrict,
-      billingDistrict: address.district,
-      billingProvince: address.province,
-      billingPostalCode: address.postalCode,
+      billingName: billing.recipientName,
+      billingPhone: billing.phone,
+      billingAddressLine1: billing.addressLine1,
+      billingAddressLine2: billing.addressLine2 ?? null,
+      billingSubdistrict: billing.subdistrict,
+      billingDistrict: billing.district,
+      billingProvince: billing.province,
+      billingPostalCode: billing.postalCode,
       subtotalSatang,
       shippingSatang,
       totalSatang,

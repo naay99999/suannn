@@ -87,14 +87,15 @@ const quote = {
 const validCheckoutBody = {
   quoteToken: 'signed-quote',
   paymentMethod: 'cod',
-  contact: { email: 'guest@example.com', phone: '+66812345678' },
-  address: {
+  contact: { email: 'guest@example.com' },
+  billingAddress: {
     recipientName: 'Somchai',
     addressLine1: '1 Main Road',
     subdistrict: 'Suthep',
     district: 'Mueang Chiang Mai',
     province: 'Chiang Mai',
     postalCode: '50200',
+    phone: '0812345678',
   },
 }
 
@@ -320,8 +321,8 @@ describe('store checkout and order HTTP contracts', () => {
     await expect(checkout.placeCod({
       quoteToken: 'signed-quote',
       paymentMethod: 'cod',
-      contact: { email: 'guest@example.com', phone: '+66812345678' },
-      address: {
+      contact: { email: 'guest@example.com' },
+      billingAddress: {
         recipientName: 'Somchai',
         addressLine1: '1 Main Road',
         addressLine2: null,
@@ -329,6 +330,7 @@ describe('store checkout and order HTTP contracts', () => {
         district: 'Mueang Chiang Mai',
         province: 'Chiang Mai',
         postalCode: '50200',
+        phone: '0812345678',
       },
     }, guest, 'guest-cod-key')).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
   })
@@ -381,19 +383,19 @@ describe('store checkout and order HTTP contracts', () => {
     const withClientTotal = await app.handle(checkoutRequest({ ...validCheckoutBody, totalSatang: 1 }))
     const invalidContact = await app.handle(checkoutRequest({
       ...validCheckoutBody,
-      contact: { email: 'not-email', phone: '+66812345678' },
+      contact: { email: 'not-email' },
     }))
     const invalidAddress = await app.handle(checkoutRequest({
       ...validCheckoutBody,
-      address: { ...validCheckoutBody.address, postalCode: '5020' },
+      billingAddress: { ...validCheckoutBody.billingAddress, postalCode: '5020' },
     }))
     const unknownAddressField = await app.handle(checkoutRequest({
       ...validCheckoutBody,
-      address: { ...validCheckoutBody.address, country: 'TH' },
+      billingAddress: { ...validCheckoutBody.billingAddress, country: 'TH' },
     }))
     const malformedSavedAddressId = await app.handle(checkoutRequest({
       ...validCheckoutBody,
-      address: { addressId: 'not-a-uuid' },
+      billingAddress: { addressId: 'not-a-uuid' },
     }, 'session=customer'))
 
     expect(withClientTotal.status).toBe(422)
@@ -402,6 +404,53 @@ describe('store checkout and order HTTP contracts', () => {
     expect(unknownAddressField.status).toBe(422)
     expect(malformedSavedAddressId.status).toBe(422)
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+  })
+
+  it('rejects the legacy address and contact.phone fields', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const { billingAddress, ...rest } = validCheckoutBody
+    const legacyAddress = await app.handle(checkoutRequest({ ...rest, address: billingAddress }))
+    const legacyPhone = await app.handle(checkoutRequest({
+      ...validCheckoutBody,
+      contact: { email: 'guest@example.com', phone: '0812345678' },
+    }))
+
+    expect(legacyAddress.status).toBe(422)
+    expect(legacyPhone.status).toBe(422)
+    expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(false)
+    expect(() => normalizeCheckoutInput({ ...rest, address: billingAddress } as never)).toThrow()
+    expect(() => normalizeCheckoutInput({ ...validCheckoutBody, contact: { email: 'a@b.co', phone: '0812345678' } } as never)).toThrow()
+  })
+
+  it('rejects an address phone with dashes', async () => {
+    const { appPromise } = createHarness()
+    const app = await appPromise
+    const body = { ...validCheckoutBody, billingAddress: { ...validCheckoutBody.billingAddress, phone: '081-234-5678' } }
+    const response = await app.handle(checkoutRequest(body))
+
+    expect(response.status).toBe(422)
+    expect(() => normalizeCheckoutInput(body as never)).toThrow()
+  })
+
+  it('accepts billing only and omits shipping', () => {
+    const normalized = normalizeCheckoutInput(validCheckoutBody as never)
+
+    expect(normalized.billingAddress).toMatchObject({ phone: '0812345678', recipientName: 'Somchai' })
+    expect(normalized).not.toHaveProperty('shippingAddress')
+    expect(normalized).not.toHaveProperty('address')
+  })
+
+  it('accepts distinct billing and shipping addresses', async () => {
+    const shippingAddress = { ...validCheckoutBody.billingAddress, recipientName: 'Malee', phone: '0899999999' }
+    const normalized = normalizeCheckoutInput({ ...validCheckoutBody, shippingAddress } as never)
+    const { appPromise } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest({ ...validCheckoutBody, shippingAddress }))
+
+    expect(normalized.shippingAddress).toMatchObject({ recipientName: 'Malee', phone: '0899999999' })
+    expect(normalized.billingAddress).toMatchObject({ recipientName: 'Somchai' })
+    expect(response.status).not.toBe(422)
   })
 
   it('rejects unknown quote fields and malformed order IDs before service calls', async () => {

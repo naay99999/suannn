@@ -44,7 +44,8 @@ export class StripeCheckoutService {
       paymentMethod: normalized.paymentMethod,
       stripePaymentMethod: normalized.stripePaymentMethod,
       contact: normalized.contact,
-      address: normalized.address,
+      billingAddress: normalized.billingAddress,
+      shippingAddress: normalized.shippingAddress,
     }
     const record = await runOrderCommand<PlacedOrderRecord>(this.db, {
       scope: principalScope(principal),

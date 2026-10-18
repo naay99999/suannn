@@ -17,7 +17,6 @@ export interface OrderStaffActor {
 
 export interface CheckoutContact {
   email: string
-  phone: string
 }
 
 export interface ThaiAddress {
@@ -30,13 +29,16 @@ export interface ThaiAddress {
   postalCode: string
 }
 
-export type CheckoutAddress = ThaiAddress | { addressId: string }
+export type ThaiAddressWithPhone = ThaiAddress & { phone: string }
+
+export type CheckoutAddress = ThaiAddressWithPhone | { addressId: string }
 
 export interface PlaceCodInput {
   quoteToken: string
   paymentMethod: 'cod'
   contact: CheckoutContact
-  address: CheckoutAddress
+  billingAddress: CheckoutAddress
+  shippingAddress?: CheckoutAddress
 }
 
 export type StripePaymentMethod = 'card' | 'promptpay'

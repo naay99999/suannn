@@ -38,20 +38,24 @@ function parseStrictBody(allowed: readonly string[]) {
   }
 }
 
-async function parseStrictPlaceOrderBody({ request }: { request: Request }) {
-  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'stripePaymentMethod', 'contact', 'address'])({ request })
-  const contact = body.contact
-  const address = body.address
-  if (!isRecord(contact) || Object.keys(contact).some((key) => key !== 'email' && key !== 'phone')) {
-    throw new DomainError('INVALID_ORDER_INPUT')
-  }
+function assertStrictAddress(address: unknown) {
   if (!isRecord(address)) throw new DomainError('INVALID_ORDER_INPUT')
   const allowedAddressFields = Object.hasOwn(address, 'addressId')
     ? ['addressId']
-    : ['recipientName', 'addressLine1', 'addressLine2', 'subdistrict', 'district', 'province', 'postalCode']
+    : ['recipientName', 'addressLine1', 'addressLine2', 'subdistrict', 'district', 'province', 'postalCode', 'phone']
   if (Object.keys(address).some((key) => !allowedAddressFields.includes(key))) {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
+}
+
+async function parseStrictPlaceOrderBody({ request }: { request: Request }) {
+  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'stripePaymentMethod', 'contact', 'billingAddress', 'shippingAddress'])({ request })
+  const contact = body.contact
+  if (!isRecord(contact) || Object.keys(contact).some((key) => key !== 'email')) {
+    throw new DomainError('INVALID_ORDER_INPUT')
+  }
+  assertStrictAddress(body.billingAddress)
+  if (body.shippingAddress !== undefined) assertStrictAddress(body.shippingAddress)
   return body
 }
 

@@ -107,6 +107,7 @@ const address = {
 }
 
 beforeAll(async () => {
+  phone: '0812345678',
   unlock = await lockTestDatabase(database)
   await resetTestDatabase(database)
   await migrateTestDatabase(database)
@@ -178,8 +179,8 @@ async function place(quoteToken: string, cookie: string, addressInput: unknown =
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: {
       quoteToken, paymentMethod: 'cod',
-      contact: { email: 'buyer@example.test', phone: '0812345678' },
-      address: addressInput,
+      contact: { email: 'buyer@example.test' },
+      billingAddress: addressInput,
     },
   })
 }
@@ -316,8 +317,8 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: {
       quoteToken: quote.quoteToken, paymentMethod: 'cod',
-      contact: { email: 'buyer@example.test', phone: '0812345678' },
-      address: { addressId: foreignAddress.id },
+      contact: { email: 'buyer@example.test' },
+      billingAddress: { addressId: foreignAddress.id },
     },
   })
   expect(foreignQuote.status).toBe(404)

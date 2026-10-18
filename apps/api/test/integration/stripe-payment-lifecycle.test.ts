@@ -77,6 +77,7 @@ const address = {
   district: 'Samphanthawong',
   province: 'Bangkok',
   postalCode: '10100',
+  phone: '0812345678',
 }
 
 function makeGateway(options: {
@@ -174,8 +175,8 @@ async function preparePendingOrder() {
   const result = await checkout.place({
     quoteToken: quoteResult.quoteToken,
     paymentMethod: 'stripe',
-    contact: { email: 'buyer@example.test', phone: '081-234-5678' },
-    address,
+    contact: { email: 'buyer@example.test' },
+    billingAddress: address,
   }, principal, `stripe-lifecycle-${suffix}`)
   const [attempt] = await database.db.select().from(stripeCheckoutAttempt)
     .where(eq(stripeCheckoutAttempt.orderId, result.order.id))

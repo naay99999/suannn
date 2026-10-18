@@ -38,6 +38,7 @@ const address = t.Union([
     district: t.String({ minLength: 1, maxLength: 200 }),
     province: t.String({ minLength: 1, maxLength: 200 }),
     postalCode: t.String({ pattern: '^[0-9]{5}$' }),
+    phone: t.String({ pattern: '^[0-9]{9,10}$' }),
   }, { additionalProperties: false }),
 ])
 
@@ -47,9 +48,9 @@ const placeOrderBody = t.Object({
   stripePaymentMethod: t.Optional(t.Union([t.Literal('card'), t.Literal('promptpay')])),
   contact: t.Object({
     email: t.String({ format: 'email', minLength: 3, maxLength: 320 }),
-    phone: t.String({ pattern: '^[+0-9][+0-9 ()-]{6,39}$' }),
   }, { additionalProperties: false }),
-  address,
+  billingAddress: address,
+  shippingAddress: t.Optional(address),
 }, { additionalProperties: false })
 
 const idempotencyHeaders = t.Object({

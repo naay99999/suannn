@@ -35,7 +35,8 @@ export class CheckoutService {
       quoteToken: normalized.quoteToken,
       paymentMethod: normalized.paymentMethod,
       contact: normalized.contact,
-      address: normalized.address,
+      billingAddress: normalized.billingAddress,
+      shippingAddress: normalized.shippingAddress,
     }
     return runOrderCommand<CheckoutResult>(this.db, {
       scope: principalScope(principal),

@@ -200,14 +200,15 @@ async function placeOrder(options: {
   const input = {
     quoteToken: quoteResult.quoteToken,
     paymentMethod: 'cod',
-    contact: { email: 'buyer@example.test', phone: '081-234-5678' },
-    address: {
+    contact: { email: 'buyer@example.test' },
+    billingAddress: {
       recipientName: 'Somchai Buyer',
       addressLine1: '12 Orchard Road',
       subdistrict: 'Talat Noi',
       district: 'Samphanthawong',
       province: 'Bangkok',
       postalCode: '10100',
+      phone: '0812345678',
     },
   } as const
   const key = `lifecycle-checkout-${crypto.randomUUID()}`
