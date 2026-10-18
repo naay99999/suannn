@@ -102,7 +102,18 @@ const shipment = t.Object({
   shippedAt: t.String({ format: 'date-time' }),
 }, { additionalProperties: false })
 
-const detail = t.Composite([snapshot, t.Object({ payment, shipment: t.Optional(shipment) })], { additionalProperties: false })
+const receiptSummary = t.Object({
+  number: t.String({ pattern: '^RC[0-9]{6}-[0-9]{5,}$' }),
+  kind: t.Union([t.Literal('abbreviated_tax_invoice'), t.Literal('receipt')]),
+  status: t.Union([t.Literal('issued'), t.Literal('cancelled')]),
+  issuedAt: t.String({ format: 'date-time' }),
+}, { additionalProperties: false })
+
+const detail = t.Composite([snapshot, t.Object({
+  payment,
+  shipment: t.Optional(shipment),
+  receipt: t.Optional(t.Union([receiptSummary, t.Null()])),
+})], { additionalProperties: false })
 const storeDetail = t.Composite([detail, t.Object({
   checkout: t.Optional(t.Object({
     url: t.String({ format: 'uri' }),
@@ -136,6 +147,9 @@ const fulfillmentBody = t.Object({
 const collectCodBody = t.Object({
   amountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 }, { additionalProperties: false })
+const cancelReceiptBody = t.Object({
+  reason: t.String({ minLength: 1, maxLength: 300 }),
+}, { additionalProperties: false })
 const guestAccessBody = t.Object({
   reasonCode: t.Union([
     t.Literal('customer_request'),
@@ -157,4 +171,5 @@ export const ordersModels = {
   'orders.fulfillmentBody': fulfillmentBody,
   'orders.collectCodBody': collectCodBody,
   'orders.guestAccessBody': guestAccessBody,
+  'orders.cancelReceiptBody': cancelReceiptBody,
 }

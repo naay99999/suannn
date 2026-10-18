@@ -26,6 +26,8 @@ export const auditMetadataKeys = {
   'order.guest-access-reissued': ['actorId', 'reasonCode', 'operationId'],
   'order.guest-access-revoked': ['actorId', 'reasonCode', 'operationId'],
   'order.stripe-refund-requested': ['operationId', 'refundId', 'amountSatang'],
+  'order.receipt-issued': ['actorId', 'receiptId', 'operationId'],
+  'order.receipt-cancelled': ['actorId', 'receiptId', 'operationId', 'reasonCode'],
   'product.created': ['fields'],
   'product.updated': ['fields'],
   'product.published': [],

@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, gt, isNotNull, lt, or, sql } from 'drizzle-orm'
 import type { DatabaseTransaction } from '../../database/types'
-import { commerceOrder, orderItem, payment, stripeCheckoutAttempt, stripeRefund } from '../../database/schema'
+import { commerceOrder, orderItem, payment, receipt, stripeCheckoutAttempt, stripeRefund } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
 import { encodeCursor, decodeCursor } from '../../shared/cursor'
-import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderShipment, OrderSnapshot } from './types'
+import type { OrderDetail, OrderItemSnapshot, OrderPage, OrderReceiptSummary, OrderShipment, OrderSnapshot } from './types'
 
 export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string): Promise<OrderSnapshot> {
   return (await loadOrder(tx, orderId)).snapshot
@@ -90,6 +90,19 @@ export async function lockOrder(tx: DatabaseTransaction, orderId: string) {
   return order
 }
 
+export async function readOrderReceiptSummary(
+  tx: DatabaseTransaction,
+  orderId: string,
+): Promise<OrderReceiptSummary | null> {
+  const [saved] = await tx.select({
+    number: receipt.receiptNumber,
+    kind: receipt.kind,
+    status: receipt.status,
+    issuedAt: receipt.issuedAt,
+  }).from(receipt).where(eq(receipt.orderId, orderId)).limit(1)
+  return saved ? { ...saved, issuedAt: saved.issuedAt.toISOString() } : null
+}
+
 export async function readOrderDetail(tx: DatabaseTransaction, orderId: string): Promise<OrderDetail> {
   const { snapshot: order, shipment } = await loadOrder(tx, orderId)
   const [savedPayment] = await tx.select({
@@ -109,9 +122,11 @@ export async function readOrderDetail(tx: DatabaseTransaction, orderId: string):
     updatedAt: stripeRefund.updatedAt,
   }).from(stripeRefund).where(eq(stripeRefund.paymentId, savedPayment.id))
     .orderBy(desc(stripeRefund.createdAt), desc(stripeRefund.id)).limit(1)
+  const receiptSummary = await readOrderReceiptSummary(tx, orderId)
   return {
     ...order,
     ...(shipment ? { shipment } : {}),
+    receipt: receiptSummary,
     payment: {
       ...savedPayment,
       currency: 'THB',

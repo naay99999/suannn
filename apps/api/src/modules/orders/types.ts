@@ -132,10 +132,19 @@ export interface OrderShipment {
   shippedAt: string
 }
 
+export interface OrderReceiptSummary {
+  number: string
+  kind: 'abbreviated_tax_invoice' | 'receipt'
+  status: 'issued' | 'cancelled'
+  issuedAt: string
+}
+
 export interface OrderDetail extends OrderSnapshot {
   payment: OrderPaymentSnapshot
   // Optional so replayed command results stored before shipments existed still validate.
   shipment?: OrderShipment
+  // Optional so replayed command results stored before receipts existed still validate.
+  receipt?: OrderReceiptSummary | null
 }
 
 export interface StoreOrderDetail extends OrderDetail {

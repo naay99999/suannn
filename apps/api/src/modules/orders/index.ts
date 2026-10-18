@@ -111,6 +111,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
       ...(order.payment.refund ? { refund: order.payment.refund } : {}),
     },
     ...(order.shipment ? { shipment: order.shipment } : {}),
+    ...(order.receipt !== undefined ? { receipt: order.receipt } : {}),
   }
 }
 
@@ -358,6 +359,43 @@ export function createAdminOrdersModule(
       detail: {
         summary: 'Record COD collection',
         description: 'Records collection only when the amount equals the order total. The command is idempotent. Requires order:collect permission, an idempotency key, and an admin-origin browser request.',
+        tags: ['Admin Orders'], security: staffSecurity,
+      },
+    })
+    .post('/:orderId/receipt', async ({ params, user, requestContext, headers }) => staffOrderProjection(
+      await service.issueReceipt(params.orderId, actorFrom(user.id, requestContext), headers['idempotency-key']),
+    ), {
+      parse: [parseEmptyBody, 'json'],
+      browserMutation: 'admin',
+      permission: { order: ['collect'] },
+      params: 'orders.idParams',
+      headers: 'orders.idempotencyHeaders',
+      body: 'orders.emptyBody',
+      response: { 200: 'orders.detail', ...errors },
+      detail: {
+        summary: 'Issue an order receipt',
+        description: 'Issues the receipt for a paid order that has none, for example after receipt settings were completed. A Stripe order qualifies once its payment is collected; a COD order once it is delivered and collected. Returns 409 RECEIPT_NOT_ELIGIBLE or RECEIPT_SETTINGS_INCOMPLETE otherwise. The command is idempotent. Requires order:collect permission, an idempotency key, and an admin-origin browser request.',
+        tags: ['Admin Orders'], security: staffSecurity,
+      },
+    })
+    .post('/:orderId/receipt/cancel', async ({ params, body, user, requestContext, headers }) => staffOrderProjection(
+      await service.cancelReceipt(
+        params.orderId,
+        body.reason,
+        actorFrom(user.id, requestContext),
+        headers['idempotency-key'],
+      ),
+    ), {
+      parse: [parseStrictJsonBody(['reason']), 'json'],
+      browserMutation: 'admin',
+      permission: { order: ['refund'] },
+      params: 'orders.idParams',
+      headers: 'orders.idempotencyHeaders',
+      body: 'orders.cancelReceiptBody',
+      response: { 200: 'orders.detail', ...errors },
+      detail: {
+        summary: 'Cancel an order receipt',
+        description: 'Marks the issued receipt cancelled with a reason. The receipt number is kept and never reused. Cancelling an already cancelled receipt returns the order unchanged. Requires order:refund permission, an idempotency key, and an admin-origin browser request.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

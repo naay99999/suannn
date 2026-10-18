@@ -9,6 +9,7 @@ import {
   orderItem,
   orderOutbox,
   payment,
+  receipt,
 } from '../../database/schema'
 import { assertAuditMetadata, type AuditEvent } from '../audit/model'
 import { CodPaymentProvider } from '../payments/cod'
@@ -23,6 +24,7 @@ import { listOrderDetails, lockOrder, readOpenStripeCheckout, readOrderDetail } 
 import { enqueueOrderEmail } from './outbox'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
+import { issueReceiptInTransaction } from '../receipts/issue'
 import type {
   OrderDetail,
   OrderPage,
@@ -246,6 +248,7 @@ export async function settleStripeOrderInTransaction(tx: DatabaseTransaction, in
       lineCount: Number(lineCount?.count ?? 0),
     },
   })
+  await issueReceiptInTransaction(tx, input.order.id, { type: 'system' })
   return true
 }
 
@@ -523,6 +526,13 @@ export class OrderService {
           operationId,
         },
       })
+      // A COD receipt is issued by whichever of delivery and collection completes second.
+      if (nextStatus === 'delivered') {
+        await issueReceiptInTransaction(tx, orderId, { type: 'staff', userId: staffActor.userId }, {
+          operationId,
+          auditContext: context,
+        })
+      }
       return commandResult(orderId, await readOrderDetail(tx, orderId))
     })
   }
@@ -578,9 +588,81 @@ export class OrderService {
           ...context,
           metadata: { actorId: staffActor.userId, paymentId: savedPayment.id, amountSatang, operationId },
         })
+        await issueReceiptInTransaction(tx, orderId, { type: 'staff', userId: staffActor.userId }, {
+          operationId,
+          auditContext: context,
+        })
       } else if (savedPayment.status !== 'collected') {
         throw new DomainError('ORDER_PAYMENT_CONFLICT')
       }
+      return commandResult(orderId, await readOrderDetail(tx, orderId))
+    })
+  }
+
+  issueReceipt(orderId: string, staffActor: OrderStaffActor, key: string): Promise<OrderDetail> {
+    assertOrderId(orderId)
+    assertStaffActor(staffActor)
+    return runOrderCommand(this.db, {
+      scope: `staff:${staffActor.userId}`,
+      command: 'issue-receipt',
+      idempotencyKey: key,
+      payload: { orderId },
+    }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
+      await lockOrder(tx, orderId)
+      const outcome = await issueReceiptInTransaction(tx, orderId, { type: 'staff', userId: staffActor.userId }, {
+        operationId,
+        auditContext: staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null },
+      })
+      if (outcome === 'not_eligible') throw new DomainError('RECEIPT_NOT_ELIGIBLE')
+      if (outcome === 'deferred') throw new DomainError('RECEIPT_SETTINGS_INCOMPLETE')
+      return commandResult(orderId, await readOrderDetail(tx, orderId))
+    })
+  }
+
+  cancelReceipt(orderId: string, reason: string, staffActor: OrderStaffActor, key: string): Promise<OrderDetail> {
+    assertOrderId(orderId)
+    assertStaffActor(staffActor)
+    const cancelReason = typeof reason === 'string' ? reason.trim() : ''
+    if (cancelReason.length < 1 || cancelReason.length > 300) throw new DomainError('INVALID_ORDER_COMMAND')
+    return runOrderCommand(this.db, {
+      scope: `staff:${staffActor.userId}`,
+      command: 'cancel-receipt',
+      idempotencyKey: key,
+      payload: { orderId, reason: cancelReason },
+    }, async (_tx, existing) => replayOrder(existing), async (tx, _requestHash, operationId) => {
+      await lockOrder(tx, orderId)
+      const [saved] = await tx.select({ id: receipt.id, status: receipt.status }).from(receipt)
+        .where(eq(receipt.orderId, orderId)).for('update').limit(1)
+      if (!saved) throw new DomainError('RECEIPT_NOT_FOUND')
+      if (saved.status === 'cancelled') return commandResult(orderId, await readOrderDetail(tx, orderId))
+
+      const [cancelled] = await tx.update(receipt).set({
+        status: 'cancelled',
+        cancelledAt: sql`transaction_timestamp()`,
+        cancelledBy: staffActor.userId,
+        cancelReason,
+      }).where(and(eq(receipt.id, saved.id), eq(receipt.status, 'issued'))).returning({ id: receipt.id })
+      if (!cancelled) throw new DomainError('INVALID_ORDER_COMMAND')
+
+      await tx.insert(orderEvent).values({
+        id: crypto.randomUUID(),
+        orderId,
+        eventType: 'receipt.cancelled',
+        actorType: 'staff',
+        actorId: staffActor.userId,
+        reasonCode: 'staff_cancelled',
+        metadata: { receiptId: saved.id, operationId },
+      })
+      const context = staffActor.auditContext ?? { requestId: orderId, ipAddress: null, userAgent: null }
+      await recordOrderAudit(tx, {
+        id: crypto.randomUUID(),
+        actorUserId: staffActor.userId,
+        action: 'order.receipt-cancelled',
+        targetType: 'commerce_order',
+        targetId: orderId,
+        ...context,
+        metadata: { actorId: staffActor.userId, receiptId: saved.id, operationId, reasonCode: 'staff_cancelled' },
+      })
       return commandResult(orderId, await readOrderDetail(tx, orderId))
     })
   }

@@ -494,3 +494,39 @@ export const receiptSettings = pgTable('receipt_settings', {
   check('receipt_settings_tax_id_check', sql`${table.sellerTaxId} is null or ${table.sellerTaxId} ~ '^[0-9]{13}$'`),
   check('receipt_settings_version_positive_check', sql`${table.version} > 0`),
 ])
+
+export const receipt = pgTable('receipt', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: uuid('order_id').notNull().references(() => commerceOrder.id, { onDelete: 'restrict' }),
+  receiptNumber: text('receipt_number').notNull(),
+  kind: text('kind', { enum: ['abbreviated_tax_invoice', 'receipt'] }).notNull(),
+  status: text('status', { enum: ['issued', 'cancelled'] }).notNull().default('issued'),
+  issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  cancelledBy: text('cancelled_by'),
+  cancelReason: text('cancel_reason'),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+}, (table) => [
+  uniqueIndex('receipt_order_unique').on(table.orderId),
+  uniqueIndex('receipt_number_unique').on(table.receiptNumber),
+  check('receipt_number_format_check', sql`${table.receiptNumber} ~ '^RC[0-9]{6}-[0-9]{5,}$'`),
+  check('receipt_kind_check', sql`${table.kind} in ('abbreviated_tax_invoice', 'receipt')`),
+  check('receipt_status_check', sql`${table.status} in ('issued', 'cancelled')`),
+  check('receipt_snapshot_object_check', sql`jsonb_typeof(${table.snapshot}) = 'object'`),
+  check('receipt_cancel_state_check', sql`
+    (${table.status} = 'issued'
+      and ${table.cancelledAt} is null and ${table.cancelledBy} is null and ${table.cancelReason} is null)
+    or (${table.status} = 'cancelled'
+      and ${table.cancelledAt} is not null
+      and ${table.cancelledBy} is not null and length(btrim(${table.cancelledBy})) between 1 and 200
+      and ${table.cancelReason} is not null and length(btrim(${table.cancelReason})) between 1 and 300)
+  `),
+])
+
+export const receiptCounter = pgTable('receipt_counter', {
+  period: text('period').primaryKey(),
+  lastValue: integer('last_value').notNull(),
+}, (table) => [
+  check('receipt_counter_period_check', sql`${table.period} ~ '^[0-9]{6}$'`),
+  check('receipt_counter_last_value_check', sql`${table.lastValue} > 0`),
+])
