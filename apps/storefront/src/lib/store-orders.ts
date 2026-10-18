@@ -106,6 +106,8 @@ function receiptUrl(orderId: string): URL {
   return new URL(`/api/v1/store/orders/${encodeURIComponent(orderId)}/receipt.pdf`, defaultApiUrl)
 }
 
+export const receiptDownloadConfig = { revokeDelayMs: 10_000 }
+
 async function saveReceiptBlob(url: URL, init: RequestInit, fetcher: typeof fetch, fileName: string): Promise<void> {
   let response: Response
   try {
@@ -119,17 +121,22 @@ async function saveReceiptBlob(url: URL, init: RequestInit, fetcher: typeof fetc
     throw new StoreOrderRequestError(response.status, isRecord(body) && typeof body.code === 'string' ? body.code : 'STORE_RECEIPT_REQUEST_FAILED')
   }
   const objectUrl = URL.createObjectURL(await response.blob())
+  let anchor: HTMLAnchorElement | undefined
   try {
-    const anchor = document.createElement('a')
+    anchor = document.createElement('a')
     anchor.href = objectUrl
     anchor.download = fileName
     anchor.style.display = 'none'
     document.body.append(anchor)
     anchor.click()
-    anchor.remove()
-  } finally {
+  } catch (error) {
     URL.revokeObjectURL(objectUrl)
+    throw error
+  } finally {
+    anchor?.remove()
   }
+  // Firefox and Safari can drop the download if the blob URL is revoked before they start reading it.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), receiptDownloadConfig.revokeDelayMs)
 }
 
 /** `fileName` should be `<receipt number>.pdf`; the fallback keeps downloads usable if it is unknown. */

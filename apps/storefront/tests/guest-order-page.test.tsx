@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { Component } from '../src/pages/orders/guest-order-page'
 import { CartProvider } from '../src/components/cart/cart-provider'
-import { guestOrderTokenFromHash, readGuestOrderToken, savePendingCheckout } from '../src/lib/store-orders'
+import { guestOrderTokenFromHash, receiptDownloadConfig, readGuestOrderToken, savePendingCheckout } from '../src/lib/store-orders'
 
 const orderId = '00000000-0000-4000-8000-0000000000aa'
 const order = {
@@ -129,20 +129,30 @@ test('download button hidden without receipt', async () => {
 test('guest receipt download sends X-Order-Access-Token', async () => {
   const originalCreate = URL.createObjectURL
   const originalRevoke = URL.revokeObjectURL
+  const originalClick = HTMLAnchorElement.prototype.click
+  const originalDelay = receiptDownloadConfig.revokeDelayMs
   const revoked: string[] = []
+  const clicks: { download: string; href: string }[] = []
   URL.createObjectURL = () => 'blob:receipt'
   URL.revokeObjectURL = url => { revoked.push(url) }
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { clicks.push({ download: this.download, href: this.getAttribute('href') ?? '' }) }
+  receiptDownloadConfig.revokeDelayMs = 50
   try {
     const { pdfTokens, user } = renderPage(`/orders/guest/${orderId}#token=guest-secret`, undefined, { ...order, billing, receipt })
 
     expect(await screen.findByText('RC-20261018-0001')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /ดาวน์โหลดใบเสร็จ/ }))
 
-    await waitFor(() => expect(pdfTokens).toEqual(['guest-secret']))
+    await waitFor(() => expect(clicks).toEqual([{ download: 'RC-20261018-0001.pdf', href: 'blob:receipt' }]))
+    expect(pdfTokens).toEqual(['guest-secret'])
+    expect(document.querySelector('a[download]')).toBeNull()
+    expect(revoked).toEqual([])
     await waitFor(() => expect(revoked).toEqual(['blob:receipt']))
   } finally {
     URL.createObjectURL = originalCreate
     URL.revokeObjectURL = originalRevoke
+    HTMLAnchorElement.prototype.click = originalClick
+    receiptDownloadConfig.revokeDelayMs = originalDelay
   }
 })
 
