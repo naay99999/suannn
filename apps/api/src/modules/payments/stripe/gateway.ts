@@ -20,6 +20,7 @@ export interface CheckoutSessionInput {
   email: string
   amountSatang: number
   currency: 'thb'
+  paymentMethodType: 'card' | 'promptpay'
   expiresAt: Date
   successUrl: string
   cancelUrl: string
@@ -178,6 +179,7 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
+        payment_method_types: [input.paymentMethodType],
         success_url: input.successUrl,
         cancel_url: input.cancelUrl,
         client_reference_id: input.orderId,

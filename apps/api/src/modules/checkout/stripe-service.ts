@@ -42,6 +42,7 @@ export class StripeCheckoutService {
     const payload = {
       quoteToken: normalized.quoteToken,
       paymentMethod: normalized.paymentMethod,
+      stripePaymentMethod: normalized.stripePaymentMethod,
       contact: normalized.contact,
       address: normalized.address,
     }
@@ -113,6 +114,7 @@ export class StripeCheckoutService {
           email: record.order.contactEmail,
           amountSatang: record.order.totalSatang,
           currency: 'thb',
+          paymentMethodType: attempt.stripePaymentMethod,
           expiresAt: attempt.plannedExpiresAt!,
           successUrl: attempt.successUrl!,
           cancelUrl: attempt.cancelUrl!,

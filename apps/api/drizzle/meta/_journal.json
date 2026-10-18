@@ -162,6 +162,20 @@
       "when": 1792133122674,
       "tag": "0022_order_shipment",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792276784693,
+      "tag": "0023_store_announcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792281276205,
+      "tag": "0024_stripe_payment_method",
+      "breakpoints": true
     }
   ]
 }

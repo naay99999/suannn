@@ -66,7 +66,7 @@ test('fresh guest sees enabled Stripe checkout and cannot accidentally select CO
   globalThis.fetch = responseFor as typeof fetch
   mountCheckout(null)
 
-  const stripe = await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
+  const stripe = await screen.findByRole('radio', { name: /บัตรเครดิต/ })
   expect((stripe as HTMLInputElement).checked).toBe(true)
   expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
   const submit = await screen.findByRole('button', { name: /ไปชำระเงิน/ })
@@ -78,7 +78,7 @@ test('unverified customer cannot select COD and is pointed to email verification
   globalThis.fetch = responseFor as typeof fetch
   mountCheckout({ ...customerSession, user: { ...customerSession.user, emailVerified: false } })
 
-  const stripe = await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
+  const stripe = await screen.findByRole('radio', { name: /บัตรเครดิต/ })
   expect((stripe as HTMLInputElement).checked).toBe(true)
   expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
   expect(screen.getByRole('link', { name: 'ส่งอีเมลยืนยัน' }).getAttribute('href')).toBe('/account/security')
@@ -90,12 +90,13 @@ test('guest submits Stripe checkout with the manual address and redirects to Str
   interceptStripeRedirect()
   mountCheckout(null, { email: 'guest@example.test', phone: '0812345678', recipientName: 'Nok Guest', addressLine1: '1 Main Road', addressLine2: '', subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200' })
 
-  await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
+  const card = await screen.findByRole('radio', { name: /บัตรเครดิต/ })
+  expect((card as HTMLInputElement).checked).toBe(true)
   await userEvent.setup().click(await screen.findByRole('button', { name: /ไปชำระเงิน/ }))
 
   await waitFor(() => expect(stripeRedirects).toEqual([stripeCheckoutUrl]))
   const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
-  expect(orderRequest.body).toMatchObject({ paymentMethod: 'stripe', contact: { email: 'guest@example.test', phone: '0812345678' }, address: { recipientName: 'Nok Guest', addressLine1: '1 Main Road', subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200' } })
+  expect(orderRequest.body).toMatchObject({ paymentMethod: 'stripe', stripePaymentMethod: 'card', contact: { email: 'guest@example.test', phone: '0812345678' }, address: { recipientName: 'Nok Guest', addressLine1: '1 Main Road', subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200' } })
 })
 
 test('customer checkout starts at COD, submits the selected payment method and saved address', async () => {
@@ -106,7 +107,9 @@ test('customer checkout starts at COD, submits the selected payment method and s
 
   const cod = await screen.findByRole('radio', { name: /เก็บเงินปลายทาง/ })
   expect((cod as HTMLInputElement).checked).toBe(true)
-  await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
+  expect(await screen.findByText('1 Main Road Suthep Mueang Chiang Mai 50200')).toBeTruthy()
+  expect(screen.queryByLabelText('บ้านเลขที่ ถนน และรายละเอียดที่อยู่')).toBeNull()
+  await waitFor(() => expect((screen.getByLabelText('เบอร์โทรศัพท์') as HTMLInputElement).value).toBe('0812345678'))
   await user.click(screen.getByRole('button', { name: /ยืนยันสั่งซื้อ/ }))
 
   await waitFor(() => expect(requests.some(request => request.path === '/api/v1/store/checkout/orders')).toBe(true))
@@ -114,22 +117,60 @@ test('customer checkout starts at COD, submits the selected payment method and s
   expect(orderRequest.body).toMatchObject({ paymentMethod: 'cod', address: { addressId } })
 })
 
-test('customer can switch to Stripe and submits the saved address', async () => {
+test('customer can switch to card and submits the saved address', async () => {
   previousFetch = globalThis.fetch
   globalThis.fetch = responseFor as typeof fetch
   interceptStripeRedirect()
   mountCheckout(customerSession)
   const user = userEvent.setup()
 
-  const stripe = await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
-  await user.click(stripe)
-  expect((stripe as HTMLInputElement).checked).toBe(true)
-  await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
+  const card = await screen.findByRole('radio', { name: /บัตรเครดิต/ })
+  await user.click(card)
+  expect((card as HTMLInputElement).checked).toBe(true)
+  await waitFor(() => expect((screen.getByLabelText('เบอร์โทรศัพท์') as HTMLInputElement).value).toBe('0812345678'))
   await user.click(screen.getByRole('button', { name: /ไปชำระเงิน/ }))
 
   await waitFor(() => expect(stripeRedirects).toEqual([stripeCheckoutUrl]))
   const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
-  expect(orderRequest.body).toMatchObject({ paymentMethod: 'stripe', address: { addressId } })
+  expect(orderRequest.body).toMatchObject({ paymentMethod: 'stripe', stripePaymentMethod: 'card', address: { addressId } })
+})
+
+test('customer can choose PromptPay QR and submits it as a Stripe order', async () => {
+  previousFetch = globalThis.fetch
+  globalThis.fetch = responseFor as typeof fetch
+  interceptStripeRedirect()
+  mountCheckout(customerSession)
+  const user = userEvent.setup()
+
+  const promptpay = await screen.findByRole('radio', { name: /QR พร้อมเพย์/ })
+  await user.click(promptpay)
+  expect((promptpay as HTMLInputElement).checked).toBe(true)
+  expect(screen.getByText('ระบบจะพาไปหน้า Stripe เพื่อสแกน QR พร้อมเพย์ ชำระภายใน 30 นาที')).toBeTruthy()
+  await waitFor(() => expect((screen.getByLabelText('เบอร์โทรศัพท์') as HTMLInputElement).value).toBe('0812345678'))
+  await user.click(screen.getByRole('button', { name: /ไปชำระเงิน/ }))
+
+  await waitFor(() => expect(stripeRedirects).toEqual([stripeCheckoutUrl]))
+  const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
+  expect(orderRequest.body).toMatchObject({ paymentMethod: 'stripe', stripePaymentMethod: 'promptpay', address: { addressId } })
+})
+
+test('customer edits a prefilled saved address and submits the edited address', async () => {
+  previousFetch = globalThis.fetch
+  globalThis.fetch = responseFor as typeof fetch
+  mountCheckout(customerSession)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขที่อยู่ Home' }))
+  const addressLine = await screen.findByLabelText('บ้านเลขที่ ถนน และรายละเอียดที่อยู่') as HTMLInputElement
+  await waitFor(() => expect(addressLine.value).toBe('1 Main Road'))
+  await user.clear(addressLine)
+  await user.type(addressLine, '2 River Road')
+  await user.click(screen.getByRole('button', { name: /ยืนยันสั่งซื้อ/ }))
+
+  await waitFor(() => expect(requests.some(request => request.path === '/api/v1/store/checkout/orders')).toBe(true))
+  const orderRequest = requests.find(request => request.path === '/api/v1/store/checkout/orders')!
+  expect(orderRequest.body).toMatchObject({ paymentMethod: 'cod', address: { recipientName: 'Mali Buyer', addressLine1: '2 River Road', subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200' } })
+  expect(orderRequest.body?.address).not.toHaveProperty('addressId')
 })
 
 test('guest checkout rejects a manual address with missing required fields', async () => {
@@ -138,7 +179,7 @@ test('guest checkout rejects a manual address with missing required fields', asy
   mountCheckout(null)
   const user = userEvent.setup()
 
-  await screen.findByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ })
+  await screen.findByRole('radio', { name: /บัตรเครดิต/ })
   await user.type(screen.getByLabelText('อีเมลสำหรับรับรายละเอียดคำสั่งซื้อ'), 'mali@example.test')
   await user.type(screen.getByLabelText('เบอร์โทรศัพท์'), '0812345678')
   await user.click(screen.getByRole('button', { name: /ไปชำระเงิน/ }))
@@ -155,7 +196,7 @@ test('session expiry switches the rendered checkout selection to Stripe', async 
 
   expect((await screen.findByRole('radio', { name: /เก็บเงินปลายทาง/ }) as HTMLInputElement).checked).toBe(true)
   await act(async () => { queryClient.setQueryData(authSessionQuery.queryKey, null) })
-  await waitFor(() => expect((screen.getByRole('radio', { name: /ชำระออนไลน์ด้วยบัตร/ }) as HTMLInputElement).checked).toBe(true))
+  await waitFor(() => expect((screen.getByRole('radio', { name: /บัตรเครดิต/ }) as HTMLInputElement).checked).toBe(true))
   expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
 })
 

@@ -34,6 +34,7 @@ import type {
   CheckoutContact,
   OrderSnapshot,
   PlaceCheckoutInput,
+  StripePaymentMethod,
   ThaiAddress,
 } from '../orders/types'
 
@@ -44,6 +45,7 @@ const guestTokenVersion = 1
 export interface NormalizedCheckoutInput {
   quoteToken: string
   paymentMethod: 'cod' | 'stripe'
+  stripePaymentMethod?: StripePaymentMethod
   contact: CheckoutContact
   address: ThaiAddress | { addressId: string }
 }
@@ -138,11 +140,19 @@ function exactKeys(value: Record<string, unknown>, required: readonly string[], 
 }
 
 export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedCheckoutInput {
-  if (!isRecord(input) || !exactKeys(input, ['quoteToken', 'paymentMethod', 'contact', 'address'])
+  if (!isRecord(input) || !exactKeys(input, ['quoteToken', 'paymentMethod', 'contact', 'address'], ['stripePaymentMethod'])
     || typeof input.quoteToken !== 'string' || input.quoteToken.length < 1 || input.quoteToken.length > 8192
     || (input.paymentMethod !== 'cod' && input.paymentMethod !== 'stripe')) {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
+  const requestedStripeMethod = (input as Record<string, unknown>).stripePaymentMethod
+  if (input.paymentMethod === 'cod' ? requestedStripeMethod !== undefined
+    : requestedStripeMethod !== undefined && requestedStripeMethod !== 'card' && requestedStripeMethod !== 'promptpay') {
+    throw new DomainError('INVALID_ORDER_INPUT')
+  }
+  const payment = input.paymentMethod === 'stripe'
+    ? { paymentMethod: input.paymentMethod, stripePaymentMethod: (requestedStripeMethod ?? 'card') as StripePaymentMethod }
+    : { paymentMethod: input.paymentMethod }
   if (!isRecord(input.contact) || !exactKeys(input.contact, ['email', 'phone'])
     || typeof input.contact.email !== 'string' || typeof input.contact.phone !== 'string') {
     throw new DomainError('INVALID_ORDER_INPUT')
@@ -162,7 +172,7 @@ export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedChe
     && input.address.addressId.trim().length > 0 && input.address.addressId.trim().length <= 200) {
     return {
       quoteToken: input.quoteToken,
-      paymentMethod: input.paymentMethod,
+      ...payment,
       contact,
       address: { addressId: input.address.addressId.trim() },
     }
@@ -197,7 +207,7 @@ export function normalizeCheckoutInput(input: PlaceCheckoutInput): NormalizedChe
   if (!/^[0-9]{5}$/.test(normalizedAddress.postalCode)) throw new DomainError('INVALID_ORDER_INPUT')
   return {
     quoteToken: input.quoteToken,
-    paymentMethod: input.paymentMethod,
+    ...payment,
     contact,
     address: normalizedAddress,
   }
@@ -582,6 +592,7 @@ export function createPlaceOrderInTransaction(
       ? await stripePayments.createAttempt(tx, {
         orderId,
         stripeIdempotencyKey: `checkout-${orderId}`,
+        stripePaymentMethod: input.stripePaymentMethod ?? 'card',
       })
       : null
 

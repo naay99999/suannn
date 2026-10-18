@@ -1,0 +1,2 @@
+ALTER TABLE "stripe_checkout_attempt" ADD COLUMN "stripe_payment_method" text DEFAULT 'card' NOT NULL;--> statement-breakpoint
+ALTER TABLE "stripe_checkout_attempt" ADD CONSTRAINT "stripe_checkout_attempt_payment_method_check" CHECK ("stripe_checkout_attempt"."stripe_payment_method" in ('card', 'promptpay'));

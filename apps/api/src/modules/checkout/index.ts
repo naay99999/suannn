@@ -39,7 +39,7 @@ function parseStrictBody(allowed: readonly string[]) {
 }
 
 async function parseStrictPlaceOrderBody({ request }: { request: Request }) {
-  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'contact', 'address'])({ request })
+  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'stripePaymentMethod', 'contact', 'address'])({ request })
   const contact = body.contact
   const address = body.address
   if (!isRecord(contact) || Object.keys(contact).some((key) => key !== 'email' && key !== 'phone')) {

@@ -44,6 +44,7 @@ const address = t.Union([
 const placeOrderBody = t.Object({
   quoteToken: t.String({ minLength: 1, maxLength: 8192 }),
   paymentMethod: t.Union([t.Literal('cod'), t.Literal('stripe')]),
+  stripePaymentMethod: t.Optional(t.Union([t.Literal('card'), t.Literal('promptpay')])),
   contact: t.Object({
     email: t.String({ format: 'email', minLength: 3, maxLength: 320 }),
     phone: t.String({ pattern: '^[+0-9][+0-9 ()-]{6,39}$' }),

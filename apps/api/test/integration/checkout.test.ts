@@ -580,12 +580,36 @@ describe('pending Stripe order placement', () => {
     expect(savedPayment).toHaveLength(1)
     expect(savedPayment[0]).toMatchObject({ method: 'stripe', provider: 'stripe', status: 'awaiting_collection', amountSatang: 1925 })
     expect(attempts).toHaveLength(1)
-    expect(attempts[0]).toMatchObject({ stripeSessionId: null, checkoutUrl: null, status: 'creating' })
+    expect(attempts[0]).toMatchObject({ stripeSessionId: null, checkoutUrl: null, status: 'creating', stripePaymentMethod: 'card' })
     expect(allocations).toHaveLength(1)
     expect(outbox).toHaveLength(0)
     expect(lot?.onHandQuantity).toBe(4)
     expect(lot?.reversibleQuantity).toBe(1)
     expect((await prepared.cartService.get(prepared.principal)).lines).toHaveLength(0)
+  })
+
+  it('sends the PromptPay choice to Stripe and rejects replaying the key with another method', async () => {
+    const principal = guestPrincipal('stripe-service-promptpay-owner')
+    const prepared = await prepareCheckout(principal, { quantity: 1 })
+    const received: Array<Parameters<StripeGateway['createCheckout']>[0]> = []
+    const gateway = makeStripeGateway(async (input) => {
+      received.push(input)
+      return {
+        sessionId: 'cs_test_service_promptpay',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_service_promptpay',
+        expiresAt: input.expiresAt,
+      }
+    })
+    const service = new StripeCheckoutService(database.db, commerceSecret, gateway)
+
+    const placed = await service.place({ ...stripeInput(prepared), stripePaymentMethod: 'promptpay' }, principal, 'stripe-service-promptpay-1')
+    const [attempt] = await database.db.select().from(stripeCheckoutAttempt).where(eq(stripeCheckoutAttempt.orderId, placed.order.id))
+
+    expect(received).toHaveLength(1)
+    expect(received[0]?.paymentMethodType).toBe('promptpay')
+    expect(attempt?.stripePaymentMethod).toBe('promptpay')
+    await expect(service.place({ ...stripeInput(prepared), stripePaymentMethod: 'card' }, principal, 'stripe-service-promptpay-1'))
+      .rejects.toMatchObject({ code: 'ORDER_OPERATION_CONFLICT', status: 409 })
   })
 
   it('creates Checkout from only the approved order fields and replays the stored session after quote expiry', async () => {
@@ -617,6 +641,7 @@ describe('pending Stripe order placement', () => {
       email: 'buyer@example.test',
       amountSatang: 1925,
       currency: 'thb',
+      paymentMethodType: 'card',
       expiresAt: plannedExpiry,
       successUrl: 'https://shop.example.test/success?session_id={CHECKOUT_SESSION_ID}',
       cancelUrl: 'https://shop.example.test/cancel',

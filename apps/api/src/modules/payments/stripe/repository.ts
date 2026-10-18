@@ -1,10 +1,12 @@
 import { and, asc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../../database/types'
 import { payment, stripeCheckoutAttempt, stripeEvent, stripeRefund } from '../../../database/schema'
+import type { StripePaymentMethod } from '../../orders/types'
 
 export interface CreateStripeCheckoutAttemptInput {
   orderId: string
   stripeIdempotencyKey: string
+  stripePaymentMethod: StripePaymentMethod
 }
 
 export interface CreateStripeRefundClaimInput {

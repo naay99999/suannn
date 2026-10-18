@@ -36,6 +36,7 @@ const checkoutInput = {
   email: 'shopper@example.com',
   amountSatang: 2_500,
   currency: 'thb' as const,
+  paymentMethodType: 'card' as 'card' | 'promptpay',
   expiresAt: new Date('2026-09-27T12:30:00.000Z'),
   successUrl: config.successUrl,
   cancelUrl: config.cancelUrl,
@@ -66,8 +67,17 @@ describe('Stripe gateway', () => {
     expect(params.mode).toBe('payment')
     expect(params.success_url).toBe(config.successUrl)
     expect(params.cancel_url).toBe(config.cancelUrl)
-    expect(params.payment_method_types).toBeUndefined()
+    expect(params.payment_method_types).toEqual(['card'])
     expect(params.automatic_tax).toBeUndefined()
+  })
+
+  it('limits the Checkout page to PromptPay when the customer chose QR', async () => {
+    const { client, requests } = createClientStub()
+    const gateway = createStripeGateway(config, client)
+
+    await gateway.createCheckout({ ...checkoutInput, paymentMethodType: 'promptpay' })
+
+    expect(requests[0]!.params.payment_method_types).toEqual(['promptpay'])
   })
 
   it('adds shipping as a separate line item when its amount is positive', async () => {

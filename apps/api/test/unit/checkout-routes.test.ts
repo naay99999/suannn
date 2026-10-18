@@ -4,6 +4,7 @@ import { loadConfig } from '../../src/config/env'
 import type { Auth } from '../../src/plugins/auth/auth'
 import { DomainError } from '../../src/shared/domain-error'
 import { CheckoutService } from '../../src/modules/checkout/service'
+import { normalizeCheckoutInput } from '../../src/modules/checkout/placement'
 import type { CartPrincipal } from '../../src/modules/cart/types'
 import { testEnv } from '../fixtures'
 
@@ -285,6 +286,31 @@ describe('store checkout and order HTTP contracts', () => {
     expect(invalid.status).toBe(422)
     expect(calls.some((call) => call.method === 'checkout.placeStripe')).toBe(true)
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(true)
+  })
+
+  it('passes the chosen Stripe payment method to the service and rejects unknown methods', async () => {
+    const { appPromise, calls } = createHarness({ stripeConfigured: true })
+    const app = await appPromise
+    const promptpay = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'stripe', stripePaymentMethod: 'promptpay' }, undefined, 'checkout-promptpay-1'))
+    const unknown = await app.handle(checkoutRequest({ ...validCheckoutBody, paymentMethod: 'stripe', stripePaymentMethod: 'truemoney' }, undefined, 'checkout-unknown-1'))
+
+    expect(promptpay.status).toBe(201)
+    expect(unknown.status).toBe(422)
+    const placed = calls.filter((call) => call.method === 'checkout.placeStripe')
+    expect(placed).toHaveLength(1)
+    expect(placed[0]!.args[0]).toMatchObject({ paymentMethod: 'stripe', stripePaymentMethod: 'promptpay' })
+  })
+
+  it('defaults Stripe orders to card and rejects a Stripe method on COD orders', () => {
+    const stripe = normalizeCheckoutInput({ ...validCheckoutBody, paymentMethod: 'stripe' } as never)
+    const promptpay = normalizeCheckoutInput({ ...validCheckoutBody, paymentMethod: 'stripe', stripePaymentMethod: 'promptpay' } as never)
+    const cod = normalizeCheckoutInput(validCheckoutBody as never)
+
+    expect(stripe.stripePaymentMethod).toBe('card')
+    expect(promptpay.stripePaymentMethod).toBe('promptpay')
+    expect(cod).not.toHaveProperty('stripePaymentMethod')
+    expect(() => normalizeCheckoutInput({ ...validCheckoutBody, stripePaymentMethod: 'card' } as never))
+      .toThrow(expect.objectContaining({ code: 'INVALID_ORDER_INPUT' }))
   })
 
   it('rejects a guest principal in the checkout service before touching persistence', async () => {

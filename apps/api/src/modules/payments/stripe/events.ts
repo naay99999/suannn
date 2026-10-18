@@ -252,6 +252,7 @@ export class StripeEventService {
           email: snapshot.contactEmail,
           amountSatang: snapshot.totalSatang,
           currency: 'thb' as const,
+          paymentMethodType: attempt.stripePaymentMethod,
           expiresAt: attempt.plannedExpiresAt,
           successUrl: attempt.successUrl,
           cancelUrl: attempt.cancelUrl,

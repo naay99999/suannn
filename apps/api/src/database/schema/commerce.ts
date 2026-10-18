@@ -64,6 +64,25 @@ export const commerceSettings = pgTable('commerce_settings', {
   check('commerce_settings_version_positive_check', sql`${table.version} > 0`),
 ])
 
+export const storeAnnouncement = pgTable('store_announcement', {
+  id: integer('id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(false),
+  message: text('message'),
+  linkLabel: text('link_label'),
+  linkUrl: text('link_url'),
+  details: text('details'),
+  startsAt: timestamp('starts_at', { withTimezone: true }),
+  endsAt: timestamp('ends_at', { withTimezone: true }),
+  version: integer('version').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  check('store_announcement_singleton_check', sql`${table.id} = 1`),
+  check('store_announcement_enabled_requires_message_check', sql`not ${table.enabled} or ${table.message} is not null`),
+  check('store_announcement_link_pair_check', sql`(${table.linkLabel} is null) = (${table.linkUrl} is null)`),
+  check('store_announcement_window_check', sql`${table.startsAt} is null or ${table.endsAt} is null or ${table.endsAt} > ${table.startsAt}`),
+  check('store_announcement_version_positive_check', sql`${table.version} > 0`),
+])
+
 const MAX_SAFE_SATANG = 9007199254740991
 const maxSafeSatangSql = sql.raw(String(MAX_SAFE_SATANG))
 
@@ -271,6 +290,7 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   successUrl: text('success_url'),
   cancelUrl: text('cancel_url'),
   stripeIdempotencyKey: text('stripe_idempotency_key').notNull(),
+  stripePaymentMethod: text('stripe_payment_method', { enum: ['card', 'promptpay'] }).notNull().default('card'),
   status: text('status', { enum: ['creating', 'open', 'completed', 'expired', 'failed', 'manual_review'] }).notNull().default('creating'),
   lastCreateCallAt: timestamp('last_create_call_at', { withTimezone: true }).notNull().defaultNow(),
   lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true })
@@ -289,6 +309,7 @@ export const stripeCheckoutAttempt = pgTable('stripe_checkout_attempt', {
   `),
   check('stripe_checkout_attempt_url_check', sql`${table.checkoutUrl} is null or ${table.checkoutUrl} ~ '^https://[^[:space:]]+$'`),
   check('stripe_checkout_attempt_idempotency_key_check', sql`length(btrim(${table.stripeIdempotencyKey})) between 1 and 255`),
+  check('stripe_checkout_attempt_payment_method_check', sql`${table.stripePaymentMethod} in ('card', 'promptpay')`),
   check('stripe_checkout_attempt_status_check', sql`${table.status} in ('creating', 'open', 'completed', 'expired', 'failed', 'manual_review')`),
 ])
 

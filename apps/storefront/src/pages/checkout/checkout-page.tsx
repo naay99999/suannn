@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,7 +12,7 @@ import { cn } from '@workspace/ui/lib/utils'
 import { ThaiAddressCascadeSelect } from '@workspace/ui/components/thai-address-cascade-select'
 import { useCart } from '@/components/cart/cart-context'
 import { authSessionQuery } from '@/lib/auth-session'
-import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, placeStoreOrder, refreshAfterStaleQuote } from '@/lib/store-checkout'
+import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, isStripeChoice, placeStoreOrder, refreshAfterStaleQuote, type CheckoutPaymentChoice } from '@/lib/store-checkout'
 import { formatStorePrice } from '@/lib/store-products'
 import { getCartSummary } from '@/lib/cart'
 import { addressesQuery } from '@/pages/account/account-queries'
@@ -20,6 +20,8 @@ import type { CustomerAddress } from '@/pages/account/account-api'
 import { clearSubmissionKey, fingerprintCheckoutInput, getOrCreateSubmissionKey } from './checkout-idempotency'
 import { checkoutAddressDefaultValue, checkoutAddressFields } from './checkout-address'
 import { OrderSummary } from './order-summary'
+import { PaymentMethodOptions, paymentNextStep } from './payment-method-options'
+import { useStickyVisibility } from '@/lib/use-sticky-visibility'
 import { redirectToStripe } from '@/lib/store-orders'
 
 const checkoutSchema = z.object({
@@ -55,9 +57,25 @@ const manualAddressFields: FormField[] = [
   { name: 'postalCode', label: 'รหัสไปรษณีย์', autoComplete: 'postal-code', inputMode: 'numeric' },
 ]
 
-function selectedAddressPayload(choice: string, address?: CustomerAddress, values?: CheckoutForm) {
-  if (choice !== 'manual' && address?.id === choice) return { addressId: address.id }
-  if (!values) return null
+// The cascade fills the postal code from the subdistrict, so say so instead of leaving a grey field unexplained.
+const cascadeTexts = { zipLabel: 'รหัสไปรษณีย์ (กรอกอัตโนมัติ)' }
+
+const shippingAddressFields = ['recipientName', 'addressLine1', 'addressLine2', 'subdistrict', 'district', 'province', 'postalCode'] as const
+
+function savedAddressFormValues(address: CustomerAddress) {
+  return { ...address, addressLine2: address.addressLine2 ?? '' }
+}
+
+function savedAddressLine(address: CustomerAddress) {
+  return [address.addressLine1, address.addressLine2, address.subdistrict, address.district, address.province, address.postalCode].filter(Boolean).join(' ')
+}
+
+function selectedAddressPayload(values: CheckoutForm, address?: CustomerAddress) {
+  // Send the saved address by reference only while the prefilled fields are untouched.
+  if (address) {
+    const saved = savedAddressFormValues(address)
+    if (shippingAddressFields.every(field => values[field].trim() === saved[field])) return { addressId: address.id }
+  }
   return {
     recipientName: values.recipientName.trim(),
     addressLine1: values.addressLine1.trim(),
@@ -100,13 +118,14 @@ export function Component() {
     enabled: Boolean(cart && lines.length && !hasUnavailable && !cartPending),
     retry: false,
   })
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'stripe'>('cod')
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentChoice>('cod')
   const [addressChoice, setAddressChoice] = useState<string>('default')
   const [manualAddress, setManualAddress] = useState(false)
+  const [editingSavedAddress, setEditingSavedAddress] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const orderMutation = useMutation({ mutationFn: ({ input, key }: { input: Parameters<typeof placeStoreOrder>[0]; key: string }) => placeStoreOrder(input, key) })
   const locationDetails = (location.state as { details?: Partial<CheckoutForm> } | null)?.details
-  const { register, handleSubmit, setValue, setError, formState: { errors, isSubmitting } } = useForm<CheckoutForm>({
+  const { register, handleSubmit, getValues, setValue, setError, formState: { errors, isSubmitting } } = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       email: session.data?.user.email ?? '', phone: '', recipientName: '', addressLine1: '', addressLine2: '',
@@ -118,8 +137,32 @@ export function Component() {
   const selectedSavedAddress = addresses.data?.items.find(address => address.id === effectiveAddressChoice)
   const availableMethods = availablePaymentMethods(canUseCod)
   const selectedPaymentMethod = effectivePaymentMethod(canUseCod, paymentMethod)
+  const paysWithStripe = isStripeChoice(selectedPaymentMethod)
 
-  const handleAddressError = useCallback(() => setManualAddress(true), [])
+  const lineImages = new Map(lines.map(line => [line.variantId, { src: line.productImageUrl, alt: line.productImageAlt }]))
+  const actions = useRef<HTMLDivElement>(null)
+  const sticky = useStickyVisibility(actions)
+  const submitDisabled = !sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)
+  const submitLabel = isSubmitting ? 'กำลังส่งคำสั่งซื้อ...' : paysWithStripe ? 'ไปชำระเงิน' : 'ยืนยันสั่งซื้อ'
+
+  const filledAddressId = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedSavedAddress || filledAddressId.current === selectedSavedAddress.id) return
+    filledAddressId.current = selectedSavedAddress.id
+    const saved = savedAddressFormValues(selectedSavedAddress)
+    for (const field of shippingAddressFields) setValue(field, saved[field], { shouldDirty: true })
+    if (!getValues('phone').trim()) setValue('phone', selectedSavedAddress.phone, { shouldDirty: true })
+  }, [selectedSavedAddress, getValues, setValue])
+
+  function handleAddressChoiceChange(choice: string) {
+    setAddressChoice(choice)
+    setEditingSavedAddress(false)
+    if (choice !== 'manual') return
+    filledAddressId.current = null
+    for (const field of shippingAddressFields) setValue(field, locationDetails?.[field] ?? '', { shouldDirty: true })
+  }
+
+  const handleAddressError = useCallback(() => setManualAddress(true), [setManualAddress])
 
   function handleAddressChange(address: Parameters<typeof checkoutAddressFields>[0]) {
     const values = checkoutAddressFields(address)
@@ -138,12 +181,8 @@ export function Component() {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
-    const selectedAddress = selectedAddressPayload(effectiveAddressChoice, selectedSavedAddress, values)
-    if (!selectedAddress) {
-      setSubmitError('กรุณาเลือกหรือกรอกที่อยู่จัดส่ง')
-      return
-    }
-    if (effectiveAddressChoice === 'manual') {
+    const selectedAddress = selectedAddressPayload(values, selectedSavedAddress)
+    if (!('addressId' in selectedAddress)) {
       const requiredAddressFields: (keyof CheckoutForm)[] = ['recipientName', 'addressLine1', 'subdistrict', 'district', 'province']
       const emptyField = requiredAddressFields.find(field => !values[field].trim())
       if (emptyField) {
@@ -175,7 +214,7 @@ export function Component() {
       const result = await orderMutation.mutateAsync({ input, key })
       if (!('order' in result)) throw new StoreCheckoutRequestError(502, 'INVALID_ORDER_RESPONSE')
       await queryClient.invalidateQueries({ queryKey: ['store-cart'] })
-      if (selectedPaymentMethod === 'stripe') {
+      if (paysWithStripe) {
         if (!('checkout' in result) || !result.checkout?.url) throw new StoreCheckoutRequestError(502, 'STRIPE_CHECKOUT_URL_MISSING')
         redirectToStripe({
           orderId: result.order.id,
@@ -204,7 +243,6 @@ export function Component() {
       <title>ชำระเงิน | suannn</title>
       <div className="mb-10 max-w-5xl md:mb-12">
         <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">ชำระเงิน</h1>
-        <p className="mt-3 max-w-xl text-sm leading-7 text-muted-foreground">กรอกข้อมูลจัดส่ง เลือกวิธีชำระเงิน แล้วตรวจสอบยอดก่อนยืนยัน</p>
       </div>
       {cartError && <p role="alert" className="mb-5 text-sm text-destructive">{cartError}</p>}
       {session.isError && <div role="alert" className="mb-5 flex items-center gap-3"><p>ตรวจสอบสถานะบัญชีไม่ได้ กรุณาลองอีกครั้งก่อนสั่งซื้อ</p><Button variant="outline" onClick={() => void session.refetch()}>ลองอีกครั้ง</Button></div>}
@@ -220,7 +258,7 @@ export function Component() {
             <FieldGroup className="mt-6 gap-5">
               {fields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
                 <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                <Input className="h-12" id={field.name} type={field.type} inputMode={field.inputMode} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+                <Input id={field.name} type={field.type} inputMode={field.inputMode} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
                 <FieldError>{errors[field.name]?.message}</FieldError>
               </Field>)}
             </FieldGroup>
@@ -229,54 +267,66 @@ export function Component() {
             <h2 id="shipping-heading" className="text-xl font-semibold">ที่อยู่จัดส่ง</h2>
             {isCustomer && <Field className="mt-6">
               <FieldLabel htmlFor="checkout-address-choice">เลือกที่อยู่</FieldLabel>
-              <select id="checkout-address-choice" className="h-12 w-full min-w-0 rounded-xl border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" value={effectiveAddressChoice} onChange={event => setAddressChoice(event.target.value)}>
+              <select id="checkout-address-choice" className="h-(--field-h) w-full min-w-0 rounded-field border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" value={effectiveAddressChoice} onChange={event => handleAddressChoiceChange(event.target.value)}>
                 <option value="manual">กรอกที่อยู่ใหม่</option>
                 {addresses.data?.items.map(address => <option key={address.id} value={address.id}>{address.label} · {address.recipientName}</option>)}
               </select>
               {addresses.isError && <p role="status" className="text-sm text-muted-foreground">โหลดที่อยู่ที่บันทึกไว้ไม่ได้ คุณยังกรอกที่อยู่ใหม่ได้</p>}
             </Field>}
-            {(!isCustomer || effectiveAddressChoice === 'manual' || !selectedSavedAddress) && <>
-              {addressFields.map(field => <Field key={field.name} className="mt-5" data-invalid={Boolean(errors[field.name])}>
+            {selectedSavedAddress && !editingSavedAddress ? <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border p-4">
+              <div className="min-w-0 text-sm leading-6">
+                <p className="font-medium">{selectedSavedAddress.recipientName}</p>
+                <p className="text-muted-foreground break-words">{savedAddressLine(selectedSavedAddress)}</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditingSavedAddress(true)} aria-label={`แก้ไขที่อยู่ ${selectedSavedAddress.label}`}>แก้ไข</Button>
+            </div> : <>
+            {addressFields.map(field => <Field key={field.name} className="mt-5" data-invalid={Boolean(errors[field.name])}>
+              <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
+              <Input id={field.name} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+              <FieldError>{errors[field.name]?.message}</FieldError>
+            </Field>)}
+            {manualAddress ? <div className="mt-5 grid gap-5 sm:grid-cols-2">
+              <p role="status" className="text-sm text-muted-foreground sm:col-span-2">โหลดรายการที่อยู่ไม่สำเร็จ กรุณากรอกข้อมูลเอง</p>
+              {manualAddressFields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
                 <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                <Input className="h-12" id={field.name} autoComplete={field.autoComplete} placeholder={field.placeholder} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
+                <Input id={field.name} inputMode={field.inputMode} autoComplete={field.autoComplete} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
                 <FieldError>{errors[field.name]?.message}</FieldError>
               </Field>)}
-              {manualAddress ? <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                <p role="status" className="text-sm text-muted-foreground sm:col-span-2">โหลดรายการที่อยู่ไม่สำเร็จ กรุณากรอกข้อมูลเอง</p>
-                {manualAddressFields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
-                  <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                  <Input className="h-12" id={field.name} inputMode={field.inputMode} autoComplete={field.autoComplete} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
-                  <FieldError>{errors[field.name]?.message}</FieldError>
-                </Field>)}
-                <Button type="button" variant="outline" onClick={() => setManualAddress(false)} className="sm:col-span-2">ลองโหลดรายการที่อยู่อีกครั้ง</Button>
-              </div> : <Field className="mt-5" data-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)}>
-                <ThaiAddressCascadeSelect triggerClassName="h-12" defaultValue={checkoutAddressDefaultValue(locationDetails)} onValueChange={handleAddressChange} onError={handleAddressError} aria-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)} required />
-                {(errors.province || errors.district || errors.subdistrict || errors.postalCode) && <FieldError>กรุณาเลือกจังหวัด อำเภอ และตำบลให้ครบ</FieldError>}
-              </Field>}
+              <Button type="button" variant="outline" onClick={() => setManualAddress(false)} className="sm:col-span-2">ลองโหลดรายการที่อยู่อีกครั้ง</Button>
+            </div> : <Field className="mt-5" data-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)}>
+              <ThaiAddressCascadeSelect key={effectiveAddressChoice} texts={cascadeTexts} defaultValue={checkoutAddressDefaultValue(selectedSavedAddress ?? locationDetails)} onValueChange={handleAddressChange} onError={handleAddressError} aria-invalid={Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)} required />
+              {(errors.province || errors.district || errors.subdistrict || errors.postalCode) && <FieldError>กรุณาเลือกจังหวัด อำเภอ และตำบลให้ครบ</FieldError>}
+            </Field>}
             </>}
-            {selectedSavedAddress && <div className="mt-5 border-l-2 border-primary pl-4 text-sm leading-7"><p className="font-medium">{selectedSavedAddress.recipientName} · {selectedSavedAddress.phone}</p><p>{selectedSavedAddress.addressLine1}{selectedSavedAddress.addressLine2 ? ` ${selectedSavedAddress.addressLine2}` : ''}</p><p>{selectedSavedAddress.subdistrict} {selectedSavedAddress.district} {selectedSavedAddress.province} {selectedSavedAddress.postalCode}</p></div>}
           </section>
-          <fieldset className="mt-8 min-w-0 border-t pt-8">
-            <legend className="sr-only">วิธีชำระเงิน</legend>
-            <h2 aria-hidden="true" className="text-xl font-semibold">วิธีชำระเงิน</h2>
-            <div className="mt-5 grid gap-3">
-              {availableMethods.map(method => <label key={method} className={cn('flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-ring', method === selectedPaymentMethod && 'border-primary bg-accent')}>
-                <input type="radio" name="paymentMethod" value={method} checked={method === selectedPaymentMethod} onChange={() => setPaymentMethod(method)} className="mt-1 accent-primary" />
-                <span><span className="block font-medium">{method === 'cod' ? 'เก็บเงินปลายทาง' : 'ชำระออนไลน์ด้วยบัตร'}</span><span className="mt-1 block text-sm text-muted-foreground">{method === 'cod' ? 'ชำระเงินเมื่อได้รับสินค้า' : 'กรอกข้อมูลบัตรในหน้าชำระเงินของ Stripe'}</span></span>
-              </label>)}
-              {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
-              {isCustomer && !canUseCod && <p className="text-sm text-muted-foreground">ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้ <Link className="font-medium text-primary-ink underline" to="/account/security">ส่งอีเมลยืนยัน</Link></p>}
-            </div>
-          </fieldset>
+          <section className="mt-8 border-t pt-8">
+            <PaymentMethodOptions available={availableMethods} selected={selectedPaymentMethod} onSelect={setPaymentMethod} isCustomer={isCustomer} canUseCod={canUseCod} />
+          </section>
         </form>
         <aside aria-label="ตรวจสอบยอดและยืนยันคำสั่งซื้อ" className="min-w-0 border-t pt-8 lg:sticky lg:top-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-          {quote.data ? <OrderSummary quote={quote.data} /> : <p role="status" className="py-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}
-          <div className="mt-6 flex flex-col gap-4">
+          {quote.data ? <OrderSummary quote={quote.data} images={lineImages} /> : <p role="status" className="py-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}
+          <div ref={actions} className="mt-8 flex flex-col gap-4">
             {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-            <Button type="submit" form="checkout-form" size="storefront" className="w-full" aria-busy={isSubmitting} disabled={!sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)}>{isSubmitting ? 'กำลังส่งคำสั่งซื้อ...' : `${selectedPaymentMethod === 'stripe' ? 'ไปชำระเงิน' : 'ยืนยันสั่งซื้อ'}${quote.data ? ` · ${formatStorePrice(quote.data.totalSatang)}` : ''}`}</Button>
-            <p className="text-center text-xs leading-6 text-muted-foreground">{selectedPaymentMethod === 'stripe' ? 'ขั้นตอนถัดไป: ชำระเงินด้วยบัตรผ่าน Stripe' : 'ชำระยอดนี้กับผู้จัดส่งเมื่อได้รับสินค้า'}</p>
+            <Button type="submit" form="checkout-form" size="storefront" className="w-full" aria-busy={isSubmitting} disabled={submitDisabled}>{isSubmitting || !quote.data ? submitLabel : `${submitLabel} · ${formatStorePrice(quote.data.totalSatang)}`}</Button>
+            <p className="text-center text-xs leading-6 text-muted-foreground">{paymentNextStep(selectedPaymentMethod)}</p>
           </div>
         </aside>
+      </div>
+      <div
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl transition-transform duration-300 ease-out lg:hidden',
+          !sticky && 'translate-y-full',
+        )}
+        aria-hidden={!sticky}
+        inert={!sticky}
+      >
+        <div className="page-width flex flex-col items-stretch gap-2 py-3">
+          {submitError && <p className="text-center text-sm text-destructive">{submitError}</p>}
+          <Button type="submit" form="checkout-form" size="storefront" className="px-10 text-base" aria-busy={isSubmitting} disabled={submitDisabled}>{submitLabel}</Button>
+          <p className="truncate text-center text-sm text-muted-foreground">
+            {quote.data ? <>ยอดชำระทั้งหมด <span className="font-semibold text-foreground tabular-nums">{formatStorePrice(quote.data.totalSatang)}</span></> : 'กำลังคำนวณยอด...'}
+          </p>
+        </div>
       </div>
     </div>
   )

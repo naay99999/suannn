@@ -6,6 +6,9 @@ export type CheckoutQuote = NonNullable<Awaited<ReturnType<typeof api.store.chec
 export type PlaceOrderBody = Parameters<typeof api.store.checkout.orders.post>[0]
 export type CreateOrderResponse = NonNullable<Awaited<ReturnType<typeof api.store.checkout.orders.post>>['data']>
 export type CheckoutPaymentMethod = PlaceOrderBody['paymentMethod']
+export type StripePaymentMethod = NonNullable<PlaceOrderBody['stripePaymentMethod']>
+// What the customer picks on /checkout; card and PromptPay both settle through Stripe Checkout.
+export type CheckoutPaymentChoice = 'cod' | StripePaymentMethod
 export type CheckoutAddress = PlaceOrderBody['address']
 export type CheckoutContact = PlaceOrderBody['contact']
 
@@ -58,20 +61,27 @@ export function placeStoreOrder(input: PlaceOrderBody, idempotencyKey: string, t
 
 export function buildCheckoutOrderBody(
   quote: CheckoutQuote,
-  paymentMethod: CheckoutPaymentMethod,
+  choice: CheckoutPaymentChoice,
   contact: CheckoutContact,
   address: CheckoutAddress,
 ): PlaceOrderBody {
-  return { quoteToken: quote.quoteToken, paymentMethod, contact, address }
+  const payment = choice === 'cod'
+    ? { paymentMethod: 'cod' as const }
+    : { paymentMethod: 'stripe' as const, stripePaymentMethod: choice }
+  return { quoteToken: quote.quoteToken, ...payment, contact, address }
+}
+
+export function isStripeChoice(choice: CheckoutPaymentChoice): choice is StripePaymentMethod {
+  return choice !== 'cod'
 }
 
 // COD needs a signed-in customer with a verified email; the API enforces the same rule.
-export function availablePaymentMethods(canUseCod: boolean): CheckoutPaymentMethod[] {
-  return canUseCod ? ['cod', 'stripe'] : ['stripe']
+export function availablePaymentMethods(canUseCod: boolean): CheckoutPaymentChoice[] {
+  return canUseCod ? ['cod', 'card', 'promptpay'] : ['card', 'promptpay']
 }
 
-export function effectivePaymentMethod(canUseCod: boolean, selected: CheckoutPaymentMethod): CheckoutPaymentMethod {
-  return canUseCod ? selected : 'stripe'
+export function effectivePaymentMethod(canUseCod: boolean, selected: CheckoutPaymentChoice): CheckoutPaymentChoice {
+  return canUseCod || selected !== 'cod' ? selected : 'card'
 }
 
 export async function refreshAfterStaleQuote(queryClient: QueryClient, quoteKey: readonly unknown[]) {

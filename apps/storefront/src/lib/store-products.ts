@@ -90,6 +90,8 @@ export function formatStorePrice(priceSatang: number): string {
   return new Intl.NumberFormat('th-TH', {
     style: 'currency',
     currency: 'THB',
+    // Whole-baht amounts read faster without ".00"; keep satang only when there are some.
+    minimumFractionDigits: priceSatang % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(priceSatang / 100)
 }

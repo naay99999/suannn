@@ -39,8 +39,11 @@ export interface PlaceCodInput {
   address: CheckoutAddress
 }
 
+export type StripePaymentMethod = 'card' | 'promptpay'
+
 export interface PlaceStripeInput extends Omit<PlaceCodInput, 'paymentMethod'> {
   paymentMethod: 'stripe'
+  stripePaymentMethod?: StripePaymentMethod
 }
 
 export type PlaceCheckoutInput = PlaceCodInput | PlaceStripeInput
