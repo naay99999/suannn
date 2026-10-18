@@ -44,6 +44,31 @@ export function createSystemSettingsModule(
         tags: ['Settings'], security: [{ sessionCookie: [] }],
       },
     })
+    .get('/customer-auth', () => service.getCustomerAuthSettings(), {
+      permission: { settings: ['read'] },
+      response: { 200: 'systemSettings.customerAuthResponse', 401: 'http.error', 403: 'http.error' },
+      detail: {
+        summary: 'Get customer authentication settings',
+        description: 'Returns whether customers must verify their email before signing in. Requires settings:read permission.',
+        tags: ['Settings'], security: [{ sessionCookie: [] }],
+      },
+    })
+    .patch('/customer-auth', ({ body, user, requestContext }) =>
+      service.setCustomerEmailVerificationRequired(body.emailVerificationRequired, user.id, {
+        requestId: requestContext.requestId,
+        ipAddress: requestContext.clientIp,
+        userAgent: requestContext.userAgent,
+      }), {
+      browserMutation: 'admin',
+      permission: { settings: ['update'] },
+      body: 'systemSettings.customerAuthBody',
+      response: { 200: 'systemSettings.customerAuthResponse', 401: 'http.error', 403: 'http.error', 422: 'http.error' },
+      detail: {
+        summary: 'Update customer authentication settings',
+        description: 'Sets whether customers must verify their email before signing in. Enabling it ends every session of an unverified customer. Requires settings:update permission.',
+        tags: ['Settings'], security: [{ sessionCookie: [] }],
+      },
+    })
 }
 
 export * from './model'

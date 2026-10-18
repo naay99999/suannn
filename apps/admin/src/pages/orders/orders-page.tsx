@@ -14,7 +14,7 @@ const columns: ColumnDef<ServerDataTableFeatures, OrderDetail>[] = column.column
   column.accessor('recipientName', { header: 'ลูกค้า', cell: ({ row }) => <div><p className="font-medium">{row.original.recipientName}</p><p className="text-sm text-muted-foreground">{row.original.contactEmail}</p></div> }),
   column.accessor('createdAt', { header: 'วันที่', cell: ({ getValue }) => formatTimestamp(getValue()) }),
   column.accessor('status', { header: 'สถานะ', cell: ({ getValue }) => <Badge variant="outline">{getValue()}</Badge> }),
-  column.accessor(row => row.payment.status, { id: 'payment', header: 'การชำระเงิน', cell: ({ row }) => <Badge variant={row.original.payment.status === 'awaiting_collection' ? 'secondary' : 'outline'}>{row.original.paymentMethod === 'cod' ? 'เก็บปลายทาง' : 'Stripe'} · {row.original.payment.status}</Badge> }),
+  column.accessor(row => row.payment.status, { id: 'payment', header: 'การชำระเงิน', cell: ({ row }) => <Badge variant={row.original.payment.status === 'awaiting_collection' ? 'warning' : 'outline'}>{row.original.paymentMethod === 'cod' ? 'เก็บปลายทาง' : 'Stripe'} · {row.original.payment.status}</Badge> }),
   column.accessor('totalSatang', { header: () => <span className="block text-right">ยอดรวม</span>, cell: ({ getValue }) => <span className="block text-right font-medium">{formatMoney(getValue())}</span> }),
 ])
 

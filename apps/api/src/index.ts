@@ -40,6 +40,8 @@ import { CartService } from './modules/cart/service'
 import { startCommerceMaintenanceLoop } from './modules/commerce/maintenance'
 import { CommerceSettingsRepository } from './modules/commerce-settings/repository'
 import { CommerceSettingsService } from './modules/commerce-settings/service'
+import { StoreAnnouncementRepository } from './modules/store-announcement/repository'
+import { StoreAnnouncementService } from './modules/store-announcement/service'
 import { ReceiptSettingsRepository, ReceiptSettingsService } from './modules/receipts/settings'
 import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
@@ -87,6 +89,7 @@ const farms = new FarmService(new FarmRepository(database.db, audit), productRep
 const cartRepository = new CartRepository(database.db, inventoryReadRepository)
 const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
+const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
 const receiptSettings = new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit))
 const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
 const checkout = new CheckoutService(database.db, config.commerceSecret)
@@ -101,8 +104,10 @@ const stripeRefunds = new StripeRefundService(database.db, stripeGateway)
 const orders = new OrderService(database.db, config.commerceSecret)
 const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret, config.storefrontUrl)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
+const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
 const auth = createAuth(config, database.db, {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
+  customerEmailVerificationRequired,
 })
 const rateLimitRepository = new ApplicationRateLimitRepository(database.db)
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
@@ -112,6 +117,8 @@ const app = await createApp(config, {
   audit,
   customerSignup: new CustomerSignupService({
     auth, claims, limiter, audit, requireTrustedClientIp: config.requireTrustedClientIp,
+    emailVerificationRequired: customerEmailVerificationRequired,
+    verificationCallbackUrl: new URL('/sign-in?verified=1', config.storefrontUrl).toString(),
   }),
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
   customerAddresses: new CustomerAddressService(new CustomerAddressRepository(database.db)),
@@ -159,6 +166,7 @@ const app = await createApp(config, {
   orders,
   commerceSettings,
   receiptSettings,
+  storeAnnouncement,
   staffMfaRequired,
   identityReservations: claims,
   limiter,

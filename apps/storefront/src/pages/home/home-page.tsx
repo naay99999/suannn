@@ -1,20 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
-import { A11y } from 'swiper/modules'
-import type { Swiper as SwiperInstance } from 'swiper'
-import { Swiper, SwiperSlide } from 'swiper/react'
+import { Link, useLocation } from 'react-router'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft02Icon,
-  ArrowRight02Icon,
   ArrowUpRight01Icon,
   Leaf01Icon,
-  PauseIcon,
-  PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
@@ -25,8 +18,6 @@ import { principles } from './home-data'
 import { getStoreProducts, storeProductQueryKey } from '@/lib/store-products'
 import { ProductRecommendations, recommendationLimit } from '@/components/product-recommendations'
 import { FeaturedFarms } from '@/components/farms/featured-farms'
-
-import 'swiper/css'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
@@ -58,9 +49,6 @@ export function Component() {
   const scope = useRef<HTMLDivElement>(null)
   const [category, setCategory] = useState('all')
   const [activeCollection, setActiveCollection] = useState(0)
-  const storySwiper = useRef<SwiperInstance | null>(null)
-  const [story, setStory] = useState(0)
-  const [paused, setPaused] = useState(false)
   const { hash, key } = useLocation()
   const featured = useQuery({
     queryKey: storeProductQueryKey({ category: category === 'all' ? undefined : category as 'fresh' | 'processed', limit: recommendationLimit }),
@@ -69,7 +57,9 @@ export function Component() {
   const visibleProducts = featured.data?.items ?? []
 
   useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView()
+    if (!hash) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })
   }, [hash, key])
 
   useGSAP(
@@ -84,6 +74,30 @@ export function Component() {
           ease: 'power3.out',
         })
       })
+      // Each card pins `step` px below the previous one and shrinks as the next
+      // card slides over it, so the stack reads like a deck being dealt.
+      function stackCards(top: number, step: number, end: (cards: HTMLElement[]) => ScrollTrigger.Vars) {
+        const cards = gsap.utils.toArray<HTMLElement>('.farm-card', scope.current)
+        cards.slice(0, -1).forEach((card, index) => {
+          ScrollTrigger.create({
+            trigger: card,
+            start: `top ${top + index * step}px`,
+            ...end(cards),
+            pin: true,
+            pinSpacing: false,
+          })
+          gsap.to(card.querySelector('.farm-card-inner'), {
+            scale: 0.96,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: cards[index + 1],
+              start: 'top 75%',
+              end: `top ${top + (index + 1) * step + 10}px`,
+              scrub: true,
+            },
+          })
+        })
+      }
       media.add(
         '(min-width: 1024px) and (min-height: 700px) and (prefers-reduced-motion: no-preference)',
         () => {
@@ -95,29 +109,17 @@ export function Component() {
             pin: true,
             pinSpacing: false,
           })
-          const cards = gsap.utils.toArray<HTMLElement>('.farm-card', scope.current)
-          cards.slice(0, -1).forEach((card, index) => {
-            ScrollTrigger.create({
-              trigger: card,
-              start: `top ${130 + index * 20}px`,
-              endTrigger: '.farm-cards',
-              end: 'bottom 620px',
-              pin: true,
-              pinSpacing: false,
-            })
-            gsap.to(card.querySelector('.farm-card-inner'), {
-              scale: 0.96,
-              ease: 'none',
-              scrollTrigger: {
-                trigger: cards[index + 1],
-                start: 'top 75%',
-                end: 'top 160px',
-                scrub: true,
-              },
-            })
-          })
+          stackCards(130, 20, () => ({ endTrigger: '.farm-cards', end: 'bottom 620px' }))
         },
       )
+      // On narrow screens the intro sits above the cards, so only the cards stack,
+      // just below the 88px sticky header. Pins release once the last card lands.
+      media.add('(max-width: 1023px) and (prefers-reduced-motion: no-preference)', () => {
+        stackCards(104, 16, (cards) => ({
+          endTrigger: cards.at(-1),
+          end: `top ${104 + (cards.length - 1) * 16}px`,
+        }))
+      })
       // Async content (products, farms, fonts) changes the page height after the
       // pins are measured, so re-measure whenever the layout height changes.
       let frame = 0
@@ -160,7 +162,7 @@ export function Component() {
           </p>
           <h1
             id="hero-title"
-            className="hero-reveal mx-auto w-full max-w-6xl text-[clamp(2.5rem,5.7vw,5.5rem)] font-semibold leading-[1.32] tracking-tight"
+            className="hero-reveal mx-auto w-full max-w-6xl text-display font-semibold tracking-tight"
           >
             ความสดจากสวน
             <br />
@@ -171,21 +173,18 @@ export function Component() {
             <br className="hidden sm:block" /> รู้ว่าใครปลูก รู้ว่ามาจากไหน เลือกได้ด้วยความสบายใจ
           </p>
           <div className="hero-reveal mt-7 flex flex-wrap justify-center gap-3">
-            <a
-              className={cn(buttonVariants({ size: 'lg' }), 'h-12 rounded-full px-7')}
-              href="#products"
+            <Link
+              className={buttonVariants({ size: 'storefront' })}
+              to="#products"
             >
               เลือกความอร่อย <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
-            </a>
-            <a
-              className={cn(
-                buttonVariants({ size: 'lg', variant: 'outline' }),
-                'h-12 rounded-full px-7',
-              )}
-              href="#from-the-farm"
+            </Link>
+            <Link
+              className={buttonVariants({ size: 'storefront', variant: 'outline' })}
+              to="#from-the-farm"
             >
               ทำไมต้อง suannn
-            </a>
+            </Link>
           </div>
         </div>
         <div className="hero-still-life hero-reveal relative w-full">
@@ -210,12 +209,11 @@ export function Component() {
         </div>
       </section>
 
-      <div className="marquee-shell relative border-y border-primary/10 bg-accent py-5">
+      <div className="border-y border-primary/10 bg-accent py-5">
         <Marquee
-          pauseOnHover
           repeat={4}
           aria-hidden="true"
-          className={cn('suannn-brand-marquee [--duration:35s] [--gap:3rem] !p-0', paused && 'is-paused')}
+          className="suannn-brand-marquee [--duration:35s] [--gap:3rem] !p-0"
         >
           {['คัดจากสวน', 'รู้จักคนปลูก', 'โปร่งใสทุกที่มา', 'อร่อยอย่างสบายใจ'].map((text) => (
             <span key={text} className="flex shrink-0 items-center gap-12 text-sm text-secondary-foreground">
@@ -225,15 +223,6 @@ export function Component() {
           ))}
         </Marquee>
         <p className="sr-only">คัดจากสวน รู้จักคนปลูก โปร่งใสทุกที่มา อร่อยอย่างสบายใจ</p>
-        <Button
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-background/90"
-          variant="outline"
-          size="icon"
-          aria-label={paused ? 'เล่นข้อความเคลื่อนไหว' : 'หยุดข้อความเคลื่อนไหว'}
-          onClick={() => setPaused(!paused)}
-        >
-          <HugeiconsIcon icon={paused ? PlayIcon : PauseIcon} />
-        </Button>
       </div>
 
       <section
@@ -259,15 +248,15 @@ export function Component() {
             onValueChange={(value) => {
               if (value.length) setCategory(value[0] as string)
             }}
-            className="max-w-full flex-wrap rounded-full border bg-muted/50 p-1.5"
+            className="max-w-full flex-wrap border bg-muted/50 p-1.5"
           >
-            <ToggleGroupItem value="all" className="rounded-full px-4">
+            <ToggleGroupItem value="all" className="px-4">
               ทั้งหมด
             </ToggleGroupItem>
-            <ToggleGroupItem value="fresh" className="rounded-full px-4">
+            <ToggleGroupItem value="fresh" className="px-4">
               ผลไม้สด
             </ToggleGroupItem>
-            <ToggleGroupItem value="processed" className="rounded-full px-4">
+            <ToggleGroupItem value="processed" className="px-4">
               แปรรูป
             </ToggleGroupItem>
           </ToggleGroup>
@@ -330,7 +319,7 @@ export function Component() {
                 <p className="mb-5 text-sm">{collection.description}</p>
                 <Button
                   variant="secondary"
-                  className="h-11 rounded-full px-5"
+                  className="px-5"
                   onClick={() => chooseCollection(collection.category)}
                 >
                   เข้าไปดู <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
@@ -384,92 +373,12 @@ export function Component() {
             ))}
           </div>
         </div>
-        <FeaturedFarms />
       </section>
 
-      <section
-        id="our-story"
-        className="page-width scroll-mt-28 py-28 md:py-40"
-        aria-labelledby="story-title"
-      >
-        <div className="grid items-center gap-12 md:grid-cols-[0.85fr_1.15fr] md:gap-20">
-          <div className="relative overflow-hidden rounded-[2rem]">
-            <img
-              src="/images/hero.jpg"
-              alt="ดินปลูกและอุปกรณ์ทำสวน ภาพประกอบแนวคิดของแบรนด์"
-              width={800}
-              height={900}
-              loading="lazy"
-              className="aspect-[1/1.05] w-full object-cover"
-            />
-            <span className="glass-label absolute bottom-5 left-5">
-              Good things take good care.
-            </span>
-          </div>
-          <div role="region" aria-roledescription="carousel" aria-label="ความตั้งใจของ suannn">
-            <p className="mb-6 text-xs tracking-[0.18em] text-muted-foreground">
-              THE HEART OF SUANNN
-            </p>
-            <h2 id="story-title" className="section-heading">
-              สวนเล็ก ๆ<br />
-              ความตั้งใจที่ไม่เล็ก
-            </h2>
-            <Swiper
-              modules={[A11y]}
-              slidesPerView={1}
-              rewind
-              watchOverflow
-              speed={300}
-              a11y={{
-                containerRole: 'group',
-                itemRoleDescriptionMessage: 'แนวคิด',
-                slideLabelMessage: 'แนวคิด {{index}} จาก {{slidesLength}}',
-                wrapperLiveRegion: true,
-              }}
-              onSwiper={swiper => { storySwiper.current = swiper }}
-              onSlideChange={swiper => setStory(swiper.realIndex)}
-              className="story-swiper mt-7"
-            >
-              {principles.map((principle, index) => (
-                <SwiperSlide key={principle.number} aria-hidden={story !== index} className="!h-auto">
-                  <div className="min-h-36">
-                    <p className="text-lg font-medium leading-8">{principle.title}</p>
-                    <p className="mt-4 text-sm leading-8 text-muted-foreground">
-                      {principle.body}
-                    </p>
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
-            <div className="mt-7 flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="icon-lg"
-                className="rounded-full"
-                aria-label="แนวคิดก่อนหน้า"
-                onClick={() => storySwiper.current?.slidePrev()}
-              >
-                <HugeiconsIcon icon={ArrowLeft02Icon} />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-lg"
-                className="rounded-full"
-                aria-label="แนวคิดถัดไป"
-                onClick={() => storySwiper.current?.slideNext()}
-              >
-                <HugeiconsIcon icon={ArrowRight02Icon} />
-              </Button>
-              <span className="ml-3 text-xs text-muted-foreground">
-                {String(story + 1).padStart(2, '0')} / {String(principles.length).padStart(2, '0')}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FeaturedFarms />
 
       <section className="page-width pb-12" aria-labelledby="cta-title">
-        <div className="suannn-cta relative isolate overflow-hidden rounded-[2rem] px-6 py-20 text-center md:py-28">
+        <div className="suannn-cta relative isolate overflow-hidden rounded-4xl px-6 py-20 text-center md:py-28">
           <HugeiconsIcon icon={Leaf01Icon} size={40} className="mx-auto mb-7 text-primary" />
           <h2 id="cta-title" className="section-heading">
             ให้ทุกวัน มีเรื่องดี ๆ จากสวน
@@ -477,12 +386,12 @@ export function Component() {
           <p className="mt-5 text-sm leading-7 text-muted-foreground">
             เริ่มจากผลไม้ที่ชอบ แล้วค้นพบความตั้งใจของคนปลูก
           </p>
-          <a
-            href="#products"
-            className={cn(buttonVariants({ size: 'lg' }), 'mt-8 h-12 rounded-full px-8')}
+          <Link
+            to="#products"
+            className={cn(buttonVariants({ size: 'storefront' }), 'mt-8 px-8')}
           >
             ไปเดินสวนกัน <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
-          </a>
+          </Link>
           <span className="cta-wordmark" aria-hidden="true">
             suannn.
           </span>

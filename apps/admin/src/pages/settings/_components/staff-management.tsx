@@ -191,7 +191,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
                     <TableRow key={member.id}>
                       <TableCell><div className="flex flex-col gap-0.5"><span className="font-medium">{member.name || 'Unnamed staff'}</span><span className="text-muted-foreground">{member.email}</span></div></TableCell>
                       <TableCell><Badge variant="outline">{displayRole(member.role)}</Badge></TableCell>
-                      <TableCell><Badge variant={member.banned ? 'destructive' : 'secondary'}>{member.banned ? 'Suspended' : 'Active'}</Badge></TableCell>
+                      <TableCell><Badge variant={member.banned ? 'destructive' : 'success'}>{member.banned ? 'Suspended' : 'Active'}</Badge></TableCell>
                       <TableCell>{formatDate(member.staffActivatedAt)}</TableCell>
                       <TableCell>
                         {hasActions && <DropdownMenu>
@@ -334,7 +334,7 @@ function StaffInvitations({ actorRole, canInvite }: { actorRole: StaffRole; canI
                   return <TableRow key={invitation.id}>
                     <TableCell className="font-medium">{invitation.email}</TableCell>
                     <TableCell><Badge variant="outline">{displayRole(invitation.role)}</Badge></TableCell>
-                    <TableCell><Badge variant={status === 'pending' ? 'secondary' : status === 'revoked' ? 'destructive' : 'outline'}>{status[0].toUpperCase() + status.slice(1)}</Badge></TableCell>
+                    <TableCell><Badge variant={status === 'pending' ? 'warning' : status === 'revoked' ? 'destructive' : 'outline'}>{status[0].toUpperCase() + status.slice(1)}</Badge></TableCell>
                     <TableCell>{formatDate(invitation.expiresAt)}</TableCell>
                     <TableCell>{canManagePending && <DropdownMenu>
                       <DropdownMenuTrigger render={<Button aria-label={`Actions for ${invitation.email}`} size="icon" variant="ghost" />}><HugeiconsIcon icon={MoreVerticalCircle01Icon} strokeWidth={2} /></DropdownMenuTrigger>

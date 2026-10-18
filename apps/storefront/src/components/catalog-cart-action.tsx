@@ -51,8 +51,8 @@ export function CatalogCartAction({ product }: { product: StoreProductSummary })
   return <div className="mt-3 flex flex-col gap-2" aria-busy={busy}>
     {quantity > 0 ? <QuantityControl label={product.name} quantity={quantity} min={0} max={available ? MAX_QUANTITY : quantity} disabled={disabled}
       className="w-full justify-between rounded-md [&_button]:size-11 [&_button]:rounded-md" onChange={next => { void changeQuantity(next) }} />
-      : !cart && !pending ? <Button variant="outline" className="min-h-11 w-full px-2" onClick={() => { void queryClient.refetchQueries({ queryKey: storeCartQueryKey }) }}>ลองโหลดตะกร้าใหม่</Button>
-        : <Button className="min-h-11 w-full gap-1 px-2 text-sm" disabled={disabled || !available} aria-label={`เพิ่ม ${product.name} ลงตะกร้า`} onClick={() => { void changeQuantity(1) }}>
+      : !cart && !pending ? <Button variant="outline" className="w-full px-2" onClick={() => { void queryClient.refetchQueries({ queryKey: storeCartQueryKey }) }}>ลองโหลดตะกร้าใหม่</Button>
+        : <Button className="w-full gap-1 px-2 text-sm" disabled={disabled || !available} aria-label={`เพิ่ม ${product.name} ลงตะกร้า`} onClick={() => { void changeQuantity(1) }}>
           <HugeiconsIcon icon={ShoppingBag01Icon} data-icon="inline-start" />
           {busy ? 'กำลังเพิ่ม...' : available ? 'เพิ่มลงตะกร้า' : 'ยังไม่พร้อมสั่งซื้อ'}
         </Button>}

@@ -157,7 +157,7 @@ export async function listOwnSessions(cursor?: string) {
 export type OwnStaffSession = Awaited<ReturnType<typeof listOwnSessions>>['items'][number]
 
 export async function revokeOwnSession(id: string) {
-  const result = await api.auth.staff.sessions({ id }).revoke.post()
+  const result = await api.auth.staff.sessions({ id }).revoke.post({})
   if (result.error) {
     const body = isRecord(result.error) && 'value' in result.error ? result.error.value : result.error
     throw errorFromResponse(result.status, body)

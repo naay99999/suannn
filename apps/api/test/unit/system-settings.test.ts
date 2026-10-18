@@ -82,3 +82,54 @@ describe('staff MFA system setting routes', () => {
     expect(writes).toBe(0)
   })
 })
+
+describe('customer email verification setting routes', () => {
+  it('returns the persisted policy to authorized staff', async () => {
+    const app = makeApp('admin', {
+      getCustomerAuthSettings: async () => ({ emailVerificationRequired: false }),
+    } as unknown as SystemSettingsService)
+
+    const response = await app.handle(new Request('http://localhost/api/v1/settings/customer-auth'))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ emailVerificationRequired: false })
+  })
+
+  it('lets admins require verification through a guarded browser mutation', async () => {
+    const changes: Array<{ required: boolean; actor: string }> = []
+    const app = makeApp('admin', {
+      setCustomerEmailVerificationRequired: async (required: boolean, actor: string) => {
+        changes.push({ required, actor })
+        return { emailVerificationRequired: required }
+      },
+    } as unknown as SystemSettingsService)
+
+    const response = await app.handle(new Request('http://localhost/api/v1/settings/customer-auth', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: 'http://localhost:5184' },
+      body: JSON.stringify({ emailVerificationRequired: true }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ emailVerificationRequired: true })
+    expect(changes).toEqual([{ required: true, actor: 'staff-1' }])
+  })
+
+  it('rejects a role without settings:update from changing the policy', async () => {
+    let writes = 0
+    const service = {
+      setCustomerEmailVerificationRequired: async () => {
+        writes += 1
+        return { emailVerificationRequired: true }
+      },
+    } as unknown as SystemSettingsService
+    const request = (body: unknown) => new Request('http://localhost/api/v1/settings/customer-auth', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', origin: 'http://localhost:5184' },
+      body: JSON.stringify(body),
+    })
+
+    expect((await makeApp('support', service).handle(request({ emailVerificationRequired: true }))).status).toBe(403)
+    expect(writes).toBe(0)
+  })
+})

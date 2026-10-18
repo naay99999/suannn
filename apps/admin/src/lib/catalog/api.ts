@@ -38,20 +38,20 @@ export function createCatalogApi(client: ApiClient = api) {
     update: (id: string, input: ProductUpdateInput) => apiRequest(async () =>
       apiData(await client.admin.products({ id }).patch(input)) as ProductUpdated),
     publish: (id: string) => apiRequest(async () => {
-      apiEmpty(await client.admin.products({ id }).publish.post())
+      apiEmpty(await client.admin.products({ id }).publish.post({}))
     }),
     unpublish: (id: string) => apiRequest(async () => {
-      apiEmpty(await client.admin.products({ id }).unpublish.post())
+      apiEmpty(await client.admin.products({ id }).unpublish.post({}))
     }),
     archive: (id: string) => apiRequest(async () => {
-      apiEmpty(await client.admin.products({ id }).delete())
+      apiEmpty(await client.admin.products({ id }).delete({}))
     }),
     createVariant: (productId: string, input: VariantCreateInput) => apiRequest(async () =>
       apiData(await client.admin.products({ id: productId }).variants.post(input)) as Variant),
     updateVariant: (productId: string, variantId: string, input: VariantUpdateInput) => apiRequest(async () =>
       apiData(await client.admin.products({ id: productId }).variants({ variantId }).patch(input)) as VariantUpdated),
     archiveVariant: (productId: string, variantId: string) => apiRequest(async () => {
-      apiEmpty(await client.admin.products({ id: productId }).variants({ variantId }).delete())
+      apiEmpty(await client.admin.products({ id: productId }).variants({ variantId }).delete({}))
     }),
     replaceFarms: (productId: string, farmIds: string[]) => apiRequest(async () =>
       apiData(await client.admin.products({ id: productId }).farms.put({ farmIds })) as ProductFarm[]),

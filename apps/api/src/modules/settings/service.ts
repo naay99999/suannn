@@ -11,4 +11,12 @@ export class SystemSettingsService {
   setStaffMfaRequired(required: boolean, actorUserId: string, auditContext: AuditContext) {
     return this.repository.setStaffMfaRequired(required, actorUserId, auditContext)
   }
+
+  async getCustomerAuthSettings() {
+    return { emailVerificationRequired: await this.repository.getCustomerEmailVerificationRequired() }
+  }
+
+  setCustomerEmailVerificationRequired(required: boolean, actorUserId: string, auditContext: AuditContext) {
+    return this.repository.setCustomerEmailVerificationRequired(required, actorUserId, auditContext)
+  }
 }

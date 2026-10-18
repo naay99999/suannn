@@ -18,8 +18,10 @@ export function clearCustomerQueries(queryClient: QueryClient) {
   clearStoreCartQuery(queryClient)
 }
 
+// Reset rather than remove: removing an in-flight query silently cancels it and leaves
+// mounted observers pending forever, which disabled add-to-cart on a fresh guest visit.
 export function clearStoreCartQuery(queryClient: QueryClient) {
-  queryClient.removeQueries({ queryKey: storeCartQueryKey })
+  void queryClient.resetQueries({ queryKey: storeCartQueryKey })
 }
 
 export function reconcileCustomerQueries(queryClient: QueryClient, session: CustomerSession | StaffSession | null) {

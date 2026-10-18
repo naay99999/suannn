@@ -44,21 +44,21 @@ export async function suspendStaff(id: string, reason: string) {
 }
 
 export async function reactivateStaff(id: string) {
-  throwApiError(await api.staff({ id }).reactivate.post())
+  throwApiError(await api.staff({ id }).reactivate.post({}))
 }
 
 export async function revokeStaffSessions(id: string) {
-  throwApiError(await api.staff({ id }).sessions.revoke.post())
+  throwApiError(await api.staff({ id }).sessions.revoke.post({}))
 }
 
 export async function resetStaffMfa(id: string) {
-  throwApiError(await api.staff({ id }).mfa.reset.post())
+  throwApiError(await api.staff({ id }).mfa.reset.post({}))
 }
 
 export async function resendStaffInvitation(id: string) {
-  throwApiError(await api.staff.invitations({ id }).resend.post())
+  throwApiError(await api.staff.invitations({ id }).resend.post({}))
 }
 
 export async function cancelStaffInvitation(id: string) {
-  throwApiError(await api.staff.invitations({ id }).cancel.post())
+  throwApiError(await api.staff.invitations({ id }).cancel.post({}))
 }

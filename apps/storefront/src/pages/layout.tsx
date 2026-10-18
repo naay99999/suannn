@@ -1,59 +1,97 @@
 import { useEffect, useState } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowUpRight01Icon, Cancel01Icon, Menu01Icon, UserCircleIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, ArrowUpRight01Icon, Cancel01Icon, Menu01Icon, UserCircleIcon } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@workspace/ui/components/dialog'
 import { cn } from '@workspace/ui/lib/utils'
 
+import { AnnouncementBar } from '@/components/announcement-bar'
+import { useCart } from '@/components/cart/cart-context'
 import { CartProvider } from '@/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '@/components/cart/side-cart'
+import { getCartSummary } from '@/lib/cart'
 import { authSessionQuery } from '@/lib/auth-session'
 import { staffSignInUrl } from '@/lib/auth-navigation'
 import type { CustomerSession, StaffSession } from '@/lib/auth-client'
 
 const navigation = [
-  { label: 'สินค้าทั้งหมด', to: '/products' },
-  { label: 'ที่มาของสินค้า', to: '/#from-the-farm' },
-  { label: 'สวนและคนปลูก', to: '/farms' },
-  { label: 'เกี่ยวกับเรา', to: '/#our-story' },
+  { label: 'หน้าแรก', to: '/', end: true },
+  { label: 'สินค้าทั้งหมด', to: '/products', end: false },
+  { label: 'สวนและคนปลูก', to: '/farms', end: false },
 ]
 
-function HeaderAccountAction({ session, className, onNavigate }: {
+function HeaderOrderAction({ className, onNavigate }: { className: string, onNavigate?: () => void }) {
+  const { cart, setOpen } = useCart()
+  const { lines, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
+
+  if (lines.length === 0) {
+    return (
+      <Link className={cn(buttonVariants(), className)} to="/products" onClick={onNavigate}>
+        เลือกซื้อสินค้า <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+      </Link>
+    )
+  }
+
+  if (hasUnavailable) {
+    return (
+      <Button className={className} onClick={() => { onNavigate?.(); setOpen(true) }}>
+        ตรวจสอบตะกร้า <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+      </Button>
+    )
+  }
+
+  return (
+    <Link className={cn(buttonVariants(), className)} to="/checkout" onClick={onNavigate}>
+      สั่งซื้อและชำระเงิน <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+    </Link>
+  )
+}
+
+function HeaderAccountAction({ session, className, compact = false, onNavigate }: {
   session: UseQueryResult<CustomerSession | StaffSession | null>
   className: string
+  compact?: boolean
   onNavigate?: () => void
 }) {
+  const variant = { variant: 'outline', size: compact ? 'icon-lg' : 'default' } as const
+
   if (session.isPending) {
-    return <Button variant="outline" className={className} disabled aria-busy="true">กำลังตรวจสอบบัญชี</Button>
+    return (
+      <Button {...variant} className={className} disabled aria-busy="true" aria-label={compact ? 'กำลังตรวจสอบบัญชี' : undefined}>
+        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : 'กำลังตรวจสอบบัญชี'}
+      </Button>
+    )
   }
 
   if (session.isError) {
     return (
-      <Button variant="outline" className={className} title="ตรวจสอบบัญชีไม่ได้ กดลองอีกครั้ง" onClick={() => void session.refetch()}>
-        ตรวจสอบบัญชีอีกครั้ง
+      <Button {...variant} className={className} title="ตรวจสอบบัญชีไม่ได้ กดลองอีกครั้ง" aria-label={compact ? 'ตรวจสอบบัญชีอีกครั้ง' : undefined} onClick={() => void session.refetch()}>
+        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : 'ตรวจสอบบัญชีอีกครั้ง'}
       </Button>
     )
   }
 
   if (session.data?.user.accountType === 'staff') {
     return (
-      <a className={cn(buttonVariants({ variant: 'outline' }), className)} href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')} onClick={onNavigate}>
-        ไปหน้าผู้ดูแล <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
+      <a className={cn(buttonVariants(variant), className)} href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')} aria-label={compact ? 'ไปหน้าผู้ดูแล' : undefined} onClick={onNavigate}>
+        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : <>ไปหน้าผู้ดูแล <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" /></>}
       </a>
     )
   }
 
-  const isCustomer = session.data?.user.accountType === 'customer'
+  const label = session.data?.user.accountType === 'customer' ? 'บัญชีของฉัน' : 'เข้าสู่ระบบ'
   return (
     <Link
-      className={cn(buttonVariants({ variant: 'outline' }), className)}
-      to={isCustomer ? '/account' : '/sign-in'}
+      className={cn(buttonVariants(variant), className)}
+      to={label === 'บัญชีของฉัน' ? '/account' : '/sign-in'}
+      aria-label={compact ? label : undefined}
+      title={compact ? label : undefined}
       onClick={onNavigate}
     >
-      <HugeiconsIcon icon={UserCircleIcon} data-icon="inline-start" />
-      {isCustomer ? 'บัญชีของฉัน' : 'เข้าสู่ระบบ'}
+      <HugeiconsIcon icon={UserCircleIcon} data-icon={compact ? undefined : 'inline-start'} />
+      {!compact && label}
     </Link>
   )
 }
@@ -108,6 +146,7 @@ function StorefrontShell() {
       <a className="skip-link" href="#main-content">
         ข้ามไปเนื้อหาหลัก
       </a>
+      <AnnouncementBar />
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
         <header className="suannn-header">
           <div className="page-width flex h-22 items-center justify-between gap-6">
@@ -121,14 +160,20 @@ function StorefrontShell() {
             </Link>
             <nav aria-label="เมนูหลัก" className="hidden items-center gap-6 text-sm md:flex lg:gap-9">
               {navigation.map((item) => (
-                <Link key={item.to} className="nav-link" to={item.to}>
+                <NavLink
+                  key={item.to}
+                  className={({ isActive }) => cn('nav-link', isActive && 'font-semibold text-primary-ink')}
+                  to={item.to}
+                  end={item.end}
+                >
                   {item.label}
-                </Link>
+                </NavLink>
               ))}
             </nav>
             <div className="flex items-center gap-2">
               <CartTrigger />
-              <HeaderAccountAction session={session} className="hidden h-11 rounded-full px-5 sm:inline-flex" onNavigate={() => setMenuOpen(false)} />
+              <HeaderAccountAction session={session} compact className="hidden sm:inline-flex" onNavigate={() => setMenuOpen(false)} />
+              <HeaderOrderAction className="hidden px-5 sm:inline-flex" onNavigate={() => setMenuOpen(false)} />
               <DialogTrigger render={<Button variant="ghost" size="icon-lg" className="md:hidden" />} aria-label="เปิดเมนู">
                 <HugeiconsIcon icon={Menu01Icon} />
               </DialogTrigger>
@@ -151,18 +196,23 @@ function StorefrontShell() {
           </div>
           <nav aria-label="เมนูมือถือ" className="page-width flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain py-8">
             {navigation.map((item) => (
-              <Link
+              <NavLink
                 key={item.to}
-                className="flex items-center justify-between gap-4 rounded-xl px-3 py-5 text-2xl font-medium hover:bg-muted focus-visible:outline-ring"
+                className={({ isActive }) => cn(
+                  'flex items-center justify-between gap-4 rounded-xl px-3 py-5 text-2xl font-medium hover:bg-muted focus-visible:outline-ring',
+                  isActive && 'bg-muted text-primary-ink',
+                )}
                 to={item.to}
+                end={item.end}
                 onClick={() => setMenuOpen(false)}
               >
                 {item.label}
                 <HugeiconsIcon icon={ArrowUpRight01Icon} className="size-5 shrink-0" aria-hidden="true" />
-              </Link>
+              </NavLink>
             ))}
-            <div className="mt-auto pt-8 pb-[env(safe-area-inset-bottom)]">
-              <HeaderAccountAction session={session} className="h-12 w-full rounded-full px-5" onNavigate={() => setMenuOpen(false)} />
+            <div className="mt-auto flex flex-col gap-3 pt-8 pb-[env(safe-area-inset-bottom)]">
+              <HeaderOrderAction className="h-(--control-h-lg) w-full px-5" onNavigate={() => setMenuOpen(false)} />
+              <HeaderAccountAction session={session} className="h-(--control-h-lg) w-full px-5" onNavigate={() => setMenuOpen(false)} />
             </div>
           </nav>
         </DialogContent>

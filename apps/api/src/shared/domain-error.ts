@@ -38,6 +38,8 @@ export type DomainErrorCode =
   | 'RECEIPT_NOT_ELIGIBLE'
   | 'RECEIPT_SETTINGS_INCOMPLETE'
   | 'RECEIPT_NOT_FOUND'
+  | 'INVALID_STORE_ANNOUNCEMENT'
+  | 'STORE_ANNOUNCEMENT_UNAVAILABLE'
   | 'CHECKOUT_DISABLED'
   | 'SHIPPING_FEE_UNSET'
   | 'CART_NOT_PURCHASABLE'
@@ -101,6 +103,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   RECEIPT_NOT_ELIGIBLE: { status: 409, message: 'Order is not eligible for a receipt' },
   RECEIPT_SETTINGS_INCOMPLETE: { status: 409, message: 'Receipt seller settings are incomplete' },
   RECEIPT_NOT_FOUND: { status: 404, message: 'Receipt was not found' },
+  INVALID_STORE_ANNOUNCEMENT: { status: 422, message: 'Store announcement is invalid' },
+  STORE_ANNOUNCEMENT_UNAVAILABLE: { status: 503, message: 'Store announcement is unavailable' },
   CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },
   SHIPPING_FEE_UNSET: { status: 409, message: 'Shipping fee is not configured' },
   CART_NOT_PURCHASABLE: { status: 409, message: 'One or more cart items cannot be purchased' },

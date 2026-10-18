@@ -41,9 +41,9 @@ const columns: ColumnDef<ServerDataTableFeatures, LotRow>[] = column.columns([
     header: 'สถานะล็อต',
     cell: ({ row }) => <div className="flex flex-wrap gap-1">
       {row.original.quarantinedAt && <Badge variant="destructive">กักกัน</Badge>}
-      {row.original.expired && <Badge variant="secondary">หมดอายุ</Badge>}
+      {row.original.expired && <Badge variant="warning">หมดอายุ</Badge>}
       {row.original.onHandQuantity === 0 && <Badge variant="outline">หมดแล้ว</Badge>}
-      {!row.original.quarantinedAt && !row.original.expired && row.original.onHandQuantity > 0 && <Badge>พร้อมใช้งาน</Badge>}
+      {!row.original.quarantinedAt && !row.original.expired && row.original.onHandQuantity > 0 && <Badge variant="success">พร้อมใช้งาน</Badge>}
     </div>,
   }),
 ])

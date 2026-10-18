@@ -1,31 +1,46 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, type UseFormRegisterReturn } from 'react-hook-form'
 import { Badge } from '@workspace/ui/components/badge'
 import { Button } from '@workspace/ui/components/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
+import { ThaiAddressCascadeSelect } from '@workspace/ui/components/thai-address-cascade-select'
 import { authSessionQuery } from '@/lib/auth-session'
+import { checkoutAddressDefaultValue, checkoutAddressFields } from '@/pages/checkout/checkout-address'
 import { createAddress, removeAddress, setDefaultAddress, updateAddress, type CustomerAddress } from './account-api'
 import { addressSchema, type AddressFormValues } from './account-forms'
 import { addressQueryKey, addressesQuery } from './account-queries'
 import { AccountQueryFeedback } from './account-query-feedback'
 import { AccountPageHeading, AddressText } from './account-ui'
 
-const fields: { name: keyof AddressFormValues; label: string; autoComplete?: string; inputMode?: 'tel' | 'numeric' }[] = [
+type FormField = { name: keyof AddressFormValues; label: string; autoComplete?: string; inputMode?: 'tel' | 'numeric' }
+
+const fields: FormField[] = [
   { name: 'label', label: 'ชื่อที่อยู่' },
   { name: 'recipientName', label: 'ชื่อผู้รับ', autoComplete: 'name' },
   { name: 'phone', label: 'เบอร์โทรศัพท์', autoComplete: 'tel', inputMode: 'tel' },
   { name: 'addressLine1', label: 'บ้านเลขที่ ถนน และรายละเอียดที่อยู่', autoComplete: 'address-line1' },
   { name: 'addressLine2', label: 'อาคาร ชั้น หรือห้อง (ถ้ามี)', autoComplete: 'address-line2' },
-  { name: 'subdistrict', label: 'แขวง / ตำบล', autoComplete: 'address-level3' },
-  { name: 'district', label: 'เขตหรืออำเภอ', autoComplete: 'address-level2' },
+]
+
+const localityFields: FormField[] = [
   { name: 'province', label: 'จังหวัด', autoComplete: 'address-level1' },
+  { name: 'district', label: 'เขต / อำเภอ', autoComplete: 'address-level2' },
+  { name: 'subdistrict', label: 'แขวง / ตำบล', autoComplete: 'address-level3' },
   { name: 'postalCode', label: 'รหัสไปรษณีย์', autoComplete: 'postal-code', inputMode: 'numeric' },
 ]
+
+function AddressInput({ field, error, registration }: { field: FormField; error?: string; registration: UseFormRegisterReturn }) {
+  return <Field data-invalid={Boolean(error)}>
+    <FieldLabel htmlFor={`address-${field.name}`}>{field.label}</FieldLabel>
+    <Input id={`address-${field.name}`} autoComplete={field.autoComplete} inputMode={field.inputMode} aria-invalid={Boolean(error)} {...registration} />
+    <FieldError>{error}</FieldError>
+  </Field>
+}
 
 function AddressForm({ address, onCancel, onSaved, userId }: {
   address?: CustomerAddress
@@ -43,7 +58,8 @@ function AddressForm({ address, onCancel, onSaved, userId }: {
       onSaved()
     },
   })
-  const { register, handleSubmit, formState: { errors } } = useForm<AddressFormValues>({
+  const [manualLocality, setManualLocality] = useState(false)
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: address ? {
       label: address.label, recipientName: address.recipientName, phone: address.phone,
@@ -55,16 +71,29 @@ function AddressForm({ address, onCancel, onSaved, userId }: {
       subdistrict: '', district: '', province: '', postalCode: '',
     },
   })
+  const localityInvalid = Boolean(errors.province || errors.district || errors.subdistrict || errors.postalCode)
+  const handleLocalityError = useCallback(() => setManualLocality(true), [])
+
+  function handleLocalityChange(locality: Parameters<typeof checkoutAddressFields>[0]) {
+    const values = checkoutAddressFields(locality)
+    for (const field of ['province', 'district', 'subdistrict', 'postalCode'] as const) {
+      setValue(field, values[field], { shouldDirty: true, shouldValidate: true })
+    }
+  }
 
   return (
     <Card className="mb-6"><CardHeader><CardTitle>{address ? 'แก้ไขที่อยู่' : 'เพิ่มที่อยู่'}</CardTitle></CardHeader><CardContent>
       <form noValidate onSubmit={handleSubmit(values => mutation.mutate(values))}>
         <FieldGroup className="gap-5">
-          {fields.map(field => <Field key={field.name} data-invalid={Boolean(errors[field.name])}>
-            <FieldLabel htmlFor={`address-${field.name}`}>{field.label}</FieldLabel>
-            <Input id={`address-${field.name}`} autoComplete={field.autoComplete} inputMode={field.inputMode} aria-invalid={Boolean(errors[field.name])} {...register(field.name)} />
-            <FieldError>{errors[field.name]?.message}</FieldError>
-          </Field>)}
+          {fields.map(field => <AddressInput key={field.name} field={field} error={errors[field.name]?.message} registration={register(field.name)} />)}
+          {manualLocality ? <div className="grid gap-5 sm:grid-cols-2">
+            <p role="status" className="text-sm text-muted-foreground sm:col-span-2">โหลดรายการที่อยู่ไม่สำเร็จ กรุณากรอกข้อมูลเอง</p>
+            {localityFields.map(field => <AddressInput key={field.name} field={field} error={errors[field.name]?.message} registration={register(field.name)} />)}
+            <Button type="button" variant="outline" onClick={() => setManualLocality(false)} className="sm:col-span-2">ลองโหลดรายการที่อยู่อีกครั้ง</Button>
+          </div> : <Field data-invalid={localityInvalid}>
+            <ThaiAddressCascadeSelect defaultValue={checkoutAddressDefaultValue(address)} onValueChange={handleLocalityChange} onError={handleLocalityError} aria-invalid={localityInvalid} required />
+            {localityInvalid && <FieldError>กรุณาเลือกจังหวัด อำเภอ และตำบลให้ครบ</FieldError>}
+          </Field>}
           {mutation.isError && <p role="alert" className="text-sm text-destructive">บันทึกที่อยู่ไม่ได้ กรุณาลองใหม่</p>}
           <div className="flex flex-wrap gap-3"><Button type="submit" disabled={mutation.isPending}>บันทึกที่อยู่</Button><Button type="button" variant="outline" onClick={onCancel}>ยกเลิก</Button></div>
         </FieldGroup>

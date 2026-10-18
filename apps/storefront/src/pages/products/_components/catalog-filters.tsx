@@ -51,7 +51,7 @@ export function CatalogToolbar({ count, pending, fetching, failed }: { count: nu
   return <div className="mb-3 flex flex-col gap-2 @min-[900px]/catalog:mb-5 @min-[900px]/catalog:flex-row @min-[900px]/catalog:items-center @min-[900px]/catalog:gap-4">
     <Field className="@min-[900px]/catalog:min-w-0 @min-[900px]/catalog:max-w-sm @min-[900px]/catalog:flex-1">
       <FieldLabel htmlFor="product-search" className="sr-only">ค้นหาของอร่อย</FieldLabel>
-      <Input id="product-search" type="search" placeholder="ค้นหาสินค้า" className="h-11" value={filters.q ?? ''}
+      <Input id="product-search" type="search" placeholder="ค้นหาสินค้า" value={filters.q ?? ''}
         onChange={event => setParams(previous => updateCatalogParams(previous, 'q', event.target.value), { replace: true, preventScrollReset: true })} />
     </Field>
     <div className="flex min-h-11 items-center justify-between gap-2 @min-[900px]/catalog:ml-auto @min-[900px]/catalog:shrink-0 @min-[900px]/catalog:gap-4">
@@ -63,7 +63,7 @@ export function CatalogToolbar({ count, pending, fetching, failed }: { count: nu
         <Select items={sortOptions} value={filters.sort ?? 'newest'} onValueChange={value => {
           if (value) setParams(previous => updateCatalogParams(previous, 'sort', value), { preventScrollReset: true })
         }}>
-          <SelectTrigger aria-labelledby={sortLabelId} className="w-auto min-w-28 max-w-48 data-[size=default]:h-11"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-labelledby={sortLabelId} className="w-auto min-w-28 max-w-48"><SelectValue /></SelectTrigger>
           <SelectContent><SelectGroup>{sortOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </Field>

@@ -42,7 +42,7 @@ const edenTransport: StoreCartTransport = {
     return unwrapStoreCart(await api.store.cart.items({ variantId }).put({ quantity }))
   },
   async removeItem(variantId) {
-    return unwrapStoreCart(await api.store.cart.items({ variantId }).delete())
+    return unwrapStoreCart(await api.store.cart.items({ variantId }).delete({}))
   },
   async mergeGuest() {
     return unwrapStoreCart(await api.store.cart.merge.post({}))

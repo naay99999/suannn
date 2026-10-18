@@ -1,0 +1,48 @@
+# Production stack for Dokploy (Docker Compose app type).
+# Images are built and pushed by .github/workflows/release.yml.
+# Domains and TLS are configured in the Dokploy UI; see docs/deployment.md.
+
+services:
+  migrate:
+    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-migrate:${IMAGE_TAG:-main}
+    pull_policy: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?}
+    restart: 'no'
+
+  api:
+    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-api:${IMAGE_TAG:-main}
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 6767
+      DATABASE_URL: ${DATABASE_URL:?}
+      BETTER_AUTH_URL: ${API_URL:?}
+      STOREFRONT_URL: ${STOREFRONT_URL:?}
+      ADMIN_URL: ${ADMIN_URL:?}
+      CORS_ORIGINS: ${STOREFRONT_URL},${ADMIN_URL}
+      TRUSTED_PROXY_HEADERS: ${TRUSTED_PROXY_HEADERS:-x-real-ip}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
+      COMMERCE_SECRET: ${COMMERCE_SECRET:?}
+      RESEND_API_KEY: ${RESEND_API_KEY:?}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:?}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-}
+    expose:
+      - 6767
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 35s
+
+  web:
+    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-web:${IMAGE_TAG:-main}
+    pull_policy: always
+    expose:
+      - 4183
+      - 4184
+    restart: unless-stopped

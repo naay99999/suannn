@@ -64,7 +64,7 @@ export function Component() {
         <div className="catalog-reveal py-2 lg:py-5">
           <Badge variant="secondary">{storeCategoryLabels[item.category]}</Badge>
           {item.englishName && <p className="mt-6 text-xs tracking-widest text-muted-foreground">{item.englishName}</p>}
-          <h1 id="product-title" className="mt-3 max-w-3xl text-[clamp(2rem,3.2vw,3.25rem)] font-semibold leading-[1.4] tracking-tight">{item.name}</h1>
+          <h1 id="product-title" className="mt-3 max-w-3xl text-title font-semibold tracking-tight">{item.name}</h1>
           {selectedVariant && <>
             <div className="my-7 flex flex-wrap items-baseline gap-3">
               <span className="text-4xl font-semibold text-primary-ink">{formatStorePrice(selectedVariant.priceSatang)}</span>
@@ -72,7 +72,7 @@ export function Component() {
             </div>
             {item.variants.length > 1 && <Field className="mb-5">
               <FieldLabel htmlFor="product-variant">ตัวเลือกสินค้า</FieldLabel>
-              <select id="product-variant" className="h-11 rounded-xl border bg-background px-3" value={selectedVariant.id} onChange={event => setSelectedVariantId(event.target.value)}>
+              <select id="product-variant" className="h-(--field-h) rounded-field border bg-background px-3" value={selectedVariant.id} onChange={event => setSelectedVariantId(event.target.value)}>
                 {item.variants.map(variant => <option key={variant.id} value={variant.id}>{variant.name} · {formatStorePrice(variant.priceSatang)} / {variant.unit}{variant.canPurchase ? '' : ' · สั่งซื้อไม่ได้'}</option>)}
               </select>
             </Field>}

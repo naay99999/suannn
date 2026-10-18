@@ -185,7 +185,7 @@ export function ProductGalleryViewer({
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className="absolute left-2 top-1/2 z-10 size-11 -translate-y-1/2 rounded-full bg-black/35 text-white hover:bg-black/65 hover:text-white sm:left-5"
+                className="absolute left-2 top-1/2 z-10 size-11 -translate-y-1/2 bg-black/35 text-white hover:bg-black/65 hover:text-white sm:left-5"
                 aria-label="ภาพก่อนหน้า"
                 disabled={activeIndex === 0}
                 onClick={() => changeSlide(activeIndex - 1)}
@@ -195,7 +195,7 @@ export function ProductGalleryViewer({
               <Button
                 variant="ghost"
                 size="icon-lg"
-                className="absolute right-2 top-1/2 z-10 size-11 -translate-y-1/2 rounded-full bg-black/35 text-white hover:bg-black/65 hover:text-white sm:right-5"
+                className="absolute right-2 top-1/2 z-10 size-11 -translate-y-1/2 bg-black/35 text-white hover:bg-black/65 hover:text-white sm:right-5"
                 aria-label="ภาพถัดไป"
                 disabled={activeIndex === product.images.length - 1}
                 onClick={() => changeSlide(activeIndex + 1)}

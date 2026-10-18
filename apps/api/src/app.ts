@@ -21,6 +21,7 @@ import { createStripeWebhookModule } from './modules/payments/stripe'
 import { createAdminOrdersModule, createStoreOrdersModule } from './modules/orders'
 import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
 import { createAdminReceiptSettingsModule } from './modules/receipts'
+import { createAdminStoreAnnouncementModule, createStoreAnnouncementModule } from './modules/store-announcement'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
@@ -43,6 +44,7 @@ import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { ReceiptSettingsService } from './modules/receipts/settings'
+import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import type { FarmService } from './modules/farms/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
@@ -78,6 +80,7 @@ export interface AppDependencies {
   orders: OrderService
   commerceSettings: CommerceSettingsService
   receiptSettings: ReceiptSettingsService
+  storeAnnouncement: StoreAnnouncementService
   staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
@@ -134,6 +137,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
     .use(createStoreFarmsModule(dependencies.farms))
+    .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
     .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
@@ -142,6 +146,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(new Elysia({ name: 'admin-checkout-and-receipt-settings' })
       .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
       .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))
+    .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

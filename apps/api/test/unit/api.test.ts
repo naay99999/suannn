@@ -38,6 +38,8 @@ import { CartService } from '../../src/modules/cart/service'
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { ReceiptSettingsRepository, ReceiptSettingsService } from '../../src/modules/receipts/settings'
+import { StoreAnnouncementRepository } from '../../src/modules/store-announcement/repository'
+import { StoreAnnouncementService } from '../../src/modules/store-announcement/service'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -55,6 +57,7 @@ let databaseIsReady = true
 const inventoryReadRepository = new InventoryReadRepository(database.db)
 const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
+const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
 const app = await createApp(config, {
   auth,
   audit,
@@ -107,6 +110,7 @@ const app = await createApp(config, {
   orders: new OrderService(database.db, config.commerceSecret),
   commerceSettings,
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
+  storeAnnouncement,
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -219,6 +223,7 @@ describe('API routes', () => {
       'Customer Account',
       'Store Products',
       'Store Farms',
+      'Store Announcement',
       'Store Cart',
       'Store Checkout',
       'Payments',
@@ -226,6 +231,7 @@ describe('API routes', () => {
       'Admin Orders',
       'Admin Commerce Settings',
       'Admin Receipt Settings',
+      'Admin Store Announcement',
       'Admin Products',
       'Admin Farms',
       'Admin Inventory',
@@ -375,7 +381,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(114)
+    expect(operations).toHaveLength(117)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

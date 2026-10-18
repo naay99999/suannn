@@ -41,6 +41,7 @@
   },
   "exports": {
     "./globals.css": "./src/styles/globals.css",
+    "./storefront.css": "./src/styles/storefront.css",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts"

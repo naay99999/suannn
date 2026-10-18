@@ -17,7 +17,7 @@ export function AccountPageHeading({ title, description, action }: { title: stri
 }
 
 export function OrderStatus({ status }: { status: CustomerOrder['status'] }) {
-  return <Badge variant={status === 'delivered' ? 'secondary' : 'outline'} className={cn('rounded-full', status === 'delivered' && 'text-primary-ink')}>{orderStatusLabels[status]}</Badge>
+  return <Badge variant={status === 'delivered' ? 'secondary' : 'outline'} className={cn(status === 'delivered' && 'text-primary-ink')}>{orderStatusLabels[status]}</Badge>
 }
 
 export interface AddressDisplay {

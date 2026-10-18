@@ -1,5 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { ArrowUpRight01Icon } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { FarmCard } from '@/components/farms/farm-card'
@@ -22,19 +24,21 @@ export function Component() {
       <section className="page-width grid items-center gap-8 pb-16 pt-4 md:grid-cols-[1.1fr_0.9fr] md:gap-14 md:pb-24 md:pt-10" aria-labelledby="farms-title">
         <div>
           <p className="mb-5 text-sm font-medium text-primary-ink">คนปลูก · สถานที่ · เรื่องราว</p>
-          <h1 id="farms-title" className="max-w-6xl text-[clamp(2.6rem,6vw,5.4rem)] font-semibold leading-[1.3] tracking-tight" style={{ fontFamily: "'Cabinet Grotesk', 'Satoshi', 'Noto Sans Thai Variable', var(--font-family-brand), sans-serif" }}>
+          <h1 id="farms-title" className="max-w-6xl text-display font-semibold tracking-tight">
             รู้จักสวนที่อยู่เบื้องหลังผลผลิต
           </h1>
           <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground md:text-lg">
             ทำความรู้จักเกษตรกรและแหล่งปลูกของสินค้าที่คัดสรรจากหลายสวน ข้อมูลนี้แสดงระดับสินค้า ยังไม่ระบุสวนของล็อตที่จัดส่ง
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link className={buttonVariants({ size: 'lg' })} to="/products">เลือกดูสินค้า</Link>
-            <a className={buttonVariants({ size: 'lg', variant: 'outline' })} href="#farm-list">รู้จักสวน</a>
+            <Link className={buttonVariants({ size: 'storefront' })} to="/products">
+              เลือกดูสินค้า <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" />
+            </Link>
+            <a className={buttonVariants({ size: 'storefront', variant: 'outline' })} href="#farm-list">รู้จักสวน</a>
           </div>
         </div>
         <div className="relative md:-mr-12">
-          <FarmImage src={lead?.coverImageUrl ?? '/images/hero.jpg'} alt={lead?.coverImageAlt ?? 'ภาพประกอบบรรยากาศสวน'} demo={lead?.isDemo} loading="eager" className="aspect-[5/4] rounded-[2rem] shadow-xl shadow-primary/10" />
+          <FarmImage src={lead?.coverImageUrl ?? '/images/hero.jpg'} alt={lead?.coverImageAlt ?? 'ภาพประกอบบรรยากาศสวน'} demo={lead?.isDemo} loading="eager" className="aspect-[5/4] rounded-4xl shadow-xl shadow-primary/10" />
           <p className="mt-3 text-right text-xs text-muted-foreground">ภาพและข้อมูลสวนสาธิตจะแสดงป้ายกำกับไว้เสมอ</p>
         </div>
       </section>

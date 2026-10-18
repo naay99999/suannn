@@ -26,11 +26,11 @@ export function createFarmsApi(client: ApiClient = api) {
     update: (id: string, input: FarmUpdateInput) => apiRequest(async () =>
       apiData(await client.admin.farms({ id }).patch(input)) as Farm),
     publish: (id: string) => apiRequest(async () =>
-      apiData(await client.admin.farms({ id }).publish.post()) as Farm),
+      apiData(await client.admin.farms({ id }).publish.post({})) as Farm),
     unpublish: (id: string) => apiRequest(async () =>
-      apiData(await client.admin.farms({ id }).unpublish.post()) as Farm),
+      apiData(await client.admin.farms({ id }).unpublish.post({})) as Farm),
     archive: (id: string) => apiRequest(async () =>
-      apiData(await client.admin.farms({ id }).archive.post()) as Farm),
+      apiData(await client.admin.farms({ id }).archive.post({})) as Farm),
   }
 }
 
@@ -41,7 +41,7 @@ export function farmStatusLabel(status: FarmStatus) {
 }
 
 export function farmStatusVariant(status: FarmStatus) {
-  return status === 'published' ? 'default' as const : status === 'draft' ? 'secondary' as const : 'outline' as const
+  return status === 'published' ? 'success' as const : status === 'draft' ? 'warning' as const : 'outline' as const
 }
 
 export function farmPublicationChecks(farm: Farm) {

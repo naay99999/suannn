@@ -113,7 +113,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-3xl font-semibold tracking-tight">{product.name}</h1>
-            <Badge variant={product.status === 'published' ? 'default' : product.status === 'draft' ? 'secondary' : 'outline'}>{statusLabel(product.status)}</Badge>
+            <Badge variant={product.status === 'published' ? 'success' : product.status === 'draft' ? 'warning' : 'outline'}>{statusLabel(product.status)}</Badge>
           </div>
           {product.englishName && <p className="text-muted-foreground">{product.englishName}</p>}
           <p className="text-sm text-muted-foreground">{categoryLabel(product.category)} · {product.slug}</p>
@@ -180,7 +180,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
                     <TableCell>{variant.name}</TableCell>
                     <TableCell>{variant.unit}</TableCell>
                     <TableCell className="text-right">{formatMoney(variant.priceSatang)}</TableCell>
-                    <TableCell><Badge variant={variant.archivedAt ? 'outline' : variant.salesEnabled ? 'default' : 'secondary'}>
+                    <TableCell><Badge variant={variant.archivedAt ? 'outline' : variant.salesEnabled ? 'success' : 'secondary'}>
                       {variant.archivedAt ? 'เก็บถาวร' : variant.salesEnabled ? 'เปิดขาย' : 'ปิดขาย'}
                     </Badge></TableCell>
                     <TableCell>{variant.displayOrder}</TableCell>

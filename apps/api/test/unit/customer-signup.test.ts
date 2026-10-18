@@ -44,4 +44,39 @@ describe('customer signup limits and failure handling', () => {
     })
     expect(limiterCalls).toBe(0)
   })
+
+  it('reports the store verification policy without depending on the address', async () => {
+    const responses = []
+    for (const required of [true, false]) {
+      const service = new CustomerSignupService({
+        auth: {} as never,
+        claims: {} as never,
+        limiter: { consume: async () => ({ allowed: false, remaining: 0, retryAfterSeconds: 60, resetAt: new Date() }) },
+        audit: {} as AuditService,
+        emailVerificationRequired: async () => required,
+      })
+      responses.push(await service.signupCustomer({
+        email: 'policy@example.com', password: 'correct horse battery staple', name: 'Test', ip: '192.0.2.10',
+      }))
+    }
+    expect(responses).toEqual([
+      { accepted: true, next: 'verify-email' },
+      { accepted: true, next: 'sign-in' },
+    ])
+  })
+
+  it('fails closed with a generic 503 when the verification policy cannot be read', async () => {
+    let limiterCalls = 0
+    const service = new CustomerSignupService({
+      auth: {} as never,
+      claims: {} as never,
+      limiter: { consume: async () => { limiterCalls += 1; throw new Error('should not run') } },
+      audit: {} as AuditService,
+      emailVerificationRequired: async () => { throw new Error('database down') },
+    })
+    await expect(service.signupCustomer({
+      email: 'policy@example.com', password: 'correct horse battery staple', name: 'Test', ip: '192.0.2.10',
+    })).rejects.toMatchObject({ code: 'IDENTITY_UNAVAILABLE' })
+    expect(limiterCalls).toBe(0)
+  })
 })

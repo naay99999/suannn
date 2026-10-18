@@ -43,7 +43,7 @@ const columns: ColumnDef<ServerDataTableFeatures, ProductSummary>[] = column.col
     cell: ({ getValue }) => {
       const status = getValue()
       const label = status === 'published' ? 'เผยแพร่แล้ว' : status === 'draft' ? 'ร่าง' : 'เก็บถาวร'
-      return <Badge variant={status === 'published' ? 'default' : status === 'draft' ? 'secondary' : 'outline'}>{label}</Badge>
+      return <Badge variant={status === 'published' ? 'success' : status === 'draft' ? 'warning' : 'outline'}>{label}</Badge>
     },
   }),
   column.accessor('updatedAt', {

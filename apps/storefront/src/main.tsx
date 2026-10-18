@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@workspace/ui/globals.css'
+import '@workspace/ui/storefront.css'
 import { Toaster } from '@workspace/ui/components/toast'
 import { TooltipProvider } from '@workspace/ui/components/tooltip'
 import { RouterProvider } from 'react-router'

@@ -14,7 +14,7 @@ export function CartTrigger() {
   const { cart, open, setOpen, triggerRef } = useCart()
   const { count } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
   return (
-    <Button ref={triggerRef} variant="outline" size="icon-lg" className="relative rounded-full" aria-label={`เปิดตะกร้า ${count} ชิ้น`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+    <Button ref={triggerRef} variant="outline" size="icon-lg" className="relative" aria-label={`เปิดตะกร้า ${count} ชิ้น`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <HugeiconsIcon icon={ShoppingBag01Icon} />
       {count > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">{count > 99 ? '99+' : count}</span>}
     </Button>
@@ -75,7 +75,7 @@ export function SideCart() {
         {canCheckout
           ? <Button render={<Link to="/checkout" />} nativeButton={false} size="storefront" onClick={() => setOpen(false)}>ตรวจสอบและชำระเงิน</Button>
           : <Button size="storefront" disabled>ตรวจสอบและชำระเงิน</Button>}
-        <SheetClose render={<Button variant="outline" />}>เลือกสินค้าต่อ</SheetClose>
+        <SheetClose render={<Button variant="outline" size="storefront" />}>เลือกสินค้าต่อ</SheetClose>
       </SheetFooter>}
     </SheetContent>
   )

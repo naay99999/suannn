@@ -15,6 +15,9 @@ colors:
   fine-border: "#e2e9e1"
   field-border: "#dce5dc"
   error: "#c93838"
+  success-green: "#15803d"
+  warning-amber: "#b45309"
+  info-blue: "#1d6fa5"
   sidebar-surface: "#f8fbf7"
   night-canvas: "#0d1911"
   night-card: "#14251a"
@@ -147,6 +150,7 @@ components:
 - **เส้นบาง** (`fine-border`) และ **เส้นช่องกรอก** (`field-border`): ขอบคอมโพเนนต์และเส้นแบ่ง
 - **พื้น sidebar** (`sidebar-surface`): ชั้นนำทางของ admin
 - **แดงแจ้งข้อผิดพลาด** (`error`): สถานะผิดพลาดและข้อมูลที่ต้องระวัง
+- **สีสถานะ** (`success-green`, `warning-amber`, `info-blue` → role `success`, `warning`, `info`): ใช้กับ Badge และกล่องแจ้งเตือนสถานะ โดยเฉพาะใน admin ใช้พื้นจาง (`/10`) กับตัวอักษรสีเต็ม ไม่ใช้เป็นสีตกแต่ง
 - **ชุดกลางคืน** (`night-canvas`, `night-card`, `night-ink`, `night-quiet-ink`, `night-border`, `night-green-ink`): คู่สีของ admin ในโหมดมืด และฐานสีที่อาจนำมาใช้กับช่วงเล่าเรื่องพื้นเข้มของ storefront เมื่อทำคอมโพเนนต์เฉพาะช่วงนั้น
 
 **The One Green Rule.** ให้เขียวสวนสดนำสายตาไปยังการกระทำและข้อมูลสำคัญ ส่วนพื้นและข้อความทั่วไปใช้สีที่สงบกว่า
@@ -190,7 +194,7 @@ Admin ใช้ sidebar กับพื้นที่เนื้อหาท�
 
 ทิศทางที่ยืนยันแล้วคือผิวแบน เรียบ และมีความเป็นกระจกโดยไม่ใช้เงา พื้นสีสว่างและพื้นเข้มสร้างลำดับชั้นด้วยความต่างของโทน ไม่ใช้ gradient เรืองแสงเป็นพื้นหลังมาตรฐาน กระจกโปร่งใช้เฉพาะชั้นที่ซ้อนทับจริง เช่น header หรือป้ายสั้นบนภาพ; การ์ดสินค้าและช่วงพื้นเข้มเป็นผิวทึบอ่านง่าย
 
-โค้ดปัจจุบันยังมี `shadow-xs` ใน shared components, `box-shadow` บนชั้นกระจก และแสงฟุ้งแบบ radial ในบาง section สิ่งเหล่านี้เป็นความต่างระหว่าง implementation กับทิศทางที่ยืนยันครั้งนี้ ไม่ใช่รูปแบบให้คัดลอกไปใช้ต่อ
+โค้ดปัจจุบันยังมี `shadow-xs` ใน `Textarea`, `box-shadow` บนชั้นกระจก และแสงฟุ้งแบบ radial ในบาง section สิ่งเหล่านี้เป็นความต่างระหว่าง implementation กับทิศทางที่ยืนยันครั้งนี้ ไม่ใช่รูปแบบให้คัดลอกไปใช้ต่อ
 
 **The Glass Without Shadow Rule.** ผิวกระจกใช้ความโปร่งและ blur เพื่อสร้างชั้น หลีกเลี่ยงเงาทุกระดับในการออกแบบใหม่
 
@@ -200,21 +204,37 @@ Admin ใช้ sidebar กับพื้นที่เนื้อหาท�
 
 โน้ตกระดาษที่อ้างอิงจากภาพใช้รูปสี่เหลี่ยมแบนและอาจเอียงหรือซ้อนกันเล็กน้อยในช่วงเล่าเรื่องหนึ่งช่วงเท่านั้น ความรู้สึกทำด้วยมือมาจากการจัดวางและตัวอักษร ไม่ใช่เงากระดาษหรือสติกเกอร์กระจายทั่วหน้า
 
+## App Profiles
+
+ทั้งสองแอปใช้ token สี ตัวอักษร และคอมโพเนนต์ชุดเดียวกัน ความต่างของรูปทรงและขนาดมาจาก profile token ใน `packages/ui/src/styles/`: ค่าเริ่มต้นใน `globals.css` คือ profile กระชับของ admin และ `storefront.css` override ภายใต้ `[data-app='storefront']` ซึ่งตั้งไว้ที่ `<html>` ของ storefront เพื่อให้ dialog, sheet และ popover ที่ render นอก root ได้ค่าเดียวกัน
+
+| Token (utility) | Admin | Storefront |
+|---|---|---|
+| `--control-radius` (`rounded-control`) ปุ่ม, toggle | `9.6px` | pill |
+| `--control-radius-xs` (`rounded-control-xs`) | `8px` | pill |
+| `--control-h` / `--control-h-lg` (`h-(--control-h)`) | `36px` / `40px` | `44px` / `48px` |
+| `--field-radius` (`rounded-field`) input, select, textarea | `9.6px` | `16.8px` |
+| `--field-h` (`h-(--field-h)`) | `36px` | `48px` |
+| `--surface-radius` (`rounded-surface`) card | `16.8px` | `26.4px` |
+| `--type-title-size` (`text-title`) หัวข้อหน้า | `1.875rem` | `clamp(2rem, 3.2vw, 3.25rem)` |
+
+**The Profile Rule.** อย่าเขียน `rounded-full`, `h-11`, `h-12` หรือ `clamp()` ทับ shared component รายจุด ให้ปรับที่ profile token แทน; CTA หลักของ storefront ใช้ `size="storefront"` และหัวข้อใช้ `text-display`, `text-headline`, `text-title`
+
 ## Components
 
 ### Buttons
 - ปุ่มร่วมสูง `36px` ตามค่าเริ่มต้น; มีขนาด `24`, `32`, `40px` และขนาดไอคอนที่สอดคล้องกัน
 - ปุ่มหลักใช้เขียวสวนสดกับหมึกบนสีเขียว ปุ่มรองใช้ผิวใบไม้อ่อน ปุ่ม outline ใช้พื้นหลักกับขอบบาง ปุ่ม ghost แสดงพื้นเมื่อ hover
-- Storefront ขยายปุ่ม CTA เป็น `44–48px` และใช้ทรงแคปซูล; admin คงรูปทรงและความหนาแน่นของ shared UI
+- ความสูงและมุมมาจาก profile: admin `36px` มุม `9.6px`; storefront `44px` ทรงแคปซูลทุกปุ่ม และ CTA หลักใช้ `size="storefront"` (`48px`)
 - สถานะ focus มองเห็นได้ด้วย ring สีเขียว; สถานะ disabled ลด opacity และหยุดการโต้ตอบ
 
 ### Badges and Filters
-- Badge สูง `20px` มุมแคปซูล ข้อความเล็กและกระชับ; มีแบบหลัก รอง outline และแจ้งข้อผิดพลาด
+- Badge สูง `20px` มุมแคปซูล ข้อความเล็กและกระชับ; มีแบบหลัก รอง outline แจ้งข้อผิดพลาด และสถานะ `success` / `warning` / `info`
 - กลุ่มตัวกรองสินค้าบน storefront วางบนผิวสีเบา มีขอบบาง และทำรายการที่เลือกให้เด่นโดยไม่สร้างสีเน้นใหม่
 - ตัวกรองต้องแสดงตัวเลือกที่เลือกด้วยความต่างของพื้นและข้อความชัดเจน พร้อม keyboard focus; บนมือถือห่อบรรทัดหรือเลื่อนแนวนอนโดยไม่ตัดชื่อหมวดหมู่
 
 ### Cards and Product Tiles
-- Shared `Card` ใช้พื้นการ์ด มุม `16.8px` และเส้นกรอบโปร่ง พร้อม padding `24px` หรือ `16px` ในขนาดเล็ก; โค้ดปัจจุบันยังมี `shadow-xs` ที่ควรถอดเมื่อปรับ implementation ให้ตรงกับทิศทางนี้
+- Shared `Card` ใช้พื้นการ์ด มุม `rounded-surface` (admin `16.8px`, storefront `26.4px`) และเส้นกรอบโปร่ง ไม่มีเงา พร้อม padding `24px` หรือ `16px` ในขนาดเล็ก
 - Product tile ให้ภาพเป็นพระเอกในกรอบ `24px` ที่มีขนาดสม่ำเสมอกัน; เวทีภาพมีพื้นเรียบและพื้นที่ว่างพอให้รูปทรงผลไม้ชัด ข้อความ ชื่อ ราคา และสถานะอยู่ด้านล่าง ไม่วางข้อความยาวทับภาพ
 - Story cards ใช้ผิวกระจกโปร่งกับมุม `28px` เฉพาะพื้นที่เล่าเรื่อง โดยไม่มีเงาตามทิศทางที่ยืนยันแล้ว
 
@@ -229,7 +249,7 @@ Admin ใช้ sidebar กับพื้นที่เนื้อหาท�
 - ช่วงพื้นเข้มหนึ่งช่วงอาจใช้โน้ตสีอ่อนเพื่อเล่าปัญหาหรือขั้นตอน โดยเนื้อหาต้องอ่านได้เมื่อโน้ตเรียงเป็นคอลัมน์เดียวบนมือถือ
 
 ### Inputs and Fields
-- Input สูง `36px` มีขอบ `field-border` มุม `9.6px` และ padding แนวนอน `10px`
+- Input, Select และ Textarea ใช้ `rounded-field` และ `h-(--field-h)`: admin สูง `36px` มุม `9.6px`; storefront สูง `48px` มุม `16.8px` (ช่องกรอกไม่เป็นแคปซูล เพื่อแยกจากปุ่ม) ขอบ `field-border` padding แนวนอน `10px`
 - Focus เปลี่ยนขอบและแสดง ring; invalid ใช้สี destructive; disabled ลด opacity และแสดง cursor ที่เหมาะสม
 
 ### Navigation

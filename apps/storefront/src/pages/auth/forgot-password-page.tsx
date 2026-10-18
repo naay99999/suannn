@@ -40,7 +40,7 @@ export function Component() {
       {sent ? <div role="status"><h2 className="text-xl font-semibold">ตรวจอีเมลของคุณ</h2><p className="mt-3 leading-7 text-muted-foreground">หากอีเมลนี้มีบัญชีอยู่ เราจะส่งลิงก์ตั้งรหัสผ่านใหม่ให้</p></div> : (
         <form noValidate onSubmit={handleSubmit(submit)} aria-busy={pending}>
           <FieldGroup className="gap-5">
-            <Field data-invalid={Boolean(errors.email)}><FieldLabel htmlFor="recovery-email">อีเมล</FieldLabel><Input id="recovery-email" className="h-12 text-base md:text-base" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'recovery-email-error' : undefined} {...register('email')} /><FieldError id="recovery-email-error">{errors.email?.message}</FieldError></Field>
+            <Field data-invalid={Boolean(errors.email)}><FieldLabel htmlFor="recovery-email">อีเมล</FieldLabel><Input id="recovery-email" className="text-base md:text-base" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'recovery-email-error' : undefined} {...register('email')} /><FieldError id="recovery-email-error">{errors.email?.message}</FieldError></Field>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังส่ง...' : 'ส่งลิงก์ตั้งรหัสผ่าน'}</Button>
           </FieldGroup>

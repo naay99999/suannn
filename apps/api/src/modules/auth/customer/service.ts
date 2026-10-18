@@ -23,9 +23,9 @@ interface SignupDependencies {
   dummyPasswordHash?: (password: string) => Promise<unknown>
   audit: AuditService
   requireTrustedClientIp?: boolean
+  emailVerificationRequired?(): Promise<boolean>
+  verificationCallbackUrl?: string
 }
-
-const publicResponse = { accepted: true, next: 'sign-in' } as const
 
 export class CustomerSignupService {
   private readonly dummyPasswordHash: (password: string) => Promise<unknown>
@@ -41,6 +41,20 @@ export class CustomerSignupService {
       throw new DomainError('CLIENT_IP_UNAVAILABLE')
     }
     const resolvedIp = ip || 'unknown'
+
+    // `next` depends only on the store policy, never on whether the address already has an account.
+    let publicResponse: { accepted: true; next: 'sign-in' | 'verify-email' }
+    try {
+      const verificationRequired = await (this.dependencies.emailVerificationRequired?.() ?? Promise.resolve(false))
+      publicResponse = { accepted: true, next: verificationRequired ? 'verify-email' : 'sign-in' }
+    } catch (error) {
+      console.error(JSON.stringify({
+        level: 'error', code: 'CUSTOMER_SIGNUP_POLICY_FAILED',
+        requestId: command.requestId,
+        errorCategory: error instanceof Error ? error.name : 'UnknownError',
+      }))
+      throw new DomainError('IDENTITY_UNAVAILABLE')
+    }
 
     let ipBudget: RateLimitResult
     let emailBudget: RateLimitResult
@@ -87,7 +101,10 @@ export class CustomerSignupService {
       let created: { user: { id: string } } | undefined
       try {
         created = await this.dependencies.auth.api.signUpEmail({
-          body: { email, password: command.password, name: command.name },
+          body: {
+            email, password: command.password, name: command.name,
+            ...(this.dependencies.verificationCallbackUrl ? { callbackURL: this.dependencies.verificationCallbackUrl } : {}),
+          },
         })
       } catch (error) {
         // Better Auth may have committed the user before a downstream delivery failure.

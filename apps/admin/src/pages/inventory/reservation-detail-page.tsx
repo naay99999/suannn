@@ -162,7 +162,7 @@ function ReservationDetail({ reservationId }: { reservationId: string }) {
         <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/inventory/reservations">กลับไปค้นหาการจอง</Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">รายละเอียดการจอง</h1>
-          <Badge variant={reservation.status === 'active' ? 'secondary' : reservation.status === 'expired' || reservation.status === 'cancelled' ? 'destructive' : 'outline'}>{statusLabels[reservation.status]}</Badge>
+          <Badge variant={reservation.status === 'active' ? 'info' : reservation.status === 'expired' || reservation.status === 'cancelled' ? 'destructive' : 'outline'}>{statusLabels[reservation.status]}</Badge>
         </div>
         <InventoryNavigation />
       </div>
@@ -184,7 +184,7 @@ function ReservationDetail({ reservationId }: { reservationId: string }) {
           <dd className="text-sm">{reservation.warehouseId}</dd>
         </dl>
       </section>
-      {active && expiredLocally && <p aria-live="polite" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="status">ถึงเวลาหมดอายุตามข้อมูลเซิร์ฟเวอร์แล้ว กำลังตรวจสอบสถานะล่าสุดและปิดคำสั่งชั่วคราว</p>}
+      {active && expiredLocally && <p aria-live="polite" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm" role="status">ถึงเวลาหมดอายุตามข้อมูลเซิร์ฟเวอร์แล้ว กำลังตรวจสอบสถานะล่าสุดและปิดคำสั่งชั่วคราว</p>}
       {!canAdjust && <p className="text-sm text-muted-foreground" role="status">คุณมีสิทธิ์ดูข้อมูล แต่ไม่มีสิทธิ์ยืนยันหรือปล่อยการจอง</p>}
       {canAdjust && active && <div className="flex flex-wrap gap-2">
         <Button disabled={!canSubmitAction} onClick={() => requestConfirmation('confirm')} type="button">ยืนยันและตัดสต็อก</Button>

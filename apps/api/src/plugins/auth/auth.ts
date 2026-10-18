@@ -34,6 +34,7 @@ export interface AuthDependencies {
   emailLogger?: EmailDeliveryLogger
   audit?: AuditService
   staffMfaRequired?(): Promise<boolean>
+  customerEmailVerificationRequired?(): Promise<boolean>
 }
 
 const backupCodeAuditContext = new AsyncLocalStorage<{ userId: string; context: AuditContext }>()
@@ -107,12 +108,22 @@ export function createAuth(
       session: {
         create: {
           async before(newSession) {
-            const [account] = await db.select({ accountType: schema.user.accountType })
+            const [account] = await db.select({
+              accountType: schema.user.accountType,
+              emailVerified: schema.user.emailVerified,
+            })
               .from(schema.user)
               .where(eq(schema.user.id, newSession.userId))
               .limit(1)
 
             if (account?.accountType !== 'staff') {
+              if (account && !account.emailVerified
+                && await (dependencies.customerEmailVerificationRequired?.() ?? Promise.resolve(false))) {
+                throw new APIError('FORBIDDEN', {
+                  code: 'EMAIL_NOT_VERIFIED',
+                  message: 'Email not verified',
+                })
+              }
               return { data: newSession }
             }
 

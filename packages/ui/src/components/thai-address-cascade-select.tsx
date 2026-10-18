@@ -99,7 +99,7 @@ export function ThaiAddressCascadeSelect({
           (label) => (
             <div key={label} className="flex flex-col gap-1.5">
               <Label className={labelClassName}>{label}</Label>
-              <Button type="button" variant="outline" disabled className={cn('w-full justify-start font-normal', triggerClassName)}>
+              <Button type="button" variant="outline" disabled className={cn('h-(--field-h) w-full justify-start rounded-field font-normal', triggerClassName)}>
                 {resolvedTexts.loadingText}
               </Button>
             </div>

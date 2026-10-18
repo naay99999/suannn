@@ -17,6 +17,6 @@ export const customerAuthModels = {
   }, { additionalProperties: false }),
   'customerAuth.signupResponse': t.Object({
     accepted: t.Literal(true),
-    next: t.Literal('sign-in'),
+    next: t.Union([t.Literal('sign-in'), t.Literal('verify-email')]),
   }),
 }

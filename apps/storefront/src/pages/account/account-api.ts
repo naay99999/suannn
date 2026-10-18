@@ -68,7 +68,7 @@ export async function updateAddress(id: string, input: Partial<AddressInput>) {
 }
 
 export async function removeAddress(id: string) {
-  return unwrapAccountResult(await api.customer.addresses({ id }).delete())
+  return unwrapAccountResult(await api.customer.addresses({ id }).delete({}))
 }
 
 export async function setDefaultAddress(id: string, kind: 'shipping' | 'billing') {

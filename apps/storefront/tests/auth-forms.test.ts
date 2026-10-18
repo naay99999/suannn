@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { forgotPasswordSchema, resetPasswordSchema, signInSchema, signUpSchema } from '../src/pages/auth/auth-schemas'
-import { registrationSuccessMessage } from '../src/pages/auth/auth-result'
+import { registrationResultContent } from '../src/pages/auth/auth-result'
 
 const valid = {
   name: '  มะลิ ใจดี  ', email: 'mali@example.com',
@@ -27,10 +27,13 @@ test('enforces API password bounds and confirmation', () => {
   if (!mismatch.success) expect(mismatch.error.issues[0]?.path).toEqual(['confirmPassword'])
 })
 
-test('uses one registration result independent of whether an address exists', () => {
-  const accepted = { accepted: true, next: 'sign-in' } as const
-  expect(registrationSuccessMessage(accepted)).toContain('หากอีเมลนี้ใช้ลงทะเบียนได้')
-  expect(registrationSuccessMessage(accepted)).not.toMatch(/สร้างบัญชีแล้ว|ลงทะเบียนสำเร็จ/)
+test('uses registration results that never confirm whether an address exists', () => {
+  for (const next of ['sign-in', 'verify-email'] as const) {
+    const { title, message } = registrationResultContent({ accepted: true, next })
+    expect(message).toContain('หากอีเมลนี้ใช้ลงทะเบียนได้')
+    expect(`${title} ${message}`).not.toMatch(/สร้างบัญชีแล้ว|ลงทะเบียนสำเร็จ/)
+  }
+  expect(registrationResultContent({ accepted: true, next: 'verify-email' }).message).toContain('ยืนยันอีเมล')
 })
 
 test('distinguishes missing confirmation from a password mismatch', () => {

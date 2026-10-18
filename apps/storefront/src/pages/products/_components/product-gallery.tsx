@@ -55,12 +55,12 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
   }
 
   if (gallery.images.length === 0) {
-    return <ProductGalleryImage src={null} alt={product.name} failed onImageError={markImageFailed} width={1254} height={1254} className="aspect-square size-full rounded-[1.5rem] md:rounded-[2rem]" />
+    return <ProductGalleryImage src={null} alt={product.name} failed onImageError={markImageFailed} width={1254} height={1254} className="aspect-square size-full rounded-3xl md:rounded-4xl" />
   }
 
   return (
     <div role="group" aria-label={`ภาพสินค้า: ${product.name}`} className="product-gallery catalog-reveal min-w-0">
-      <div className="relative overflow-hidden rounded-[1.5rem] bg-muted md:rounded-[2rem]">
+      <div className="relative overflow-hidden rounded-3xl bg-muted md:rounded-4xl">
         <Swiper
           modules={[A11y]}
           slidesPerView={1}
@@ -117,7 +117,7 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
             <Button
               variant="ghost"
               size="icon-lg"
-              className="absolute left-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 rounded-full bg-background/85 md:grid"
+              className="absolute left-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 bg-background/85 md:grid"
               aria-label="ภาพก่อนหน้า"
               disabled={activeIndex === 0}
               onClick={() => selectImage(activeIndex - 1)}
@@ -127,7 +127,7 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
             <Button
               variant="ghost"
               size="icon-lg"
-              className="absolute right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 rounded-full bg-background/85 md:grid"
+              className="absolute right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 bg-background/85 md:grid"
               aria-label="ภาพถัดไป"
               disabled={activeIndex === gallery.images.length - 1}
               onClick={() => selectImage(activeIndex + 1)}

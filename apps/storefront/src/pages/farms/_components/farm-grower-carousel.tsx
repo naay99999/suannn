@@ -25,8 +25,8 @@ export function FarmGrowerCarousel({ farms }: { farms: StoreFarmSummary[] }) {
         {location && <p className="mt-2 text-sm text-muted-foreground">{location}</p>}
         {active.summary && <p className="mt-5 max-w-xl text-sm leading-8 text-muted-foreground">{active.summary}</p>}
         <div className="mt-7 flex items-center gap-3">
-          <Button variant="outline" size="icon-lg" className="rounded-full" aria-label="สวนก่อนหน้า" onClick={() => move(-1)}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
-          <Button variant="outline" size="icon-lg" className="rounded-full" aria-label="สวนถัดไป" onClick={() => move(1)}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
+          <Button variant="outline" size="icon-lg" aria-label="สวนก่อนหน้า" onClick={() => move(-1)}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
+          <Button variant="outline" size="icon-lg" aria-label="สวนถัดไป" onClick={() => move(1)}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
           <span className="ml-2 text-sm text-muted-foreground">{activeIndex + 1} / {farms.length}</span>
           <Link to={`/farms/${active.slug}`} className="ml-auto text-sm font-medium text-primary-ink underline-offset-4 hover:underline">อ่านเรื่องราวของสวน</Link>
         </div>

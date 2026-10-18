@@ -18,6 +18,8 @@
   --text-body: var(--type-body-size);
   --text-body--line-height: var(--type-body-leading);
   --text-label: var(--type-label-size);
+  --text-title: var(--type-title-size);
+  --text-title--line-height: var(--type-title-leading);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -34,6 +36,12 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -64,6 +72,10 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+  --radius-control: var(--control-radius);
+  --radius-control-xs: var(--control-radius-xs);
+  --radius-field: var(--field-radius);
+  --radius-surface: var(--surface-radius);
   --animate-marquee: marquee var(--duration) infinite linear;
   --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
   @keyframes marquee {
@@ -94,6 +106,16 @@
   --type-body-size: 0.875rem;
   --type-body-leading: 1.75;
   --type-label-size: 0.75rem;
+  --type-title-size: 1.875rem;
+  --type-title-leading: 1.4;
+  /* App profile: compact defaults for admin; storefront.css overrides them under [data-app='storefront']. */
+  --control-radius: calc(var(--radius) * 0.8);
+  --control-radius-xs: 8px;
+  --control-h: 2.25rem;
+  --control-h-lg: 2.5rem;
+  --field-radius: calc(var(--radius) * 0.8);
+  --field-h: 2.25rem;
+  --surface-radius: calc(var(--radius) * 1.4);
   /* Primitive values mirror the DESIGN.md frontmatter. Components use roles below. */
   --garden-green: #16a34a;
   --garden-green-ink: #137a39;
@@ -108,6 +130,9 @@
   --fine-border: #e2e9e1;
   --field-border: #dce5dc;
   --error: #c93838;
+  --success-green: #15803d;
+  --warning-amber: #b45309;
+  --info-blue: #1d6fa5;
   --sidebar-surface: #f8fbf7;
   --night-canvas: #0d1911;
   --night-card: #14251a;
@@ -133,6 +158,12 @@
   --accent: var(--fresh-wash);
   --accent-foreground: var(--soft-leaf-ink);
   --destructive: var(--error);
+  --success: var(--success-green);
+  --success-foreground: var(--success-green);
+  --warning: var(--warning-amber);
+  --warning-foreground: var(--warning-amber);
+  --info: var(--info-blue);
+  --info-foreground: var(--info-blue);
   --border: var(--fine-border);
   --input: var(--field-border);
   --ring: var(--garden-green);
@@ -177,6 +208,12 @@
   --accent: #203b28;
   --accent-foreground: #ebf8ed;
   --destructive: #f37373;
+  --success: #4ade80;
+  --success-foreground: #86efac;
+  --warning: #f59e0b;
+  --warning-foreground: #fcd34d;
+  --info: #38bdf8;
+  --info-foreground: #7dd3fc;
   --border: var(--night-border);
   --input: #3b5541;
   --ring: #56c979;
@@ -261,83 +298,4 @@ html[data-theme-transition='active']::view-transition-group(root) {
   font-weight: 900;
   font-style: normal;
   font-display: swap;
-}
-
-.suannn-store {
-  -webkit-font-smoothing: antialiased;
-}
-
-.suannn-store .page-width { width: min(100% - 96px, 1280px); margin-inline: auto; }
-.suannn-store .section-heading { font-size: var(--type-headline-size); font-weight: 600; line-height: var(--type-headline-leading); letter-spacing: -0.035em; }
-.suannn-store .suannn-logo { font-family: var(--font-family-brand); font-size: 2.55rem; font-weight: 900; letter-spacing: -0.075em; line-height: 1; color: var(--primary); }
-.suannn-store .suannn-logo span { color: var(--foreground); }
-.suannn-store .suannn-header { position: sticky; top: 0; z-index: 30; background: var(--glass-surface); border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(22px) saturate(1.5); }
-.suannn-store .nav-link { transition: color 180ms ease; }
-.suannn-store .nav-link:hover { color: var(--primary-ink); }
-.suannn-store a:focus-visible, .suannn-store button:focus-visible { outline: 2px solid var(--foreground); outline-offset: 5px; }
-.suannn-store .skip-link { position: fixed; top: 8px; left: 16px; z-index: 60; transform: translateY(-180%); padding: 12px 20px; border-radius: 12px; background: var(--foreground); color: var(--background); }
-.suannn-store .skip-link:focus { transform: translateY(0); }
-.suannn-store .suannn-hero { background: var(--background); }
-.suannn-store .hero-orb { display: none; }
-.suannn-store .hero-still-life { height: clamp(420px, 46vw, 720px); margin-top: -8px; }
-.suannn-store .hero-still-life > img { object-position: center 72%; mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 93%, transparent 100%); mix-blend-mode: multiply; }
-.suannn-store .hero-glass-note { display: flex; align-items: center; gap: 12px; position: absolute; bottom: 56px; left: max(24px, calc((100vw - 1280px) / 2)); padding: 16px 22px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--glass-surface); backdrop-filter: blur(20px) saturate(1.4); }
-.suannn-store .hero-side-note { position: absolute; right: max(24px, calc((100vw - 1280px) / 2)); top: 42%; writing-mode: vertical-rl; font-size: 10px; letter-spacing: 0.18em; color: var(--muted-foreground); }
-.suannn-store .glass-label { padding: 8px 13px; border-radius: 999px; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); color: var(--foreground); font-size: 11px; }
-.suannn-store .glass-icon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--glass-surface); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); }
-.suannn-store .product-card { border-radius: 24px; }
-.suannn-store .product-card:focus-visible { outline-offset: 7px; }
-.suannn-store .suannn-brand-marquee { padding-right: 52px; }
-.suannn-store .suannn-brand-marquee.is-paused > div { animation-play-state: paused; }
-.suannn-store .collection-accordion { display: flex; gap: 16px; min-height: 450px; }
-.suannn-store .collection-panel { position: relative; flex: 1; overflow: hidden; border-radius: 28px; color: var(--photo-foreground); transition: flex 550ms cubic-bezier(0.2, 0.65, 0.3, 1); }
-.suannn-store .collection-panel.is-active { flex: 1.7; }
-.suannn-store .collection-shade { background: linear-gradient(180deg, transparent 20%, var(--photo-shade) 100%); }
-.suannn-store .collection-heading { position: absolute; left: 0; bottom: 36px; width: 100%; padding: 0 28px; text-align: left; transition: bottom 300ms ease; }
-.suannn-store .collection-panel.is-active .collection-heading { bottom: 154px; }
-.suannn-store .collection-detail { position: absolute; bottom: 32px; left: 28px; right: 28px; }
-.suannn-store .farm-section { background: var(--accent); }
-.suannn-store .farm-card { position: relative; }
-.suannn-store .farm-card-inner { position: relative; min-height: 390px; padding: 36px; border: 1px solid var(--glass-border); border-radius: 28px; background: var(--glass-surface); backdrop-filter: blur(24px); transform-origin: top center; }
-.suannn-store .suannn-cta { background: var(--accent); }
-.suannn-store .cta-wordmark { position: absolute; z-index: -1; bottom: -0.33em; left: 50%; transform: translateX(-50%); font-family: var(--font-family-brand); font-size: clamp(120px, 26vw, 350px); font-weight: 900; letter-spacing: -0.08em; color: var(--primary); opacity: 0.08; }
-
-@media (max-width: 767px) {
-  .suannn-store .page-width { width: calc(100% - 40px); }
-  .suannn-store .suannn-logo { font-size: 2.15rem; }
-  .suannn-store .hero-still-life { height: 370px; margin-top: 14px; }
-  .suannn-store .hero-glass-note { left: 50%; bottom: 16px; transform: translateX(-50%); padding: 12px 16px; white-space: nowrap; }
-  .suannn-store .hero-still-life > img { object-position: center 70%; }
-  .suannn-store .collection-accordion { flex-direction: column; gap: 12px; }
-  .suannn-store .collection-panel { min-height: 180px; flex: none; transition: min-height 300ms ease; }
-  .suannn-store .collection-panel.is-active { min-height: 340px; flex: none; }
-  .suannn-store .collection-heading { bottom: 28px; }
-  .suannn-store .collection-panel.is-active .collection-heading { bottom: 150px; }
-  .suannn-store .farm-card-inner { padding: 28px; min-height: auto; }
-  .suannn-store .glass-label { padding: 6px 10px; font-size: 10px; }
-  .suannn-store .glass-icon { width: 34px; height: 34px; }
-  .suannn-store .suannn-brand-marquee { --gap: 2.25rem; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .suannn-store *, .suannn-store *::before, .suannn-store *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-  .suannn-store .product-gallery-main .swiper-wrapper,
-  .suannn-store .product-gallery-viewer-swiper .swiper-wrapper,
-  .suannn-store .story-swiper .swiper-wrapper,
-  .suannn-store .related-products-swiper .swiper-wrapper { transition-duration: 0ms !important; }
-  .suannn-store .marquee-shell > button { display: none; }
-  .suannn-store .suannn-brand-marquee { display: block; padding: 0 16px !important; }
-  .suannn-store .suannn-brand-marquee > div { flex-wrap: wrap; justify-content: center; gap: 12px 24px; }
-  .suannn-store .suannn-brand-marquee > div ~ div { display: none; }
-}
-
-
-/* Storefront catalog compositions share the global brand tokens. */
-.suannn-store .catalog-toolbar { background: var(--glass-surface); border-color: var(--border); backdrop-filter: blur(20px); }
-.suannn-store .catalog-grid { grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 640px) {
-  .suannn-store .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .suannn-store .catalog-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

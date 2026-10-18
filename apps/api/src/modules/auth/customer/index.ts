@@ -23,7 +23,7 @@ export function createCustomerAuthModule(config: AppConfig, service: CustomerSig
       response: { 200: 'customerAuth.signupResponse', 403: 'http.error', 422: 'http.error', 503: 'http.error' },
       detail: {
         summary: 'Create customer account',
-        description: 'Register a customer with email and password. Existing or reserved addresses receive the same generic response. A verification email is queued when an account is created.',
+        description: 'Register a customer with email and password. Existing or reserved addresses receive the same generic response. A verification email is queued when an account is created. `next` is `verify-email` when the store requires a verified email before sign-in, otherwise `sign-in`.',
         tags: ['Customer Registration'],
         security: [],
       },

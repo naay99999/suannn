@@ -48,26 +48,26 @@ export function ProductCatalog({ fixedCategory, title = 'สินค้าจ�
                 <Skeleton className="h-4 w-1/3" />
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-5 w-1/2" />
-                <Skeleton className="h-11 w-full" />
+                <Skeleton className="h-(--field-h) w-full rounded-field" />
               </div>)}
             </div>}
             {products.isError && <div role="alert" className="flex flex-col items-start gap-3 py-8">
               <p className="font-medium">โหลดรายการสินค้าไม่ได้ กรุณาลองอีกครั้ง</p>
-              <Button variant="outline" className="min-h-11" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button>
+              <Button variant="outline" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button>
             </div>}
             {products.data && !products.data.items.length && <Empty className="py-16">
               <EmptyHeader><EmptyTitle>ไม่พบสินค้า</EmptyTitle><EmptyDescription>ลองเปลี่ยนคำค้นหาหรือกลับไปดูสินค้าทั้งหมด</EmptyDescription></EmptyHeader>
               <EmptyContent>
                 {fixedCategory
-                  ? <Link className={buttonVariants({ variant: 'outline', className: 'min-h-11' })} to="/products">ดูสินค้าทั้งหมด</Link>
-                  : <Button variant="outline" className="min-h-11" onClick={resetFilters}>ล้างตัวกรอง</Button>}
+                  ? <Link className={buttonVariants({ variant: 'outline' })} to="/products">ดูสินค้าทั้งหมด</Link>
+                  : <Button variant="outline" onClick={resetFilters}>ล้างตัวกรอง</Button>}
               </EmptyContent>
             </Empty>}
             {products.data?.items.length ? <div className={gridClassName}>
               {products.data.items.map(product => <ProductCard key={product.id} product={product} appearance="catalog" />)}
             </div> : null}
             {products.data?.nextCursor && <div className="mt-8 flex justify-center">
-              <Button variant="outline" className="min-h-11 px-6" disabled={products.isFetching} onClick={loadNextPage}>ดูสินค้าเพิ่มเติม</Button>
+              <Button variant="outline" className="px-6" disabled={products.isFetching} onClick={loadNextPage}>ดูสินค้าเพิ่มเติม</Button>
             </div>}
           </section>
         </div>

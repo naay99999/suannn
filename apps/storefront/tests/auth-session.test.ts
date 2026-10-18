@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
-import { QueryClient } from '@tanstack/react-query'
-import { accountQueryPrefix, classifyCustomerSession, clearCustomerQueries, reconcileCustomerQueries } from '../src/lib/auth-session'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { accountQueryPrefix, classifyCustomerSession, clearCustomerQueries, clearStoreCartQuery, reconcileCustomerQueries } from '../src/lib/auth-session'
+import { storeCartQueryKey } from '../src/lib/store-cart'
 
 const session = {
   session: { id: 'session-1', expiresAt: '2026-10-01T00:00:00.000Z' },
@@ -28,6 +29,20 @@ test('removes protected data while keeping unrelated storefront cache', () => {
   clearCustomerQueries(client)
   expect(client.getQueryData(['customer-account', 'customer-1', 'orders'])).toBeUndefined()
   expect(client.getQueryData(['catalog', 'products'])).toEqual(['fruit'])
+})
+
+test('clearing the cart while it loads still settles the mounted cart query', async () => {
+  const client = new QueryClient()
+  const observer = new QueryObserver(client, {
+    queryKey: storeCartQueryKey,
+    queryFn: () => new Promise(resolve => setTimeout(() => resolve({ lines: [] }), 5)),
+  })
+  const unsubscribe = observer.subscribe(() => {})
+  clearStoreCartQuery(client)
+  await new Promise(resolve => setTimeout(resolve, 50))
+  expect(observer.getCurrentResult().isPending).toBe(false)
+  expect(observer.getCurrentResult().data).toEqual({ lines: [] })
+  unsubscribe()
 })
 
 test('session identity changes discard only the previous customer account', () => {

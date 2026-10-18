@@ -167,7 +167,7 @@ export function Component() {
           </Field>
           {quarantineEnabled && <FormInput error={formErrors.quarantineReason?.message} id="receive-quarantine-reason" label="เหตุผลกักกัน" disabled={command.isPending || command.uncertain} maxLength={200} {...form.register('quarantineReason')} required />}
         </FieldGroup>
-        {showExpiredWarning && <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="status">วันหมดอายุที่เลือกผ่านไปแล้ว ระบบอาจรับล็อตนี้ได้ตามกฎของเซิร์ฟเวอร์ โปรดตรวจสอบข้อมูลก่อนยืนยัน</p>}
+        {showExpiredWarning && <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm" role="status">วันหมดอายุที่เลือกผ่านไปแล้ว ระบบอาจรับล็อตนี้ได้ตามกฎของเซิร์ฟเวอร์ โปรดตรวจสอบข้อมูลก่อนยืนยัน</p>}
         {receivedAt && <p className="text-sm text-muted-foreground">เวลารับเข้าจะตีความเป็นเวลาไทย (Asia/Bangkok)</p>}
         {selectionError && <p aria-live="assertive" className="text-sm text-destructive" role="alert">{selectionError}</p>}
         {command.error && <p aria-live="assertive" className="text-sm text-destructive" role="alert">{command.error}</p>}

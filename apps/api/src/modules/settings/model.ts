@@ -5,4 +5,8 @@ export const systemSettingsModels = {
   'systemSettings.securityBody': t.Object({
     staffMfaRequired: t.Boolean(),
   }, { additionalProperties: false }),
+  'systemSettings.customerAuthResponse': t.Object({ emailVerificationRequired: t.Boolean() }),
+  'systemSettings.customerAuthBody': t.Object({
+    emailVerificationRequired: t.Boolean(),
+  }, { additionalProperties: false }),
 }

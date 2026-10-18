@@ -1,8 +1,10 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@workspace/ui/components/tabs'
 import { StaffManagement } from './_components/staff-management'
 import { FeatureControls } from './_components/feature-controls'
+import { CustomerAuthControls } from './_components/customer-auth-controls'
 import { CommerceSettings } from './_components/commerce-settings'
 import { ReceiptSettings } from './_components/receipt-settings'
+import { StoreAnnouncementSettings } from './_components/store-announcement-settings'
 
 export function Component() {
   return (
@@ -14,11 +16,18 @@ export function Component() {
           <TabsTrigger value="feature-controls">Feature controls</TabsTrigger>
           <TabsTrigger value="commerce">Commerce</TabsTrigger>
           <TabsTrigger value="receipts">Receipts</TabsTrigger>
+          <TabsTrigger value="promotion-bar">Promotion bar</TabsTrigger>
         </TabsList>
         <TabsContent value="admin-users"><StaffManagement /></TabsContent>
-        <TabsContent value="feature-controls"><FeatureControls /></TabsContent>
+        <TabsContent value="feature-controls">
+          <div className="flex flex-col gap-6">
+            <FeatureControls />
+            <CustomerAuthControls />
+          </div>
+        </TabsContent>
         <TabsContent value="commerce"><CommerceSettings /></TabsContent>
         <TabsContent value="receipts"><ReceiptSettings /></TabsContent>
+        <TabsContent value="promotion-bar"><StoreAnnouncementSettings /></TabsContent>
       </Tabs>
     </section>
   )

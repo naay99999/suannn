@@ -188,7 +188,7 @@ function LotDetailPage({ lotId }: { lotId: string | undefined }) {
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">ล็อต {lot.data.lotCode}</h1>
           {lot.data.quarantinedAt && <Badge variant="destructive">กักกัน</Badge>}
-          {expired && <Badge variant="secondary">หมดอายุ</Badge>}
+          {expired && <Badge variant="warning">หมดอายุ</Badge>}
           {lot.data.onHandQuantity === 0 && <Badge variant="outline">หมดแล้ว</Badge>}
         </div>
         <InventoryNavigation lotId={lot.data.id} variantId={lot.data.variantId} />

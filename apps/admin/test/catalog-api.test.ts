@@ -53,10 +53,10 @@ test('sends all catalog operations to the typed API with cookies and exact paylo
   expect(JSON.parse(String(requests[3]!.init.body))).toEqual(updateInput)
   expect(JSON.parse(String(requests[7]!.init.body))).toEqual(variantInput)
   expect(JSON.parse(String(requests[8]!.init.body))).toEqual(variantUpdateInput)
-  expect(requests[4]!.init.body).toBeUndefined()
-  expect(requests[5]!.init.body).toBeUndefined()
-  expect(requests[6]!.init.body).toBeUndefined()
-  expect(requests[9]!.init.body).toBeUndefined()
+  for (const index of [4, 5, 6, 9]) {
+    expect(requests[index]!.init.body).toBe('{}')
+    expect(new Headers(requests[index]!.init.headers).get('content-type')).toBe('application/json')
+  }
 })
 
 test('normalizes empty catalog operations and keeps unknown server messages private', async () => {
