@@ -15,6 +15,15 @@ export function nextFulfillmentStatus(order: OrderDetail): 'processing' | 'packe
   return command?.kind === 'fulfillment' ? command.status : null
 }
 
+export function canIssueReceipt(order: OrderDetail): boolean {
+  return (order.receipt === null || order.receipt === undefined) && order.status !== 'cancelled' && order.payment.status === 'collected'
+    && (order.paymentMethod === 'stripe' || order.status === 'delivered')
+}
+
+export function canCancelReceipt(order: OrderDetail): boolean {
+  return order.receipt?.status === 'issued'
+}
+
 export function availableOrderCommands(order: OrderDetail, permissions: readonly string[]): OrderCommand['kind'][] {
   const available: OrderCommand['kind'][] = []
   const allowed = (permission: string) => permissions.includes(permission)
@@ -24,6 +33,8 @@ export function availableOrderCommands(order: OrderDetail, permissions: readonly
   const refund = order.payment.refund
   if (allowed('order:refund') && order.status === 'cancelled' && order.paymentMethod === 'stripe'
     && order.payment.status === 'collected' && (!refund || ['failed', 'canceled'].includes(refund.status))) available.push('refund')
+  if (allowed('order:collect') && canIssueReceipt(order)) available.push('issueReceipt')
+  if (allowed('order:refund') && canCancelReceipt(order)) available.push('cancelReceipt')
   if (allowed('order:manage-access') && order.customerId === null) {
     available.push('reissue', 'revoke')
   }

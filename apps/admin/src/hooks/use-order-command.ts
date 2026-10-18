@@ -54,7 +54,8 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
         return current ?? response
       } catch (requestError) {
         const status = requestError instanceof ApiRequestError ? requestError.status : 0
-        setError(status === 409 ? 'ข้อมูลคำสั่งซื้อเปลี่ยนแล้ว ตรวจสอบสถานะล่าสุดก่อนดำเนินการต่อ' : apiErrorMessage(requestError))
+        const receiptCode = requestError instanceof ApiRequestError && requestError.code.startsWith('RECEIPT_') ? requestError.code : null
+        setError(status === 409 && !receiptCode ? 'ข้อมูลคำสั่งซื้อเปลี่ยนแล้ว ตรวจสอบสถานะล่าสุดก่อนดำเนินการต่อ' : apiErrorMessage(requestError))
         if (status === 0 || status >= 500) {
           attemptRef.current = { identity, attempt }
           setUncertain(true)
@@ -66,7 +67,7 @@ export function useOrderCommand({ staffId, orderId }: { staffId: string; orderId
             queryClient.setQueryData(authSessionQuery.queryKey, null)
           }
           await invalidateOrders(queryClient, orderId)
-          if (status === 409) {
+          if (status === 409 && !receiptCode) {
             try {
               await queryClient.fetchQuery({ ...orderQuery(orderId), staleTime: 0 })
               setReviewRequired(true)

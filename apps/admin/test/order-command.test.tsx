@@ -60,3 +60,21 @@ test('clears the cached staff session after an expired-session rejection', async
   expect(hook.result.current.error).toBe('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง')
   globalThis.fetch = previousFetch
 })
+
+test('RECEIPT_SETTINGS_INCOMPLETE shows the settings hint', async () => {
+  const orderId = '00000000-0000-4000-8000-000000000022'
+  const staffId = '00000000-0000-4000-8000-000000000021'
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? (input instanceof Request ? input.method : 'GET')
+    if (method === 'POST') return Response.json({ code: 'RECEIPT_SETTINGS_INCOMPLETE', message: 'x' }, { status: 409 })
+    return Response.json({ id: orderId })
+  }) as typeof fetch
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const hook = renderHook(() => useOrderCommand({ staffId, orderId }), { wrapper })
+  await act(async () => { await hook.result.current.submit({ kind: 'issueReceipt' }) })
+  expect(hook.result.current.error).toBe('ตั้งค่าข้อมูลผู้ขายในหน้า Settings ก่อนออกใบเสร็จ')
+  expect(hook.result.current.reviewRequired).toBe(false)
+  globalThis.fetch = previousFetch
+})

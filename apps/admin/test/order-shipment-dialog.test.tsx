@@ -35,3 +35,15 @@ test('other carriers need a name before shipping', async () => {
   await user.click(confirm)
   expect(onSubmit).toHaveBeenCalledWith({ kind: 'fulfillment', status: 'shipped', shipment: { carrier: 'other', carrierName: 'Farm van', trackingNumber: 'VAN-0001' } })
 })
+
+test('cancel receipt requires a reason and sends idempotency key', async () => {
+  const onSubmit = mock((_command: OrderCommand) => {})
+  render(<OrderCommandDialog open kind="cancelReceipt" totalSatang={1000} nextStatus={null} pending={false} uncertain={false} error={null} onOpenChange={() => {}} onSubmit={onSubmit} onRetry={() => {}} />)
+  const user = userEvent.setup()
+  const confirm = screen.getByRole('button', { name: 'ยืนยัน' }) as HTMLButtonElement
+  expect(confirm.disabled).toBe(true)
+  await user.type(screen.getByLabelText('เหตุผลในการยกเลิกใบเสร็จ'), 'ออกผิดชื่อ')
+  expect(confirm.disabled).toBe(false)
+  await user.click(confirm)
+  expect(onSubmit).toHaveBeenCalledWith({ kind: 'cancelReceipt', reason: 'ออกผิดชื่อ' })
+})

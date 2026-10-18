@@ -21,6 +21,8 @@ const messages: Record<string, string> = {
   VALIDATION_ERROR: 'ข้อมูลที่ส่งมาไม่ถูกต้อง',
   AUTHENTICATION_REQUIRED: 'กรุณาเข้าสู่ระบบอีกครั้ง',
   SESSION_EXPIRED: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง',
+  RECEIPT_SETTINGS_INCOMPLETE: 'ตั้งค่าข้อมูลผู้ขายในหน้า Settings ก่อนออกใบเสร็จ',
+  RECEIPT_NOT_ELIGIBLE: 'คำสั่งซื้อนี้ยังออกใบเสร็จไม่ได้ ตรวจสอบสถานะการชำระเงินและการจัดส่ง',
   FORBIDDEN: 'คุณไม่มีสิทธิ์ดำเนินการนี้',
 }
 

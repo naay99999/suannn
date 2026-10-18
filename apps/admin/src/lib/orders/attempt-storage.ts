@@ -14,7 +14,8 @@ function validCommand(value: unknown): value is OrderCommand {
   if (!value || typeof value !== 'object') return false
   const command = value as Record<string, unknown>
   if (command.kind === 'fulfillment') return ['processing', 'packed', 'shipped', 'delivered'].includes(String(command.status))
-  if (command.kind === 'cancel' || command.kind === 'refund') return Object.keys(command).length === 1
+  if (command.kind === 'cancelReceipt') return typeof command.reason === 'string' && command.reason.length >= 1 && command.reason.length <= 300 && Object.keys(command).length === 2
+  if (command.kind === 'cancel' || command.kind === 'refund' || command.kind === 'issueReceipt') return Object.keys(command).length === 1
   if (command.kind === 'collectCod') return Number.isSafeInteger(command.amountSatang) && Number(command.amountSatang) > 0
   if (command.kind === 'reissue' || command.kind === 'revoke') return ['customer_request', 'suspected_compromise', 'support_recovery'].includes(String(command.reasonCode))
   return false

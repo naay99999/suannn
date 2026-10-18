@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { OrderDetail } from '../src/lib/orders/api'
-import { availableOrderCommands, nextFulfillmentStatus } from '../src/lib/orders/eligibility'
+import { availableOrderCommands, canCancelReceipt, canIssueReceipt, nextFulfillmentStatus } from '../src/lib/orders/eligibility'
 
 function order(overrides: Partial<OrderDetail> = {}): OrderDetail {
   return {
@@ -24,4 +24,19 @@ test('refund requires cancelled collected Stripe payment and no active refund', 
   const value = order({ status: 'cancelled', paymentMethod: 'stripe', payment: { id: 'p', method: 'stripe', provider: 'stripe', amountSatang: 10000, currency: 'THB', status: 'collected' } })
   expect(availableOrderCommands(value, ['order:refund'])).toEqual(['refund'])
   expect(availableOrderCommands(order({ ...value, payment: { ...value.payment, refund: { id: 'r', amountSatang: 10000, status: 'pending', createdAt: new Date(), updatedAt: new Date() } } }), ['order:refund'])).toEqual([])
+})
+
+test('canIssueReceipt matrix', () => {
+  const collected = { id: 'p', method: 'cod' as const, provider: 'cod' as const, amountSatang: 10000, currency: 'THB', status: 'collected' as const }
+  const stripe = { ...collected, method: 'stripe' as const, provider: 'stripe' as const }
+  expect(canIssueReceipt(order({ status: 'placed', paymentMethod: 'stripe', payment: stripe, receipt: null }))).toBe(true)
+  expect(canIssueReceipt(order({ status: 'delivered', payment: collected, receipt: null }))).toBe(true)
+  expect(canIssueReceipt(order({ status: 'shipped', payment: collected, receipt: null }))).toBe(false)
+  expect(canIssueReceipt(order({ status: 'cancelled', paymentMethod: 'stripe', payment: stripe, receipt: null }))).toBe(false)
+  expect(canIssueReceipt(order({ status: 'delivered', payment: collected, receipt: { number: 'RC261018-00001', kind: 'receipt', status: 'issued', issuedAt: new Date() } as never }))).toBe(false)
+  const issued = order({ receipt: { number: 'RC261018-00001', kind: 'receipt', status: 'issued', issuedAt: new Date() } as never })
+  expect(canCancelReceipt(issued)).toBe(true)
+  expect(availableOrderCommands(issued, ['order:refund'])).toEqual(['cancelReceipt'])
+  expect(availableOrderCommands(issued, [])).toEqual([])
+  expect(canCancelReceipt(order({ receipt: { ...issued.receipt!, status: 'cancelled' } }))).toBe(false)
 })
