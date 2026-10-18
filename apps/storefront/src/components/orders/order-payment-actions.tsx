@@ -1,15 +1,16 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import type { ReactNode } from 'react'
 import { Button } from '@workspace/ui/components/button'
-import { useCart } from '@/components/cart/cart-context'
-import { canResumePayment, reorderQuantities } from '@/lib/reorder'
+import { canResumePayment } from '@/lib/reorder'
 import { redirectToStripe, type StoreOrderDetail } from '@/lib/store-orders'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
+import { formatDeadline } from '@/pages/account/order-display'
+import { useReorder } from './use-reorder'
 
-export function OrderPaymentActions({ order, guestAccessToken }: { order: StoreOrderDetail; guestAccessToken?: string }) {
-  const { cart, setItem, setOpen } = useCart()
-  const navigate = useNavigate()
-  const [pending, setPending] = useState(false)
-  const [message, setMessage] = useState('')
+const reorderableStatuses: ReadonlySet<StoreOrderDetail['status']> = new Set(['cancelled', 'delivered'])
+
+// `children` adds the page's own actions (receipt, cancel) to the same row.
+export function OrderPaymentActions({ order, guestAccessToken, children }: { order: StoreOrderDetail; guestAccessToken?: string; children?: ReactNode }) {
+  const { reorder, pending, message, setMessage } = useReorder(order)
 
   function resume() {
     if (!order.checkout) return
@@ -25,39 +26,17 @@ export function OrderPaymentActions({ order, guestAccessToken }: { order: StoreO
     }
   }
 
-  async function reorder() {
-    setPending(true)
-    setMessage('')
-    let skipped = 0
-    for (const line of reorderQuantities(order, cart)) {
-      try {
-        await setItem(line.variantId, line.quantity)
-      } catch {
-        skipped += 1
-      }
-    }
-    setPending(false)
-    if (skipped === order.items.length) {
-      setMessage('สินค้าในคำสั่งซื้อนี้ไม่พร้อมขายแล้ว')
-      return
-    }
-    if (skipped) {
-      setMessage(`เพิ่มลงตะกร้าแล้ว ยกเว้น ${skipped} รายการที่ไม่พร้อมขาย`)
-      setOpen(true)
-      return
-    }
-    navigate('/checkout')
-  }
-
-  const resumable = canResumePayment(order)
-  if (!resumable && order.status !== 'cancelled') return null
+  const checkout = canResumePayment(order) ? order.checkout : undefined
+  const reorderable = reorderableStatuses.has(order.status)
+  if (!checkout && !reorderable && !children) return null
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3">
-        {resumable && <Button onClick={resume}>ชำระเงินต่อ</Button>}
-        {order.status === 'cancelled' && <Button variant="outline" disabled={pending} onClick={() => void reorder()}>{pending ? 'กำลังเพิ่มลงตะกร้า...' : 'สั่งซื้ออีกครั้ง'}</Button>}
+      <div className="flex flex-wrap items-start gap-3">
+        {checkout && <Button onClick={resume}>ชำระเงินต่อ</Button>}
+        {reorderable && <Button variant={order.status === 'delivered' ? 'default' : 'outline'} disabled={pending} onClick={() => void reorder()}><ButtonSpinner show={pending} />{pending ? 'กำลังเพิ่มลงตะกร้า...' : 'สั่งซื้ออีกครั้ง'}</Button>}
+        {children}
       </div>
-      {resumable && <p className="text-sm text-muted-foreground">ลิงก์ชำระเงินใช้ได้ถึง {new Date(order.checkout!.expiresAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น. หลังจากนั้นคำสั่งซื้อจะถูกยกเลิกและคืนสต็อก</p>}
+      {checkout && <p className="text-sm text-muted-foreground">ลิงก์ชำระเงินใช้ได้ถึง {formatDeadline(checkout.expiresAt)} หลังจากนั้นคำสั่งซื้อจะถูกยกเลิกและคืนสต็อก</p>}
       {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
     </div>
   )

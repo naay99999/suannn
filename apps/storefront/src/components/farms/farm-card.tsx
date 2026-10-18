@@ -9,7 +9,7 @@ export function FarmCard({ farm }: { farm: StoreFarmSummary }) {
   return (
     <article className="group min-w-0">
       <Link to={`/farms/${farm.slug}`} className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-        <FarmImage src={farm.coverImageUrl} alt={farm.coverImageAlt} demo={farm.isDemo} className="aspect-[4/3] rounded-2xl" />
+        <FarmImage src={farm.coverImageUrl} alt={farm.coverImageAlt} className="aspect-[4/3] rounded-2xl" />
         <div className="mt-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold leading-relaxed tracking-tight group-hover:text-primary">{farm.name}</h2>

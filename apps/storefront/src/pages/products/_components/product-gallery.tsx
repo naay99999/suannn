@@ -104,9 +104,11 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
                     <HugeiconsIcon icon={Maximize01Icon} size={20} />
                   </span>
                 </button>
-                <span className="glass-label pointer-events-none absolute bottom-4 left-4 max-w-[calc(100%-5rem)] text-xs">
-                  {image.caption}
-                </span>
+                {image.caption && (
+                  <span className="glass-label pointer-events-none absolute bottom-4 left-4 max-w-[calc(100%-5rem)] text-xs">
+                    {image.caption}
+                  </span>
+                )}
               </div>
             </SwiperSlide>
           ))}

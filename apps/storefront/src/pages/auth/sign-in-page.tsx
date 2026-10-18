@@ -12,8 +12,9 @@ import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
 import { mergeCustomerCartOnce } from '@/lib/store-cart'
 import { signInSchema, type SignInValues } from './auth-schemas'
 import { AuthPageFrame } from './auth-layout'
-import { emailNotVerifiedMessage, emailVerifiedMessage, verificationLinkFailedMessage } from './auth-result'
+import { emailChangedMessage, emailNotVerifiedMessage, emailVerifiedMessage, verificationLinkFailedMessage } from './auth-result'
 import { verificationSentMessage } from '../account/customer-security'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
 
 export function Component() {
   const [searchParams] = useSearchParams()
@@ -28,7 +29,8 @@ export function Component() {
   const [resendState, setResendState] = useState<'idle' | 'pending' | 'sent' | 'failed'>('idle')
   const verificationNotice = searchParams.has('error')
     ? verificationLinkFailedMessage
-    : searchParams.get('verified') === '1' ? emailVerifiedMessage : ''
+    : searchParams.get('verified') === '1' ? emailVerifiedMessage
+      : searchParams.get('emailChanged') === '1' ? emailChangedMessage : ''
   const { register, handleSubmit, formState: { errors } } = useForm<SignInValues>({
     mode: 'onTouched',
     resolver: zodResolver(signInSchema),
@@ -102,13 +104,13 @@ export function Component() {
           {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
           {unverifiedEmail && (
             <div className="flex flex-col items-start gap-2">
-              <Button type="button" variant="outline" disabled={resendState === 'pending' || resendState === 'sent'} onClick={() => void resendVerification()}>ส่งอีเมลยืนยันอีกครั้ง</Button>
+              <Button type="button" variant="outline" disabled={resendState === 'pending' || resendState === 'sent'} onClick={() => void resendVerification()}><ButtonSpinner show={resendState === 'pending'} />ส่งอีเมลยืนยันอีกครั้ง</Button>
               {resendState === 'sent' && <p role="status" className="text-sm text-muted-foreground">{verificationSentMessage}</p>}
               {resendState === 'failed' && <p role="alert" className="text-sm text-destructive">ส่งอีเมลยืนยันไม่ได้ กรุณาลองใหม่ภายหลัง</p>}
             </div>
           )}
           {staffFlow && <a className="text-sm font-semibold text-primary-ink underline underline-offset-4" href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')}>ไปหน้าเข้าสู่ระบบผู้ดูแล</a>}
-          <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Button>
+          <Button type="submit" size="storefront" className="w-full" disabled={pending}><ButtonSpinner show={pending} />{pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Button>
         </FieldGroup>
       </form>
       <p className="mt-5 flex flex-wrap items-center justify-center gap-x-2 text-sm text-muted-foreground">ยังไม่มีบัญชี? <Link className="inline-flex min-h-11 items-center font-semibold text-primary-ink underline underline-offset-4 transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" to="/sign-up">สมัครสมาชิก</Link></p>

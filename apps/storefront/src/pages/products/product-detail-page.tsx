@@ -14,6 +14,7 @@ import { ProductInformation } from './_components/product-information'
 import { ProductFarms } from '@/components/farms/product-farms'
 import { RelatedProductsCarousel, relatedProductLimit } from './_components/related-products-carousel'
 import { useProductMotion } from './_components/use-product-motion'
+import { ProductDetailSkeleton } from './_components/product-detail-skeleton'
 
 export function Component() {
   const { slug } = useParams()
@@ -30,7 +31,7 @@ export function Component() {
     enabled: Boolean(product.data),
   })
 
-  if (product.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดสินค้า...</p>
+  if (product.isPending) return <ProductDetailSkeleton />
   if (product.isError && (product.error instanceof StoreProductRequestError && product.error.status === 404)) {
     return (
       <Empty className="min-h-[50svh]">

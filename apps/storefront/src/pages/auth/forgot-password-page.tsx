@@ -9,6 +9,7 @@ import { Input } from '@workspace/ui/components/input'
 import { requestPasswordReset } from '@/lib/auth-client'
 import { AuthPageFrame } from './auth-layout'
 import { forgotPasswordSchema } from './auth-schemas'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
 
 type Values = z.infer<typeof forgotPasswordSchema>
 
@@ -42,7 +43,7 @@ export function Component() {
           <FieldGroup className="gap-5">
             <Field data-invalid={Boolean(errors.email)}><FieldLabel htmlFor="recovery-email">อีเมล</FieldLabel><Input id="recovery-email" className="text-base md:text-base" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'recovery-email-error' : undefined} {...register('email')} /><FieldError id="recovery-email-error">{errors.email?.message}</FieldError></Field>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังส่ง...' : 'ส่งลิงก์ตั้งรหัสผ่าน'}</Button>
+            <Button type="submit" size="storefront" className="w-full" disabled={pending}><ButtonSpinner show={pending} />{pending ? 'กำลังส่ง...' : 'ส่งลิงก์ตั้งรหัสผ่าน'}</Button>
           </FieldGroup>
         </form>
       )}

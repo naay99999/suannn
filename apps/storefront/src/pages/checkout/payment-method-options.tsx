@@ -59,7 +59,7 @@ export function PaymentMethodOptions({ available, selected, onSelect, isCustomer
           )
         })}
         {!isCustomer && <p className="text-sm text-muted-foreground">เก็บเงินปลายทางใช้ได้เฉพาะสมาชิกที่เข้าสู่ระบบ <Link className="font-medium text-primary-ink underline" to={`/sign-in?returnTo=${encodeURIComponent('/checkout')}`}>เข้าสู่ระบบ</Link></p>}
-        {isCustomer && !canUseCod && <p className="text-sm text-muted-foreground">ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้ <Link className="font-medium text-primary-ink underline" to="/account/security">ส่งอีเมลยืนยัน</Link></p>}
+        {isCustomer && !canUseCod && <p className="text-sm text-muted-foreground">ยืนยันอีเมลก่อนจึงจะเลือกเก็บเงินปลายทางได้ <Link className="font-medium text-primary-ink underline" to="/account/profile">ส่งอีเมลยืนยัน</Link></p>}
       </div>
     </fieldset>
   )

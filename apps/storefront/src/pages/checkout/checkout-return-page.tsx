@@ -8,6 +8,7 @@ import { formatStorePrice } from '@/lib/store-products'
 import { checkoutReturnMessage, missingCheckoutContextMessage, type ReturnMode } from '@/lib/checkout-return'
 import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
 import { getCustomerOrder, getGuestOrder, guestOrderQueryKey, readPendingCheckout, storeOrderQueryKey, type PendingCheckout } from '@/lib/store-orders'
+import { PageLoading } from '@/components/loading/page-loading'
 
 export function Component() {
   const location = useLocation()
@@ -38,7 +39,7 @@ export function Component() {
     return <Empty className="rounded-3xl border bg-card py-20"><EmptyHeader><EmptyTitle>{mode === 'cancel' ? 'กลับจากหน้าชำระเงิน' : 'ตรวจสอบคำสั่งซื้อไม่สำเร็จ'}</EmptyTitle><EmptyDescription>{missingCheckoutContextMessage(isCustomer ? 'customer' : 'guest')}</EmptyDescription></EmptyHeader><EmptyContent>{isCustomer ? <Link className={buttonVariants()} to="/account/orders">ดูคำสั่งซื้อของฉัน</Link> : <Link className={buttonVariants()} to="/products">กลับไปที่ร้าน</Link>}</EmptyContent></Empty>
   }
 
-  if (order.isPending) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังตรวจสอบสถานะการชำระเงิน...</p>
+  if (order.isPending) return <PageLoading label="กำลังตรวจสอบสถานะการชำระเงิน..." />
   if (order.isError || !order.data) return <div className="mx-auto max-w-2xl py-12 text-center"><h1 className="text-3xl font-semibold">ตรวจสอบสถานะคำสั่งซื้อไม่ได้</h1><p className="mt-3 text-muted-foreground">คำสั่งซื้อยังไม่ถูกยกเลิกจากการกลับมาหน้านี้ ลองโหลดสถานะอีกครั้ง</p><Button className="mt-6" variant="outline" onClick={() => void order.refetch()}>ลองอีกครั้ง</Button></div>
 
   const snapshot = order.data

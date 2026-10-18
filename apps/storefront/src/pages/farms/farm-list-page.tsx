@@ -7,6 +7,8 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { FarmCard } from '@/components/farms/farm-card'
 import { FarmImage } from '@/components/farms/farm-image'
 import { getStoreFarms, storeFarmListQueryKey } from '@/lib/store-farms'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
+import { FarmListSkeleton } from './_components/farm-list-skeleton'
 
 export function Component() {
   const farms = useInfiniteQuery({
@@ -38,8 +40,7 @@ export function Component() {
           </div>
         </div>
         <div className="relative md:-mr-12">
-          <FarmImage src={lead?.coverImageUrl ?? '/images/hero.jpg'} alt={lead?.coverImageAlt ?? 'ภาพประกอบบรรยากาศสวน'} demo={lead?.isDemo} loading="eager" className="aspect-[5/4] rounded-4xl shadow-xl shadow-primary/10" />
-          <p className="mt-3 text-right text-xs text-muted-foreground">ภาพและข้อมูลสวนสาธิตจะแสดงป้ายกำกับไว้เสมอ</p>
+          <FarmImage src={lead?.coverImageUrl ?? '/images/hero.jpg'} alt={lead?.coverImageAlt ?? 'ภาพประกอบบรรยากาศสวน'} loading="eager" className="aspect-[5/4] rounded-4xl shadow-xl shadow-primary/10" />
         </div>
       </section>
 
@@ -51,8 +52,8 @@ export function Component() {
           </div>
           <Link className={buttonVariants({ variant: 'link' })} to="/products">กลับไปเลือกสินค้า</Link>
         </div>
-        {farms.isPending && <p role="status" className="py-12 text-center text-muted-foreground">กำลังโหลดรายชื่อสวน...</p>}
-        {farms.isError && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border p-6"><p>โหลดรายชื่อสวนไม่ได้</p><Button variant="outline" onClick={() => void farms.refetch()}>ลองอีกครั้ง</Button></div>}
+        {farms.isPending && <FarmListSkeleton />}
+        {farms.isError && !farms.isFetchNextPageError && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border p-6"><p>โหลดรายชื่อสวนไม่ได้</p><Button variant="outline" onClick={() => void farms.refetch()}>ลองอีกครั้ง</Button></div>}
         {farms.data && items.length === 0 && <Empty className="border py-12">
           <EmptyHeader><EmptyTitle>ยังไม่มีสวนที่เปิดเผยโปรไฟล์</EmptyTitle><EmptyDescription>กลับมาดูใหม่เมื่อมีสวนเผยแพร่ข้อมูล</EmptyDescription></EmptyHeader>
           <EmptyContent><Link className={buttonVariants({ variant: 'outline' })} to="/products">เลือกดูสินค้าทั้งหมด</Link></EmptyContent>
@@ -71,7 +72,7 @@ export function Component() {
         {items.length > 0 && items.length < 6 && <div className="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
           {items.map(farm => <FarmCard key={farm.id} farm={farm} />)}
         </div>}
-        {farms.hasNextPage && <div className="mt-12 text-center"><Button variant="outline" disabled={farms.isFetchingNextPage} onClick={() => void farms.fetchNextPage()}>{farms.isFetchingNextPage ? 'กำลังโหลด...' : 'ดูสวนเพิ่มเติม'}</Button></div>}
+        {farms.hasNextPage && <div className="mt-12 text-center"><Button variant="outline" disabled={farms.isFetchingNextPage} onClick={() => void farms.fetchNextPage()}><ButtonSpinner show={farms.isFetchingNextPage} />{farms.isFetchingNextPage ? 'กำลังโหลด...' : 'ดูสวนเพิ่มเติม'}</Button></div>}
         {farms.isFetchNextPageError && <p role="alert" className="mt-4 text-center text-sm text-destructive">โหลดสวนเพิ่มเติมไม่ได้ ลองกดอีกครั้ง</p>}
       </section>
     </div>

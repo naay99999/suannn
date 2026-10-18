@@ -22,6 +22,8 @@ import { orderStatusLabels } from '@/pages/account/order-display'
 import { ShipmentDetails } from '@/components/orders/shipment-details'
 import { BillingReceiptCard } from '@/components/orders/billing-receipt-card'
 import { OrderPaymentActions } from '@/components/orders/order-payment-actions'
+import { PageLoading } from '@/components/loading/page-loading'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
 
 export function Component() {
   const { orderId = '' } = useParams()
@@ -78,10 +80,10 @@ export function Component() {
             {missingToken && <FieldError id="guest-token-error">กรอกรหัสเข้าดูคำสั่งซื้อจากอีเมลยืนยันคำสั่งซื้อ</FieldError>}
           </Field>
           {order.isError && <p role="alert" className="mt-4 text-sm text-destructive">ไม่พบคำสั่งซื้อหรือรหัสไม่ถูกต้อง ตรวจรหัสในอีเมลแล้วลองอีกครั้ง</p>}
-          <Button className="mt-5" type="submit" disabled={order.isFetching}>{order.isFetching ? 'กำลังตรวจสอบ...' : 'ดูคำสั่งซื้อ'}</Button>
+          <Button className="mt-5" type="submit" disabled={order.isFetching}><ButtonSpinner show={order.isFetching} />{order.isFetching ? 'กำลังตรวจสอบ...' : 'ดูคำสั่งซื้อ'}</Button>
         </form>
       </>}
-      {!needsToken && order.isPending && <p role="status" className="mt-8 text-sm text-muted-foreground">กำลังโหลดคำสั่งซื้อ...</p>}
+      {!needsToken && order.isPending && <PageLoading label="กำลังโหลดคำสั่งซื้อ..." className="mt-8 justify-start py-0" />}
       {detail && <section className="mt-8 rounded-3xl border bg-card p-6 md:p-8" aria-labelledby="guest-order-title">
         <h2 id="guest-order-title" className="text-xl font-semibold">คำสั่งซื้อ {detail.orderNumber}</h2>
         <p role="status" className="mt-3 text-sm text-muted-foreground">สถานะ: {orderStatusLabels[detail.status]}{detail.status === 'pending_payment' ? ' · รอการชำระเงินออนไลน์' : detail.payment.status === 'collected' ? ' · ชำระเงินแล้ว' : ''}</p>

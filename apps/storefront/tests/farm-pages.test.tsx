@@ -51,11 +51,10 @@ function mount(path: string) {
   return router
 }
 
-test('farm directory shows profile links and marks demo data', async () => {
+test('farm directory shows profile links', async () => {
   mount('/farms')
   const link = await screen.findByRole('link', { name: /สวนแม่ริม/ })
   expect(link.getAttribute('href')).toBe('/farms/mae-rim')
-  expect(screen.getAllByText('ข้อมูลสาธิต').length).toBeGreaterThan(0)
 })
 
 test('farm profile links its public products back to product details', async () => {

@@ -32,3 +32,55 @@ export function mergeOrderPages<T extends { id: string }>(pages: { items: T[] }[
     return true
   }))
 }
+
+const settledStatuses: CustomerOrder['status'][] = ['delivered', 'cancelled']
+
+export function isActiveOrder(order: Pick<CustomerOrder, 'status'>) {
+  return !settledStatuses.includes(order.status)
+}
+
+// Fulfilment steps an active order moves through after payment.
+export const fulfilmentSteps = ['placed', 'processing', 'packed', 'shipped'] as const satisfies CustomerOrder['status'][]
+
+export function fulfilmentProgress(status: CustomerOrder['status']) {
+  return fulfilmentSteps.indexOf(status as (typeof fulfilmentSteps)[number])
+}
+
+export function orderQuantity(order: Pick<CustomerOrder, 'items'>) {
+  return order.items.reduce((sum, item) => sum + item.quantity, 0)
+}
+
+// Splits a long item list into a preview and the remainder shown on demand.
+export function previewOrderItems<T>(items: T[], limit: number) {
+  if (items.length <= limit + 1) return { shown: items, hidden: [] as T[] }
+  return { shown: items.slice(0, limit), hidden: items.slice(limit) }
+}
+
+// A deadline later than today needs its date, not just the time.
+export function formatDeadline(iso: string, now = new Date()) {
+  const deadline = new Date(iso)
+  const time = deadline.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  if (deadline.toDateString() === now.toDateString()) return `วันนี้ ${time} น.`
+  return `${new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short' }).format(deadline)} ${time} น.`
+}
+
+// Replaces one order inside cached cursor pages, keeping every other order untouched.
+export function replaceOrderInPages<D extends { pages: { items: { id: string }[] }[] }>(data: D | undefined, next: D['pages'][number]['items'][number]): D | undefined {
+  if (!data) return data
+  return { ...data, pages: data.pages.map(page => ({ ...page, items: page.items.map(item => item.id === next.id ? next : item) })) }
+}
+
+export function findOrderInPages<T extends { id: string }>(data: { pages: { items: T[] }[] } | undefined, orderId: string) {
+  for (const page of data?.pages ?? []) {
+    const found = page.items.find(item => item.id === orderId)
+    if (found) return found
+  }
+  return undefined
+}
+
+interface ContactAddress { name: string; phone: string; addressLine1: string; addressLine2: string | null; subdistrict: string; district: string; province: string; postalCode: string }
+
+export function isSameContactAddress(a: ContactAddress, b: ContactAddress) {
+  return a.name === b.name && a.phone === b.phone && a.addressLine1 === b.addressLine1 && (a.addressLine2 ?? '') === (b.addressLine2 ?? '')
+    && a.subdistrict === b.subdistrict && a.district === b.district && a.province === b.province && a.postalCode === b.postalCode
+}

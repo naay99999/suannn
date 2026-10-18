@@ -9,6 +9,9 @@ import { ProductCard } from '@/components/product-card'
 import { getStoreFarm, getStoreFarmProducts, StoreFarmRequestError, storeFarmDetailQueryKey, storeFarmProductsQueryKey } from '@/lib/store-farms'
 import { FarmStory } from './_components/farm-story'
 import { useFarmMotion } from './_components/use-farm-motion'
+import { ProductGridSkeleton } from '@/components/loading/product-grid-skeleton'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
+import { FarmDetailSkeleton } from './_components/farm-detail-skeleton'
 
 export function Component() {
   const { slug = '' } = useParams()
@@ -24,7 +27,7 @@ export function Component() {
   })
   const items = products.data?.pages.flatMap(page => page.items) ?? []
 
-  if (farm.isPending) return <div ref={scope} className="w-full max-w-full overflow-x-clip"><p role="status" className="py-20 text-center text-muted-foreground">กำลังโหลดข้อมูลสวน...</p></div>
+  if (farm.isPending) return <div ref={scope} className="w-full max-w-full overflow-x-clip"><FarmDetailSkeleton /></div>
   if (farm.isError && farm.error instanceof StoreFarmRequestError && farm.error.status === 404) return (
     <div ref={scope} className="w-full max-w-full overflow-x-clip"><Empty className="min-h-[50svh]">
       <EmptyHeader><EmptyTitle><h1>ไม่พบโปรไฟล์สวนนี้</h1></EmptyTitle><EmptyDescription>สวนนี้อาจยังไม่เปิดเผยข้อมูลหรือไม่มีอยู่ในร้าน</EmptyDescription></EmptyHeader>
@@ -44,7 +47,7 @@ export function Component() {
         </Breadcrumb>
         <section className="grid items-center gap-8 py-8 md:grid-cols-[0.9fr_1.1fr] md:gap-14 md:py-14" aria-labelledby="farm-title">
           <div className="md:order-2">
-            <FarmImage src={profile.coverImageUrl} alt={profile.coverImageAlt} demo={profile.isDemo} loading="eager" className="aspect-[5/4] rounded-4xl" />
+            <FarmImage src={profile.coverImageUrl} alt={profile.coverImageAlt} loading="eager" className="aspect-[5/4] rounded-4xl" />
           </div>
           <div className="farm-reveal md:order-1">
             <p className="mb-4 text-sm font-medium text-primary-ink">{location || 'แหล่งผลิตของ suannn'}</p>
@@ -60,11 +63,11 @@ export function Component() {
             <div><h2 id="farm-products-title" className="text-3xl font-semibold tracking-tight md:text-4xl">สินค้าที่เชื่อมกับสวนนี้</h2><p className="mt-3 text-sm leading-7 text-muted-foreground">แหล่งผลิตระดับสินค้า อาจมีสินค้ารายการเดียวกันจากหลายสวน</p></div>
             <Link className={buttonVariants({ variant: 'outline' })} to="/farms">สวนทั้งหมด</Link>
           </div>
-          {products.isPending && <p role="status" className="py-8 text-muted-foreground">กำลังโหลดสินค้า...</p>}
-          {products.isError && <div role="alert" className="flex flex-wrap items-center gap-3 py-8"><p>โหลดสินค้าในสวนไม่ได้</p><Button variant="outline" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button></div>}
+          {products.isPending && <ProductGridSkeleton count={4} />}
+          {products.isError && !products.isFetchNextPageError && <div role="alert" className="flex flex-wrap items-center gap-3 py-8"><p>โหลดสินค้าในสวนไม่ได้</p><Button variant="outline" onClick={() => void products.refetch()}>ลองอีกครั้ง</Button></div>}
           {products.data && items.length === 0 && <Empty className="border py-10"><EmptyHeader><EmptyTitle>ยังไม่มีสินค้าที่แสดงในร้าน</EmptyTitle><EmptyDescription>สวนนี้ยังไม่มีสินค้าที่เผยแพร่พร้อมแสดง</EmptyDescription></EmptyHeader><EmptyContent><Link className={buttonVariants({ variant: 'outline' })} to="/products">เลือกดูสินค้าทั้งหมด</Link></EmptyContent></Empty>}
           {items.length > 0 && <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">{items.map(product => <ProductCard key={product.id} product={product} />)}</div>}
-          {products.hasNextPage && <div className="mt-10 text-center"><Button variant="outline" disabled={products.isFetchingNextPage} onClick={() => void products.fetchNextPage()}>{products.isFetchingNextPage ? 'กำลังโหลด...' : 'ดูสินค้าเพิ่มเติม'}</Button></div>}
+          {products.hasNextPage && <div className="mt-10 text-center"><Button variant="outline" disabled={products.isFetchingNextPage} onClick={() => void products.fetchNextPage()}><ButtonSpinner show={products.isFetchingNextPage} />{products.isFetchingNextPage ? 'กำลังโหลด...' : 'ดูสินค้าเพิ่มเติม'}</Button></div>}
           {products.isFetchNextPageError && <p role="alert" className="mt-4 text-center text-sm text-destructive">โหลดสินค้าเพิ่มเติมไม่ได้ ลองกดอีกครั้ง</p>}
         </section>
       </div>

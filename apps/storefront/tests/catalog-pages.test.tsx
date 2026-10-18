@@ -224,6 +224,38 @@ test('catalog paginates and resets cursor when category or search changes', asyn
   expect((await screen.findByRole('link', { name: /Test mango/ })).getAttribute('href')).toBe('/products/mango')
 })
 
+test('catalog skeleton is announced as a busy status region', async () => {
+  productResponse = () => new Promise(() => {})
+  mount(<CatalogPage />)
+  const region = screen.getByText('กำลังโหลดรายการสินค้า').closest('[role="status"]')
+  expect(region?.getAttribute('aria-busy')).toBe('true')
+})
+
+test('catalog appends the next page and keeps the current grid while a new filter loads', async () => {
+  productResponse = async url => Response.json({ items: url.searchParams.has('cursor') ? [jam] : [mango], nextCursor: url.searchParams.has('cursor') ? null : 'page-two' })
+  const user = userEvent.setup()
+  mount(<CatalogPage />)
+  await screen.findByText(mango.name)
+  await user.click(screen.getByRole('button', { name: 'ดูสินค้าเพิ่มเติม' }))
+  await screen.findByText(jam.name)
+  expect(screen.getByText(mango.name)).toBeTruthy()
+
+  let finish: ((response: Response) => void) | undefined
+  productResponse = () => new Promise(resolve => { finish = resolve })
+  await user.click(screen.getByRole('button', { name: 'แปรรูป' }))
+  await waitFor(() => expect(finish).toBeDefined())
+  expect(screen.getByText(mango.name)).toBeTruthy()
+  expect(screen.queryByText('กำลังโหลดรายการสินค้า')).toBeNull()
+  expect(screen.getByText('กำลังอัปเดตรายการ...')).toBeTruthy()
+  // Let TanStack's batched notify (setTimeout 0) flush inside act before asserting the swap.
+  await act(async () => {
+    finish!(Response.json({ items: [jam], nextCursor: null }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  await waitFor(() => expect(screen.queryByText(mango.name)).toBeNull())
+  expect(screen.getByText(jam.name)).toBeTruthy()
+})
+
 test('detail sends selected variant and accumulated quantity to cart', async () => {
   cart = { cartVersion: 1, lines: [{ variantId: mango.variants[1]!.id, productId: mango.id, productSlug: 'mango', productName: mango.name,
     productImageUrl: null, productImageAlt: null, variantName: 'Large', unit: 'box', quantity: 2, priceSatang: 2000, canPurchase: true, issues: [] }] }

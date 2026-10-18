@@ -13,6 +13,7 @@ import { mergeCustomerCartOnce } from '@/lib/store-cart'
 import { AuthPageFrame } from './auth-layout'
 import { registrationResultContent, type RegistrationResult } from './auth-result'
 import { signUpSchema, type SignUpValues } from './auth-schemas'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
 
 export function Component() {
   const navigate = useNavigate()
@@ -77,7 +78,7 @@ export function Component() {
             <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="sign-up-password">รหัสผ่าน</FieldLabel><Input id="sign-up-password" className="text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'sign-up-password-error' : undefined} {...register('password', { deps: touchedFields.confirmPassword ? ['confirmPassword'] : [] })} /><FieldError id="sign-up-password-error">{errors.password?.message}</FieldError></Field>
             <Field data-invalid={Boolean(errors.confirmPassword)}><FieldLabel htmlFor="sign-up-confirm">ยืนยันรหัสผ่าน</FieldLabel><Input id="sign-up-confirm" className="text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} aria-describedby={errors.confirmPassword ? 'sign-up-confirm-error' : undefined} {...register('confirmPassword')} /><FieldError id="sign-up-confirm-error">{errors.confirmPassword?.message}</FieldError></Field>
             {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
-            <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังส่งข้อมูล...' : 'สมัครสมาชิก'}</Button>
+            <Button type="submit" size="storefront" className="w-full" disabled={pending}><ButtonSpinner show={pending} />{pending ? 'กำลังส่งข้อมูล...' : 'สมัครสมาชิก'}</Button>
           </FieldGroup>
         </form>
       )}

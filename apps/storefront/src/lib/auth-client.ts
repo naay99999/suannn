@@ -64,7 +64,8 @@ function parseSession(value: unknown): CustomerSession | StaffSession | null {
   } as CustomerSession | StaffSession
 }
 
-export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
+// Looks up the global fetch per request so wrappers installed after import (tests, instrumentation) apply.
+export function createAuthClient(baseUrl: string, fetcher: Fetcher = (input, init) => fetch(input, init)) {
   const base = new URL('/api/v1/auth/', baseUrl)
 
   async function request(path: string, body?: JsonRecord): Promise<unknown> {
@@ -115,8 +116,8 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = fetch) {
     async sendVerificationEmail(email: string, callbackURL: string) {
       await request('send-verification-email', { email, callbackURL })
     },
-    async changePassword(currentPassword: string, newPassword: string) {
-      await request('change-password', { currentPassword, newPassword })
+    async changePassword(currentPassword: string, newPassword: string, revokeOtherSessions = false) {
+      await request('change-password', { currentPassword, newPassword, revokeOtherSessions })
     },
     async listSessions() { return request('list-sessions') },
     async revokeSession(token: string) { await request('revoke-session', { token }) },

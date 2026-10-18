@@ -3,6 +3,7 @@ import type { UseFormReturn } from 'react-hook-form'
 import { Button } from '@workspace/ui/components/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select'
 import { ThaiAddressCascadeSelect } from '@workspace/ui/components/thai-address-cascade-select'
 import type { CustomerAddress } from '@/pages/account/account-api'
 import { checkoutAddressDefaultValue, checkoutAddressFields } from './checkout-address'
@@ -58,6 +59,8 @@ export function AddressSection({ kind, title, phoneLabel, savedAddresses, defaul
     for (const field of Object.keys(emptyAddressFields) as (keyof AddressFields)[]) setValue(`${prefix}.${field}`, field === 'savedAddressId' ? '' : blank[field], { shouldDirty: true })
   }
 
+  const addressOptions = [{ value: 'manual', label: 'กรอกที่อยู่ใหม่' }, ...(savedAddresses ?? []).map(address => ({ value: address.id, label: `${address.label} · ${address.recipientName}` }))]
+
   const handleLocalityError = useCallback(() => setManualLocality(true), [])
 
   function handleLocalityChange(locality: Parameters<typeof checkoutAddressFields>[0]) {
@@ -88,10 +91,10 @@ export function AddressSection({ kind, title, phoneLabel, savedAddresses, defaul
       <h2 id={id('heading')} className="text-xl font-semibold">{title}</h2>
       {savedAddresses && <Field className="mt-6">
         <FieldLabel htmlFor={id('address-choice')}>{kind === 'billing' ? 'เลือกที่อยู่ออกใบเสร็จ' : 'เลือกที่อยู่จัดส่ง'}</FieldLabel>
-        <select id={id('address-choice')} className="h-(--field-h) w-full min-w-0 rounded-field border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" value={effectiveChoice} onChange={event => handleChoiceChange(event.target.value)}>
-          <option value="manual">กรอกที่อยู่ใหม่</option>
-          {savedAddresses.map(address => <option key={address.id} value={address.id}>{address.label} · {address.recipientName}</option>)}
-        </select>
+        <Select items={addressOptions} value={effectiveChoice} onValueChange={value => value && handleChoiceChange(value)}>
+          <SelectTrigger id={id('address-choice')} className="w-full min-w-0"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectGroup>{addressOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
+        </Select>
       </Field>}
       {selected && !editing ? <div className="mt-5 flex items-start justify-between gap-4 rounded-surface border p-4">
         <div className="min-w-0 text-sm leading-6">

@@ -20,3 +20,5 @@ export function registrationResultContent(result: RegistrationResult) {
 export const emailNotVerifiedMessage = 'ยืนยันอีเมลก่อนเข้าสู่ระบบ กรุณาตรวจกล่องจดหมายหรือขอลิงก์ยืนยันใหม่'
 export const emailVerifiedMessage = 'ยืนยันอีเมลแล้ว เข้าสู่ระบบได้เลย'
 export const verificationLinkFailedMessage = 'ลิงก์ยืนยันอีเมลใช้ไม่ได้หรือหมดอายุ เข้าสู่ระบบเพื่อขอลิงก์ใหม่'
+
+export const emailChangedMessage = 'เปลี่ยนอีเมลแล้ว เข้าสู่ระบบอีกครั้งด้วยอีเมลใหม่'

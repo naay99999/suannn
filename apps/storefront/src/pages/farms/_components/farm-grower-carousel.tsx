@@ -16,7 +16,7 @@ export function FarmGrowerCarousel({ farms }: { farms: StoreFarmSummary[] }) {
   return (
     <div className="grid items-center gap-6 md:grid-cols-[1fr_1fr] md:gap-12" role="region" aria-roledescription="carousel" aria-label="สวนและเกษตรกร">
       <Link to={`/farms/${active.slug}`} className="group block rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-        <FarmImage src={active.coverImageUrl} alt={active.coverImageAlt} demo={active.isDemo} className="aspect-[5/4] rounded-3xl" />
+        <FarmImage src={active.coverImageUrl} alt={active.coverImageAlt} className="aspect-[5/4] rounded-3xl" />
       </Link>
       <div aria-live="polite" aria-atomic="true">
         <p className="text-sm font-medium text-primary-ink">สวนและคนปลูก</p>
@@ -24,11 +24,13 @@ export function FarmGrowerCarousel({ farms }: { farms: StoreFarmSummary[] }) {
         {active.farmerName && <p className="mt-3 text-base text-muted-foreground">ดูแลโดย {active.farmerName}</p>}
         {location && <p className="mt-2 text-sm text-muted-foreground">{location}</p>}
         {active.summary && <p className="mt-5 max-w-xl text-sm leading-8 text-muted-foreground">{active.summary}</p>}
-        <div className="mt-7 flex items-center gap-3">
-          <Button variant="outline" size="icon-lg" aria-label="สวนก่อนหน้า" onClick={() => move(-1)}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
-          <Button variant="outline" size="icon-lg" aria-label="สวนถัดไป" onClick={() => move(1)}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
-          <span className="ml-2 text-sm text-muted-foreground">{activeIndex + 1} / {farms.length}</span>
-          <Link to={`/farms/${active.slug}`} className="ml-auto text-sm font-medium text-primary-ink underline-offset-4 hover:underline">อ่านเรื่องราวของสวน</Link>
+        <div className="mt-7 flex flex-wrap items-center gap-x-3 gap-y-4">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon-lg" aria-label="สวนก่อนหน้า" onClick={() => move(-1)}><HugeiconsIcon icon={ArrowLeft02Icon} aria-hidden="true" /></Button>
+            <Button variant="outline" size="icon-lg" aria-label="สวนถัดไป" onClick={() => move(1)}><HugeiconsIcon icon={ArrowRight02Icon} aria-hidden="true" /></Button>
+            <span className="ml-2 text-sm text-muted-foreground">{activeIndex + 1} / {farms.length}</span>
+          </div>
+          <Link to={`/farms/${active.slug}`} className="inline-flex min-h-11 items-center text-sm font-medium text-primary-ink underline-offset-4 hover:underline sm:ml-auto">อ่านเรื่องราวของสวน</Link>
         </div>
       </div>
     </div>

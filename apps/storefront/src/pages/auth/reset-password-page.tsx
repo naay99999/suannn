@@ -9,6 +9,7 @@ import { Input } from '@workspace/ui/components/input'
 import { resetPassword } from '@/lib/auth-client'
 import { AuthPageFrame } from './auth-layout'
 import { resetPasswordSchema } from './auth-schemas'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
 
 type Values = z.infer<typeof resetPasswordSchema>
 
@@ -49,7 +50,7 @@ export function Component() {
             <Field data-invalid={Boolean(errors.password)}><FieldLabel htmlFor="reset-password">รหัสผ่านใหม่</FieldLabel><Input id="reset-password" className="text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'reset-password-error' : undefined} {...register('password', { deps: touchedFields.confirmPassword ? ['confirmPassword'] : [] })} /><FieldError id="reset-password-error">{errors.password?.message}</FieldError></Field>
             <Field data-invalid={Boolean(errors.confirmPassword)}><FieldLabel htmlFor="reset-confirm">ยืนยันรหัสผ่านใหม่</FieldLabel><Input id="reset-confirm" className="text-base md:text-base" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} aria-describedby={errors.confirmPassword ? 'reset-confirm-error' : undefined} {...register('confirmPassword')} /><FieldError id="reset-confirm-error">{errors.confirmPassword?.message}</FieldError></Field>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" size="storefront" className="w-full" disabled={pending}>{pending ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}</Button>
+            <Button type="submit" size="storefront" className="w-full" disabled={pending}><ButtonSpinner show={pending} />{pending ? 'กำลังบันทึก...' : 'บันทึกรหัสผ่านใหม่'}</Button>
           </FieldGroup>
         </form>
       )}

@@ -20,14 +20,14 @@ export function AnnouncementBar() {
     : null
 
   return (
-    <aside aria-label="โปรโมชัน" className="bg-foreground text-background">
+    <aside aria-label="โปรโมชัน" className="bg-primary text-primary-foreground">
       <p className="page-width flex min-h-10 flex-wrap items-center justify-center gap-x-1.5 py-2 text-center text-sm leading-6 font-medium">
         <span>{message}</span>
         {link}
         {details && (
           <Popover>
             <PopoverTrigger
-              className="inline-flex size-7 items-center justify-center rounded-full hover:bg-background/15"
+              className="inline-flex size-7 items-center justify-center rounded-full hover:bg-primary-foreground/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground"
               aria-label="รายละเอียดโปรโมชัน"
             >
               <HugeiconsIcon icon={InformationCircleIcon} className="size-4.5" aria-hidden="true" />

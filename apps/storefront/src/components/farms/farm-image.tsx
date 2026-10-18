@@ -7,11 +7,10 @@ interface FarmImageProps {
   src: string | null
   alt: string | null
   className?: string
-  demo?: boolean
   loading?: 'eager' | 'lazy'
 }
 
-export function FarmImage({ src, alt, className, demo = false, loading = 'lazy' }: FarmImageProps) {
+export function FarmImage({ src, alt, className, loading = 'lazy' }: FarmImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const hasImage = Boolean(src && failedSrc !== src)
 
@@ -30,7 +29,6 @@ export function FarmImage({ src, alt, className, demo = false, loading = 'lazy' 
           <HugeiconsIcon icon={Leaf01Icon} size={42} aria-hidden="true" />
         </div>
       )}
-      {demo && <span className="absolute bottom-3 left-3 rounded-full bg-background/95 px-3 py-1 text-xs font-medium text-foreground shadow-sm">ข้อมูลสาธิต</span>}
     </div>
   )
 }

@@ -59,6 +59,11 @@ export function storeProductQueryKey(query: StoreProductQuery) {
   return ['store-products', query] as const
 }
 
+/** Infinite catalog pages are cached apart from the single-page `storeProductQueryKey` lists. */
+export function storeProductCatalogQueryKey(query: Omit<StoreProductQuery, 'cursor'>) {
+  return ['store-products', 'catalog', query] as const
+}
+
 export function storeProductDetailQueryKey(slug: string) {
   return ['store-product', slug] as const
 }

@@ -238,3 +238,22 @@ const refundStatusLabels: Record<StoreOrderRefund['status'], string> = {
 export function refundStatusLabel(refund: StoreOrderRefund): string {
   return refundStatusLabels[refund.status]
 }
+
+export function paymentMethodLabel(method: StoreOrderDetail['paymentMethod']): string {
+  return method === 'cod' ? 'เก็บเงินปลายทาง' : 'บัตรเครดิต/เดบิต (ชำระออนไลน์)'
+}
+
+const paymentStatusLabels: Record<StoreOrderDetail['paymentMethod'], Record<StorePaymentStatus, string>> = {
+  cod: { awaiting_collection: 'รอเก็บเงินปลายทาง', collected: 'รับเงินแล้ว', void: 'ยกเลิกการชำระเงิน' },
+  stripe: { awaiting_collection: 'รอยืนยันการชำระเงิน', collected: 'ชำระเงินแล้ว', void: 'ยกเลิกการชำระเงิน' },
+}
+
+export function paymentStatusLabel(order: { paymentMethod: StoreOrderDetail['paymentMethod']; payment: Pick<StoreOrderDetail['payment'], 'status'> }): string {
+  return paymentStatusLabels[order.paymentMethod][order.payment.status]
+}
+
+export const paymentStatusVariants: Record<StorePaymentStatus, 'success' | 'warning' | 'secondary'> = {
+  collected: 'success',
+  awaiting_collection: 'warning',
+  void: 'secondary',
+}

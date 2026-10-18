@@ -25,7 +25,6 @@ test('homepage farm feature loads API-backed profiles and links to the directory
   mount()
   expect(await screen.findByRole('heading', { name: 'สวนแม่ริม' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'ดูสวนทั้งหมด' }).getAttribute('href')).toBe('/farms')
-  expect(screen.getByText('ข้อมูลสาธิต')).toBeTruthy()
 })
 
 test('homepage farm feature keeps its empty state informative', async () => {

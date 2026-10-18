@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { QueryClient } from '@tanstack/react-query'
-import { accountDeletionFailureMessage, expireSecuritySession, performAccountDeletion, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, verificationSentMessage } from '../src/pages/account/customer-security'
+import { accountDeletionFailureMessage, describeUserAgent, emailChangeConfirmFailure, emailChangeRequestFailure, expireSecuritySession, passwordChangeFailure, performAccountDeletion, parseCustomerSessions, performRevokeSession, performSignOut, securityFailureMessage, sortSessions, verificationSentMessage } from '../src/pages/account/customer-security'
 import { AuthRequestError } from '../src/lib/auth-client'
 import { AccountRequestError } from '../src/pages/account/account-api'
 
@@ -35,7 +35,7 @@ test('parses only usable session rows from Better Auth', () => {
   expect(parseCustomerSessions([
     { id: 'one', token: 'token-1', userAgent: 'Browser', createdAt: '2026-09-01T00:00:00Z' },
     { id: 'bad', userAgent: 'Missing token' },
-  ])).toEqual([{ id: 'one', token: 'token-1', userAgent: 'Browser', createdAt: '2026-09-01T00:00:00Z' }])
+  ])).toEqual([{ id: 'one', token: 'token-1', userAgent: 'Browser', createdAt: '2026-09-01T00:00:00Z', updatedAt: '', ipAddress: null }])
 })
 
 test('security 401 clears session and protected cache; server errors remain retryable', () => {
@@ -62,4 +62,27 @@ test('explains why an account cannot be deleted', () => {
   expect(accountDeletionFailureMessage(new AccountRequestError(409, 'ACCOUNT_HAS_OPEN_ORDERS'))).toContain('คำสั่งซื้อ')
   expect(accountDeletionFailureMessage(new AccountRequestError(422, 'INVALID_CURRENT_PASSWORD'))).toBe('รหัสผ่านไม่ถูกต้อง')
   expect(accountDeletionFailureMessage(new Error('offline'))).toBe('ลบบัญชีไม่สำเร็จ กรุณาลองใหม่')
+})
+
+test('names devices in plain words instead of raw user agents', () => {
+  expect(describeUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36')).toBe('Chrome บน macOS')
+  expect(describeUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari บน iPhone')
+  expect(describeUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0')).toBe('Edge บน Windows')
+  expect(describeUserAgent(null)).toBe('อุปกรณ์ที่ไม่ระบุชื่อ')
+})
+
+test('lists the current device first, then the most recently active', () => {
+  const row = (id: string, updatedAt: string) => ({ id, token: id, userAgent: null, createdAt: '', updatedAt, ipAddress: null })
+  expect(sortSessions([row('old', '2026-09-01T00:00:00Z'), row('new', '2026-10-01T00:00:00Z'), row('me', '2026-08-01T00:00:00Z')], 'me').map(item => item.id))
+    .toEqual(['me', 'new', 'old'])
+})
+
+test('points password and email change failures at the field that caused them', () => {
+  expect(passwordChangeFailure(new AuthRequestError(400, 'INVALID_PASSWORD', 'x'))).toEqual({ field: 'currentPassword', message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' })
+  expect(passwordChangeFailure(new AuthRequestError(429, 'RATE_LIMITED', 'x')).field).toBeUndefined()
+  expect(emailChangeRequestFailure(new AccountRequestError(422, 'INVALID_CURRENT_PASSWORD')).field).toBe('currentPassword')
+  expect(emailChangeRequestFailure(new AccountRequestError(409, 'EMAIL_UNAVAILABLE')).field).toBe('newEmail')
+  expect(emailChangeConfirmFailure(new AccountRequestError(410, 'EMAIL_CHANGE_CODE_EXPIRED')).expired).toBe(true)
+  expect(emailChangeConfirmFailure(new AccountRequestError(422, 'EMAIL_CHANGE_CODE_INVALID')).expired).toBe(false)
+  expect(securityFailureMessage(new AuthRequestError(429, 'RATE_LIMITED', 'x'))).toContain('รอสักครู่')
 })

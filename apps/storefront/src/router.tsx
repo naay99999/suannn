@@ -3,16 +3,13 @@ import { StorefrontRouteError } from './pages/error-page'
 import { StorefrontLayout } from './pages/layout'
 import { AccountLayout } from './pages/account/account-layout'
 import { CustomerGuard } from './pages/auth/customer-guard'
+import { PageLoading } from './components/loading/page-loading'
 
 export const router = createBrowserRouter([
   {
     Component: StorefrontLayout,
     errorElement: <StorefrontRouteError />,
-    hydrateFallbackElement: (
-      <div className="suannn-store grid min-h-svh place-items-center bg-background text-foreground" role="status">
-        <p>กำลังเปิดสวน...</p>
-      </div>
-    ),
+    hydrateFallbackElement: <PageLoading label="กำลังเปิดสวน..." className="suannn-store min-h-svh bg-background" />,
     children: [
       {
         index: true,

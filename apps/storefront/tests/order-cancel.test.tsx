@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CancelOrderDialog } from '../src/components/orders/cancel-order-dialog'
-import { canCancelOrder, cancelOrderErrorMessage, refundStatusLabel, StoreOrderRequestError, type StoreOrderDetail } from '../src/lib/store-orders'
+import { canCancelOrder, cancelOrderErrorMessage, paymentMethodLabel, paymentStatusLabel, refundStatusLabel, StoreOrderRequestError, type StoreOrderDetail } from '../src/lib/store-orders'
 
 test('only COD orders that have not shipped can be cancelled by the customer', () => {
   for (const status of ['placed', 'processing', 'packed'] as const) expect(canCancelOrder({ paymentMethod: 'cod', status })).toBe(true)
@@ -40,4 +40,10 @@ test('retries a failed cancellation with the same idempotency key', async () => 
   await waitFor(() => expect(onCancelled).toHaveBeenCalledWith(cancelled))
   expect(keys).toHaveLength(2)
   expect(keys[0]).toBe(keys[1])
+})
+
+test('labels payment status by method without naming the processor', () => {
+  expect(paymentStatusLabel({ paymentMethod: 'stripe', payment: { status: 'collected' } })).toBe('ชำระเงินแล้ว')
+  expect(paymentStatusLabel({ paymentMethod: 'cod', payment: { status: 'awaiting_collection' } })).toBe('รอเก็บเงินปลายทาง')
+  expect(paymentMethodLabel('stripe')).not.toContain('Stripe')
 })

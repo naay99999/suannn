@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowRight01Icon, ArrowUpRight01Icon, Cancel01Icon, Menu01Icon, UserCircleIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, ArrowUpRight01Icon, Cancel01Icon, Menu01Icon, UserIcon } from '@hugeicons/core-free-icons'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
+import { Skeleton } from '@workspace/ui/components/skeleton'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@workspace/ui/components/dialog'
 import { cn } from '@workspace/ui/lib/utils'
 
 import { AnnouncementBar } from '@/components/announcement-bar'
+import { NavigationProgress } from '@/components/loading/navigation-progress'
 import { useCart } from '@/components/cart/cart-context'
 import { CartProvider } from '@/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '@/components/cart/side-cart'
@@ -59,8 +61,10 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
 
   if (session.isPending) {
     return (
-      <Button {...variant} className={className} disabled aria-busy="true" aria-label={compact ? 'กำลังตรวจสอบบัญชี' : undefined}>
-        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : 'กำลังตรวจสอบบัญชี'}
+      // Same icon and footprint as the resolved link, so the header does not shift once the session loads.
+      <Button {...variant} className={className} disabled aria-busy="true" aria-label="กำลังตรวจสอบบัญชี">
+        <HugeiconsIcon icon={UserIcon} data-icon={compact ? undefined : 'inline-start'} />
+        {!compact && <Skeleton aria-hidden="true" className="h-3.5 w-18" />}
       </Button>
     )
   }
@@ -68,7 +72,7 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
   if (session.isError) {
     return (
       <Button {...variant} className={className} title="ตรวจสอบบัญชีไม่ได้ กดลองอีกครั้ง" aria-label={compact ? 'ตรวจสอบบัญชีอีกครั้ง' : undefined} onClick={() => void session.refetch()}>
-        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : 'ตรวจสอบบัญชีอีกครั้ง'}
+        {compact ? <HugeiconsIcon icon={UserIcon} /> : 'ตรวจสอบบัญชีอีกครั้ง'}
       </Button>
     )
   }
@@ -76,7 +80,7 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
   if (session.data?.user.accountType === 'staff') {
     return (
       <a className={cn(buttonVariants(variant), className)} href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')} aria-label={compact ? 'ไปหน้าผู้ดูแล' : undefined} onClick={onNavigate}>
-        {compact ? <HugeiconsIcon icon={UserCircleIcon} /> : <>ไปหน้าผู้ดูแล <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" /></>}
+        {compact ? <HugeiconsIcon icon={UserIcon} /> : <>ไปหน้าผู้ดูแล <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" /></>}
       </a>
     )
   }
@@ -90,7 +94,7 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
       title={compact ? label : undefined}
       onClick={onNavigate}
     >
-      <HugeiconsIcon icon={UserCircleIcon} data-icon={compact ? undefined : 'inline-start'} />
+      <HugeiconsIcon icon={UserIcon} data-icon={compact ? undefined : 'inline-start'} />
       {!compact && label}
     </Link>
   )
@@ -127,6 +131,7 @@ function StorefrontShell() {
   if (isAuthPage || isCheckoutPage) {
     return (
       <div className="suannn-store flex min-h-dvh flex-col bg-background text-foreground">
+        <NavigationProgress />
         <a className="skip-link" href="#main-content">ข้ามไปเนื้อหาหลัก</a>
         <header className="page-width w-full">
           <nav aria-label="เมนูหลัก" className="flex min-h-22 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-4">
@@ -143,13 +148,14 @@ function StorefrontShell() {
 
   return (
     <div className="suannn-store flex min-h-svh flex-col bg-background text-foreground">
+      <NavigationProgress />
       <a className="skip-link" href="#main-content">
         ข้ามไปเนื้อหาหลัก
       </a>
       <AnnouncementBar />
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
         <header className="suannn-header">
-          <div className="page-width flex h-22 items-center justify-between gap-6">
+          <div className="page-width flex h-16 items-center justify-between gap-6 md:h-22">
             <Link
               className="suannn-logo"
               to="/"
@@ -186,7 +192,7 @@ function StorefrontShell() {
         >
           <DialogTitle className="sr-only">เมนูหลัก</DialogTitle>
           <DialogDescription className="sr-only">เลือกหน้าที่ต้องการ หรือจัดการบัญชีของคุณ</DialogDescription>
-          <div className="page-width flex h-22 shrink-0 items-center justify-between gap-6 border-b">
+          <div className="page-width flex h-16 shrink-0 items-center justify-between gap-6 border-b md:h-22">
             <Link className="suannn-logo" to="/" aria-label="suannn หน้าแรก" onClick={() => setMenuOpen(false)}>
               suannn<span>.</span>
             </Link>
@@ -252,7 +258,7 @@ function StorefrontShell() {
             <div className="flex flex-col gap-4">
               <p className="font-semibold">เรื่องของสวน</p>
               <Link className="nav-link" to="/#our-story">
-                ความตั้งใจของเรา
+                เรื่องราวของสวน
               </Link>
               <Link className="nav-link" to="/#from-the-farm">
                 ความโปร่งใสของสินค้า
@@ -261,9 +267,8 @@ function StorefrontShell() {
             </div>
           </div>
         </div>
-        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} suannn. Grown with care, shared with you.</p>
-          <p>ภาพและรายการสินค้าเป็นตัวอย่างสำหรับหน้าเว็บไซต์</p>
+        <div className="pt-6 text-xs text-muted-foreground">
+          <p>© {new Date().getFullYear()} suannn. <span lang="en">Grown with care, shared with you.</span></p>
         </div>
       </footer>
       <SideCart />

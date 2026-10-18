@@ -206,9 +206,11 @@ export function ProductGalleryViewer({
           )}
 
           <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-3 pb-2 pt-12 sm:px-6">
-            <p className="max-w-prose text-center text-sm text-white" aria-live="polite">
-              {currentImage.caption}
-            </p>
+            {currentImage.caption && (
+              <p className="max-w-prose text-center text-sm text-white" aria-live="polite">
+                {currentImage.caption}
+              </p>
+            )}
             {product.images.length > 1 && (
               <ProductGalleryThumbnails
                 images={product.images}

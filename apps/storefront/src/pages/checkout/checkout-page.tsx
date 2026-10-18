@@ -22,6 +22,8 @@ import { OrderSummary } from './order-summary'
 import { PaymentMethodOptions, paymentNextStep } from './payment-method-options'
 import { useStickyVisibility } from '@/lib/use-sticky-visibility'
 import { redirectToStripe } from '@/lib/store-orders'
+import { ButtonSpinner } from '@/components/loading/button-spinner'
+import { PageLoading } from '@/components/loading/page-loading'
 
 const emailField = { label: 'อีเมลสำหรับรับรายละเอียดคำสั่งซื้อ', autoComplete: 'email', inputMode: 'email', type: 'email', placeholder: 'name@example.com' } as const
 
@@ -84,6 +86,7 @@ export function Component() {
   const actions = useRef<HTMLDivElement>(null)
   const sticky = useStickyVisibility(actions)
   const submitDisabled = !sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)
+  const submitBusy = isSubmitting || orderMutation.isPending
   const submitLabel = isSubmitting ? 'กำลังส่งคำสั่งซื้อ...' : paysWithStripe ? 'ไปชำระเงิน' : 'ยืนยันสั่งซื้อ'
 
   // Pre-check "ship elsewhere" once for a customer whose saved shipping default differs from the billing default.
@@ -143,7 +146,7 @@ export function Component() {
     }
   }
 
-  if (cartPending && !cart) return <p role="status" className="py-16 text-center text-muted-foreground">กำลังโหลดตะกร้า...</p>
+  if (cartPending && !cart) return <PageLoading label="กำลังโหลดตะกร้า..." />
   if (!lines.length) {
     return <Empty className="py-20"><EmptyHeader><EmptyTitle>ยังไม่มีสินค้าในตะกร้า</EmptyTitle><EmptyDescription>เลือกสินค้าจากร้านก่อน แล้วกลับมาตรวจสอบรายการได้ที่นี่</EmptyDescription></EmptyHeader><EmptyContent><Button render={<Link to="/products" />} nativeButton={false} size="storefront">ไปเลือกสินค้า</Button></EmptyContent></Empty>
   }
@@ -156,9 +159,7 @@ export function Component() {
       </div>
       {cartError && <p role="alert" className="mb-5 text-sm text-destructive">{cartError}</p>}
       {session.isError && <div role="alert" className="mb-5 flex items-center gap-3"><p>ตรวจสอบสถานะบัญชีไม่ได้ กรุณาลองอีกครั้งก่อนสั่งซื้อ</p><Button variant="outline" onClick={() => void session.refetch()}>ลองอีกครั้ง</Button></div>}
-      {session.isPending && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังตรวจสอบสถานะบัญชี...</p>}
       {hasUnavailable && <p role="alert" className="mb-5 text-sm text-destructive">มีสินค้าไม่พร้อมสั่งซื้อ กรุณากลับไปแก้ไขตะกร้าก่อน</p>}
-      {quote.isPending && !quote.data && !hasUnavailable && <p role="status" className="mb-5 text-sm text-muted-foreground">กำลังคำนวณยอดและค่าจัดส่ง...</p>}
       {quote.isError && <div role="alert" className="mb-5 flex flex-wrap items-center gap-3"><p>คำนวณยอดชำระไม่ได้ กรุณาลองอีกครั้ง</p><Button variant="outline" onClick={() => void quote.refetch()}>คำนวณใหม่</Button></div>}
       <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:gap-16">
         <form id="checkout-form" noValidate onSubmit={handleSubmit(submit, () => setSubmitError('กรุณากรอกข้อมูลติดต่อและที่อยู่ให้ครบถ้วน'))} className="min-w-0">
@@ -185,11 +186,17 @@ export function Component() {
           </section>
         </form>
         <aside aria-label="ตรวจสอบยอดและยืนยันคำสั่งซื้อ" className="min-w-0 border-t pt-8 lg:sticky lg:top-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-          {quote.data ? <OrderSummary quote={quote.data} images={lineImages} /> : <p role="status" className="py-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}
+          {quote.data
+            ? <OrderSummary quote={quote.data} images={lineImages} />
+            : quote.isPending && !hasUnavailable
+              ? <PageLoading label="กำลังคำนวณยอดและค่าจัดส่ง..." className="justify-start py-6" />
+              : <p role="status" className="py-6 text-sm text-muted-foreground">ยอดรวมจะแสดงเมื่อคำนวณราคาเสร็จ</p>}
           <div ref={actions} className="mt-8 flex flex-col gap-4">
             {submitError && !sticky && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
-            <Button type="submit" form="checkout-form" size="storefront" className="w-full" aria-busy={isSubmitting} disabled={submitDisabled}>{isSubmitting || !quote.data ? submitLabel : `${submitLabel} · ${formatStorePrice(quote.data.totalSatang)}`}</Button>
-            <p className="text-center text-xs leading-6 text-muted-foreground">{paymentNextStep(selectedPaymentMethod)}</p>
+            <Button type="submit" form="checkout-form" size="storefront" className="w-full" aria-busy={submitBusy} disabled={submitDisabled}><ButtonSpinner show={submitBusy} />{isSubmitting || !quote.data ? submitLabel : `${submitLabel} · ${formatStorePrice(quote.data.totalSatang)}`}</Button>
+            {session.isPending
+              ? <PageLoading label="กำลังตรวจสอบสถานะบัญชี..." className="py-0 text-xs leading-6" />
+              : <p className="text-center text-xs leading-6 text-muted-foreground">{paymentNextStep(selectedPaymentMethod)}</p>}
           </div>
         </aside>
       </div>
@@ -203,7 +210,7 @@ export function Component() {
       >
         <div className="page-width flex flex-col items-stretch gap-2 py-3">
           {submitError && sticky && <p className="text-center text-sm text-destructive">{submitError}</p>}
-          <Button type="submit" form="checkout-form" size="storefront" className="px-10 text-base" aria-busy={isSubmitting} disabled={submitDisabled}>{submitLabel}</Button>
+          <Button type="submit" form="checkout-form" size="storefront" className="px-10 text-base" aria-busy={submitBusy} disabled={submitDisabled}><ButtonSpinner show={submitBusy} />{submitLabel}</Button>
           <p className="truncate text-center text-sm text-muted-foreground">
             {quote.data ? <>ยอดชำระทั้งหมด <span className="font-semibold text-foreground tabular-nums">{formatStorePrice(quote.data.totalSatang)}</span></> : 'กำลังคำนวณยอด...'}
           </p>

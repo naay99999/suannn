@@ -84,7 +84,7 @@ test('unverified customer cannot select COD and is pointed to email verification
   const stripe = await screen.findByRole('radio', { name: /บัตรเครดิต/ })
   expect((stripe as HTMLInputElement).checked).toBe(true)
   expect(screen.queryByRole('radio', { name: /เก็บเงินปลายทาง/ })).toBeNull()
-  expect(screen.getByRole('link', { name: 'ส่งอีเมลยืนยัน' }).getAttribute('href')).toBe('/account/security')
+  expect(screen.getByRole('link', { name: 'ส่งอีเมลยืนยัน' }).getAttribute('href')).toBe('/account/profile')
 })
 
 test('contact section only asks for email', async () => {

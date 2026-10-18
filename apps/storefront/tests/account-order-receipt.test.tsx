@@ -7,7 +7,7 @@ import { CartProvider } from '../src/components/cart/cart-provider'
 import { Component } from '../src/pages/account/order-detail-page'
 import { authSessionQuery } from '../src/lib/auth-session'
 import { receiptDownloadConfig } from '../src/lib/store-orders'
-import { orderQueryKey } from '../src/pages/account/account-queries'
+import { orderQueryKey, ordersQueryKey } from '../src/pages/account/account-queries'
 
 const orderId = '00000000-0000-4000-8000-0000000000bb'
 const userId = 'user-1'
@@ -60,4 +60,31 @@ test('customer receipt download sends credentials and triggers the anchor downlo
   expect(pdfCalls[0]?.credentials).toBe('include')
   expect(revoked).toEqual([])
   await waitFor(() => expect(revoked).toEqual(['blob:customer']))
+})
+
+function renderDetail(seed: (queryClient: QueryClient) => void) {
+  // Keep the detail request in flight so the page shows what it had before the response.
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  queryClient.setQueryData(authSessionQuery.queryKey, { session: { id: 's', expiresAt: '' }, user: { id: userId, name: 'n', email: 'e', emailVerified: true, image: null, accountType: 'customer' } })
+  seed(queryClient)
+  const router = createMemoryRouter([{ path: '/account/orders/:orderId', Component }], { initialEntries: [`/account/orders/${orderId}`] })
+  render(<QueryClientProvider client={queryClient}><CartProvider><RouterProvider router={router} /></CartProvider></QueryClientProvider>)
+}
+
+test('delivered orders offer reorder and show the shipment up front', async () => {
+  const shipment = { carrier: 'thailand_post', carrierName: null, trackingNumber: 'EF123456789TH', shippedAt: '2026-10-19T00:00:00.000Z' }
+  renderDetail(queryClient => queryClient.setQueryData(orderQueryKey(userId, orderId), { ...order, status: 'delivered', payment: { status: 'collected' }, shipment }))
+
+  expect(await screen.findByRole('button', { name: 'สั่งซื้ออีกครั้ง' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'การจัดส่ง' })).toBeTruthy()
+  expect(screen.getByText('EF123456789TH')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'ยกเลิกคำสั่งซื้อ' })).toBeNull()
+})
+
+test('renders the orders-list copy immediately while the detail loads', async () => {
+  renderDetail(queryClient => queryClient.setQueryData(ordersQueryKey(userId), { pages: [{ items: [order], nextCursor: null }], pageParams: [undefined] }))
+
+  expect(await screen.findByRole('heading', { name: 'SN-1' })).toBeTruthy()
+  expect(screen.queryByRole('status', { name: 'กำลังโหลดคำสั่งซื้อ' })).toBeNull()
 })

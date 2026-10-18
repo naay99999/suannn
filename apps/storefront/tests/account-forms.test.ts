@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { addressSchema, emailChangeCodeSchema, profileNameSchema } from '../src/pages/account/account-forms'
+import { addressSchema, emailChangeCodeSchema, normalizeThaiPhone, profileNameSchema } from '../src/pages/account/account-forms'
 
 const address = {
   label: 'บ้าน', recipientName: 'มะลิ ใจดี', phone: '0812345678',
@@ -25,4 +25,18 @@ test('email change code has exactly eight digits', () => {
   expect(emailChangeCodeSchema.safeParse({ code: '12345678' }).success).toBe(true)
   expect(emailChangeCodeSchema.safeParse({ code: '1234567' }).success).toBe(false)
   expect(emailChangeCodeSchema.safeParse({ code: '1234abcd' }).success).toBe(false)
+})
+
+test('address phone accepts pasted formats and stores plain digits', () => {
+  expect(addressSchema.parse({ ...address, phone: '081-234-5678' }).phone).toBe('0812345678')
+  expect(addressSchema.parse({ ...address, phone: '+66 81 234 5678' }).phone).toBe('0812345678')
+  expect(addressSchema.parse({ ...address, phone: '(02) 123 4567' }).phone).toBe('021234567')
+  expect(normalizeThaiPhone('66812345678')).toBe('0812345678')
+  expect(addressSchema.safeParse({ ...address, phone: '081-234' }).success).toBe(false)
+})
+
+test('email change code accepts pasted spacing', () => {
+  expect(emailChangeCodeSchema.parse({ code: '1234 5678' }).code).toBe('12345678')
+  expect(emailChangeCodeSchema.parse({ code: '1234-5678' }).code).toBe('12345678')
+  expect(emailChangeCodeSchema.safeParse({ code: '1234567' }).success).toBe(false)
 })

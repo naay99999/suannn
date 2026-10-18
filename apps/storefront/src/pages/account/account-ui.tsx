@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Badge } from '@workspace/ui/components/badge'
 import { cn } from '@workspace/ui/lib/utils'
 import type { CustomerOrder } from './account-api'
-import { formatSatang, orderStatusLabels } from './order-display'
+import { formatSatang, fulfilmentProgress, fulfilmentSteps, orderStatusLabels } from './order-display'
 
 export function AccountPageHeading({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
@@ -16,8 +16,28 @@ export function AccountPageHeading({ title, description, action }: { title: stri
   )
 }
 
+const orderStatusVariants: Partial<Record<CustomerOrder['status'], 'warning' | 'info' | 'success' | 'secondary'>> = {
+  pending_payment: 'warning',
+  shipped: 'info',
+  delivered: 'success',
+  cancelled: 'secondary',
+}
+
 export function OrderStatus({ status }: { status: CustomerOrder['status'] }) {
-  return <Badge variant={status === 'delivered' ? 'secondary' : 'outline'} className={cn(status === 'delivered' && 'text-primary-ink')}>{orderStatusLabels[status]}</Badge>
+  return <Badge variant={orderStatusVariants[status] ?? 'outline'}>{orderStatusLabels[status]}</Badge>
+}
+
+export function FulfilmentProgress({ status }: { status: CustomerOrder['status'] }) {
+  const progress = fulfilmentProgress(status)
+  if (progress < 0) return null
+  return (
+    <ol aria-label="ความคืบหน้าการจัดส่ง" className="grid grid-cols-4 gap-1.5">
+      {fulfilmentSteps.map((step, index) => <li key={step} aria-current={index === progress ? 'step' : undefined} className="flex min-w-0 flex-col gap-1.5">
+        <span className={cn('h-2 rounded-full', index <= progress ? 'bg-primary' : 'bg-muted')} />
+        <span className={cn('truncate text-xs', index === progress ? 'font-medium text-foreground' : 'text-muted-foreground', index !== progress && 'max-sm:sr-only')}>{orderStatusLabels[step]}</span>
+      </li>)}
+    </ol>
+  )
 }
 
 export interface AddressDisplay {
@@ -35,10 +55,16 @@ export function AddressText({ address }: { address: AddressDisplay }) {
 
 export function OrderItems({ order }: { order: CustomerOrder }) {
   return (
-    <ul className="flex flex-col gap-5">
-      {order.items.map(item => <li key={item.id} className="flex min-w-0 flex-wrap justify-between gap-4 border-b pb-4 last:border-0 last:pb-0">
-        <div className="min-w-0"><p className="font-medium">{item.productName}</p><p className="mt-1 text-xs text-muted-foreground">{item.variantName} · {item.unit} · จำนวน {item.quantity}</p></div>
-        <p className="font-semibold tabular-nums text-primary-ink">{formatSatang(item.lineTotalSatang)}</p>
+    <ul className="flex flex-col divide-y">
+      {order.items.map(item => <li key={item.id} className="flex min-w-0 items-baseline justify-between gap-4 py-4 first:pt-0 last:pb-0">
+        <div className="min-w-0">
+          <p className="font-medium">{item.productName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{item.variantName} · {item.unit}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-semibold tabular-nums">{formatSatang(item.lineTotalSatang)}</p>
+          <p className="mt-1 text-xs tabular-nums text-muted-foreground">{formatSatang(item.unitPriceSatang)} × {item.quantity}</p>
+        </div>
       </li>)}
     </ul>
   )

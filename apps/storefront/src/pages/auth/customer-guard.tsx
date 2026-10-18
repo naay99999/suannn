@@ -4,6 +4,7 @@ import { Link, Navigate, Outlet, useLocation } from 'react-router'
 import { Button } from '@workspace/ui/components/button'
 import { authSessionQuery, classifyCustomerSession, reconcileCustomerQueries } from '@/lib/auth-session'
 import { staffSignInUrl } from '@/lib/auth-navigation'
+import { PageLoading } from '@/components/loading/page-loading'
 
 export function CustomerGuard() {
   const { pathname, search } = useLocation()
@@ -17,7 +18,7 @@ export function CustomerGuard() {
   }, [accountType, queryClient, sessionQuery.data, sessionQuery.isSuccess, userId])
 
   if (sessionQuery.isPending) {
-    return <div className="grid min-h-80 place-items-center text-muted-foreground" role="status">กำลังตรวจสอบบัญชี...</div>
+    return <PageLoading label="กำลังตรวจสอบบัญชี..." className="min-h-80" />
   }
   if (sessionQuery.isError) {
     return (

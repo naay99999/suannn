@@ -3,6 +3,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft02Icon, ArrowRight02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@workspace/ui/components/button'
 import { cn } from '@workspace/ui/lib/utils'
+import { ProductGridSkeleton } from '@/components/loading/product-grid-skeleton'
 import { ProductCard } from '@/components/product-card'
 import type { StoreProductSummary } from '@/lib/store-products'
 
@@ -22,8 +23,24 @@ function subscribeLayout(onChange: () => void) {
   return () => queries.forEach(query => query.removeEventListener('change', onChange))
 }
 
+// The track bleeds into the gutter by 12px so focus outlines on the cards are not clipped by overflow.
+const carouselClassName = '-mx-3 -mt-3 flex snap-x snap-mandatory scroll-px-3 gap-4 overflow-x-auto overscroll-x-contain px-3 pt-3 pb-5 scroll-smooth motion-reduce:scroll-auto sm:gap-6'
+const slideClassName = 'flex-none basis-[82%] snap-start sm:basis-[46%]'
+
+function useRecommendationColumns() {
+  return useSyncExternalStore(subscribeLayout, readColumns, () => 0)
+}
+
+/** Loading placeholder that uses the same carousel/grid switch as `ProductRecommendations`. */
+export function ProductRecommendationsSkeleton({ label }: { label: string }) {
+  const columns = useRecommendationColumns()
+  return columns
+    ? <ProductGridSkeleton label={label} count={columns * 2} className={cn('grid gap-x-5 gap-y-10', columns === 4 ? 'grid-cols-4' : 'grid-cols-3')} />
+    : <ProductGridSkeleton label={label} count={3} className={cn(carouselClassName, 'overflow-x-hidden')} itemClassName={slideClassName} />
+}
+
 export function ProductRecommendations({ products, label }: { products: StoreProductSummary[]; label: string }) {
-  const columns = useSyncExternalStore(subscribeLayout, readColumns, () => 0)
+  const columns = useRecommendationColumns()
   const isCarousel = columns === 0
   const visibleProducts = products.slice(0, columns ? columns * 2 : recommendationLimit)
   const track = useRef<HTMLDivElement>(null)
@@ -81,23 +98,23 @@ export function ProductRecommendations({ products, label }: { products: StorePro
         } : undefined}
         className={cn(
           isCarousel
-            ? 'flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-5 scroll-smooth motion-reduce:scroll-auto sm:gap-6'
+            ? carouselClassName
             : 'grid gap-x-5 gap-y-10',
           columns === 4 && 'grid-cols-4',
           columns === 3 && 'grid-cols-3',
         )}
       >
         {visibleProducts.map((product, index) => (
-          <div key={product.id} role={isCarousel ? 'group' : undefined} aria-roledescription={isCarousel ? 'slide' : undefined} aria-label={isCarousel ? `${index + 1} จาก ${visibleProducts.length}` : undefined} className={cn('min-w-0', isCarousel && 'flex-none basis-[82%] snap-start sm:basis-[46%]')}>
+          <div key={product.id} role={isCarousel ? 'group' : undefined} aria-roledescription={isCarousel ? 'slide' : undefined} aria-label={isCarousel ? `${index + 1} จาก ${visibleProducts.length}` : undefined} className={cn('min-w-0', isCarousel && slideClassName)}>
             <ProductCard product={product} />
           </div>
         ))}
       </div>
       {isCarousel ? <div className="mt-2 flex items-center justify-between gap-4">
-        <p className="text-sm tabular-nums text-muted-foreground" aria-live="polite">{position.active + 1} / {visibleProducts.length}</p>
+        <p className="text-sm tabular-nums text-muted-foreground">{position.active + 1} / {visibleProducts.length}</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าก่อนหน้า" disabled={position.atStart} onClick={() => goTo(position.active - 1)}><HugeiconsIcon icon={ArrowLeft02Icon} /></Button>
-          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าถัดไป" disabled={position.atEnd} onClick={() => goTo(position.active + 1)}><HugeiconsIcon icon={ArrowRight02Icon} /></Button>
+          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าก่อนหน้า" disabled={position.atStart} onClick={() => goTo(position.active - 1)}><HugeiconsIcon icon={ArrowLeft02Icon} aria-hidden="true" /></Button>
+          <Button variant="outline" size="icon-lg" className="size-11 rounded-full" aria-label="สินค้าถัดไป" disabled={position.atEnd} onClick={() => goTo(position.active + 1)}><HugeiconsIcon icon={ArrowRight02Icon} aria-hidden="true" /></Button>
         </div>
       </div> : <p role="status" className="mt-7 text-xs leading-6 text-muted-foreground">แสดง {visibleProducts.length} รายการ</p>}
     </div>

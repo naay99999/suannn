@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Sheet } from '@workspace/ui/components/sheet'
 import { authSessionQuery, clearStoreCartQuery } from '@/lib/auth-session'
 import { getStoreCart, mergeCustomerCartOnce, removeCartItem, setCartItem, storeCartQueryKey, StoreCartRequestError } from '@/lib/store-cart'
 import { cartMergeNotice, discardLegacyCart } from '@/lib/cart'
@@ -84,7 +83,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setOpen,
       triggerRef,
     }}>
-      <Sheet open={open} onOpenChange={setOpen}>{children}</Sheet>
+      {children}
     </CartContext.Provider>
   )
 }
