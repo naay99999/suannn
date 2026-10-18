@@ -13,6 +13,18 @@ import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus, Shipmen
 import type { OrderService } from './service'
 import type { StripeRefundService } from '../payments/stripe/refunds'
 import { ordersModels } from './model'
+import { renderReceiptPdf } from '../receipts/pdf'
+
+async function receiptPdfResponse(service: Pick<OrderService, 'readReceipt'>, orderId: string, principal: OrderPrincipal) {
+  const { snapshot, status, receiptNumber } = await service.readReceipt(orderId, principal)
+  return new Response(await renderReceiptPdf(snapshot, status), {
+    headers: {
+      'content-type': 'application/pdf',
+      'content-disposition': `attachment; filename="${receiptNumber}.pdf"`,
+      'cache-control': 'private, no-store',
+    },
+  })
+}
 
 const guestOrderAccessLimit = { limit: 30, windowSeconds: 60 }
 
@@ -173,7 +185,7 @@ async function rateLimitGuestOrderAccess(
 export function createStoreOrdersModule(
   config: AppConfig,
   auth: Auth,
-  service: Pick<OrderService, 'listCustomer' | 'getStoreOrder' | 'cancel'>,
+  service: Pick<OrderService, 'listCustomer' | 'getStoreOrder' | 'cancel' | 'readReceipt'>,
   limiter: Pick<RateLimiter, 'consume'>,
 ) {
   const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error' } as const
@@ -210,6 +222,23 @@ export function createStoreOrdersModule(
       detail: {
         summary: 'Get an owned store order',
         description: 'Returns a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response. Unpaid Stripe orders include checkout with the hosted Checkout URL while that session is still open.',
+        tags: ['Store Orders'],
+        security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
+      },
+    })
+    .get('/:orderId/receipt.pdf', async ({ request, params, requestContext, set }) => {
+      const { principal, guest } = await resolveOrderPrincipal(auth, request)
+      if (guest) {
+        const limited = await rateLimitGuestOrderAccess(request, limiter, requestContext, set)
+        if (limited) return limited
+      }
+      return receiptPdfResponse(service, params.orderId, principal)
+    }, {
+      params: 'orders.idParams',
+      response: { 404: 'http.error', 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error', 429: 'http.error' },
+      detail: {
+        summary: 'Download an order receipt PDF',
+        description: 'Returns the receipt PDF of a customer-owned order or a guest order authenticated by X-Order-Access-Token. Missing, invalid, and unknown guest orders return the same not-found response as the order detail. Returns 404 RECEIPT_NOT_FOUND when the order has no receipt.',
         tags: ['Store Orders'],
         security: [{ sessionCookie: [] }, { orderAccessToken: [] }],
       },
@@ -277,6 +306,19 @@ export function createAdminOrdersModule(
       detail: {
         summary: 'Get a staff order',
         description: 'Returns an order and payment detail without any guest access secret. Requires order:read permission.',
+        tags: ['Admin Orders'], security: staffSecurity,
+      },
+    })
+    .get('/:orderId/receipt.pdf', ({ params, user, requestContext }) => receiptPdfResponse(
+      service, params.orderId, actorFrom(user.id, requestContext),
+    ), {
+      beforeHandle: rejectUnknownQueryFields([]),
+      permission: { order: ['read'] },
+      params: 'orders.idParams',
+      response: { 404: 'http.error', 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error' },
+      detail: {
+        summary: 'Download a staff order receipt PDF',
+        description: 'Returns the receipt PDF of an order, including a cancelled receipt with its cancelled mark. Returns 404 RECEIPT_NOT_FOUND when the order has no receipt. Requires order:read permission.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

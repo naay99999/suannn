@@ -27,7 +27,7 @@ import { StripeCheckoutService } from '../../src/modules/checkout/stripe-service
 import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/repository'
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
-import { createAdminOrdersModule } from '../../src/modules/orders'
+import { createAdminOrdersModule, createStoreOrdersModule } from '../../src/modules/orders'
 import { OrderService } from '../../src/modules/orders/service'
 import type { StripeGateway } from '../../src/modules/payments/stripe/gateway'
 import { StripeEventService } from '../../src/modules/payments/stripe/events'
@@ -193,7 +193,7 @@ async function placeStripe() {
     contact: { email: 'guest@example.test' },
     billingAddress,
   }, principal, `receipts-stripe-${crypto.randomUUID()}`)
-  return result.order
+  return { ...result.order, guestAccessToken: result.guestAccessToken! }
 }
 
 async function settleStripe(order: { id: string; totalSatang: number }, eventId = `evt_${crypto.randomUUID().replaceAll('-', '')}`) {
@@ -236,7 +236,7 @@ function receiptEvents(orderId: string) {
     .then((events) => events.filter(({ eventType }) => eventType.startsWith('receipt.')))
 }
 
-function createAdminApp(role: 'owner' | 'fulfillment' | 'support') {
+function createAdminApp(role: 'owner' | 'fulfillment' | 'support' | 'customer') {
   const auth = {
     handler: async () => new Response(),
     api: {
@@ -250,6 +250,43 @@ function createAdminApp(role: 'owner' | 'fulfillment' | 'support') {
   return new Elysia()
     .use(createErrorHandlingPlugin())
     .use(createAdminOrdersModule(config, auth, services().orders))
+}
+
+function createStoreApp(sessionUserId: string | null) {
+  const auth = {
+    handler: async () => new Response(),
+    api: {
+      getSession: async () => sessionUserId === null ? null : {
+        session: { id: 'session-2', expiresAt: new Date('2099-01-01T00:00:00Z') },
+        user: { id: sessionUserId, accountType: 'customer' as const },
+      },
+    },
+  } as unknown as Auth
+  const limiter = { consume: async () => ({ allowed: true as const, remaining: 1, retryAfterSeconds: 0 }) }
+  return new Elysia()
+    .use(createErrorHandlingPlugin())
+    .use(createStoreOrdersModule(config, auth, services().orders, limiter as never))
+}
+
+function storeReceiptRequest(app: ReturnType<typeof createStoreApp>, orderId: string, headers: Record<string, string> = {}) {
+  return app.handle(new Request(`http://localhost/api/v1/store/orders/${orderId}/receipt.pdf`, { headers }))
+}
+
+async function expectPdf(response: Response, receiptNumber: string) {
+  expect(response.status).toBe(200)
+  expect(response.headers.get('content-type')).toBe('application/pdf')
+  expect(response.headers.get('content-disposition')).toBe(`attachment; filename="${receiptNumber}.pdf"`)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')
+}
+
+async function paidCodOrder() {
+  const { orders } = services()
+  const order = await placeCod()
+  await orders.collectCod(order.id, order.totalSatang, staffActor, `receipts-pdf-collect-${order.id}`)
+  await deliver(orders, order.id)
+  const [saved] = await receiptsFor(order.id)
+  return { order, receiptNumber: saved!.receiptNumber }
 }
 
 function adminRequest(app: ReturnType<typeof createAdminApp>, path: string, options: { body?: unknown; key?: string } = {}) {
@@ -534,5 +571,61 @@ describe('receipt issuance', () => {
     const response = await adminRequest(createAdminApp('support'), `/${order.id}`)
     expect(response.status).toBe(200)
     expect((await response.json() as { receipt: unknown }).receipt).toEqual(summary)
+  })
+})
+
+describe('receipt pdf download', () => {
+  it('customer downloads own receipt pdf', async () => {
+    const { order, receiptNumber } = await paidCodOrder()
+    await expectPdf(await storeReceiptRequest(createStoreApp(customerId), order.id), receiptNumber)
+  })
+
+  it('guest download requires X-Order-Access-Token', async () => {
+    const order = await placeStripe()
+    await settleStripe(order)
+    const [saved] = await receiptsFor(order.id)
+    const app = createStoreApp(null)
+
+    const missing = await storeReceiptRequest(app, order.id)
+    expect(missing.status).toBe(404)
+    expect((await missing.json() as { code: string }).code).toBe('ORDER_NOT_FOUND')
+    expect((await storeReceiptRequest(app, order.id, { 'x-order-access-token': 'wrong-token' })).status).toBe(404)
+    await expectPdf(
+      await storeReceiptRequest(app, order.id, { 'x-order-access-token': order.guestAccessToken }),
+      saved!.receiptNumber,
+    )
+  })
+
+  it('other customer gets 404', async () => {
+    const { order } = await paidCodOrder()
+    const response = await storeReceiptRequest(createStoreApp('someone-else'), order.id)
+    expect(response.status).toBe(404)
+    expect((await response.json() as { code: string }).code).toBe('ORDER_NOT_FOUND')
+  })
+
+  it('no receipt returns 404', async () => {
+    const order = await placeCod()
+    const response = await storeReceiptRequest(createStoreApp(customerId), order.id)
+    expect(response.status).toBe(404)
+    expect((await response.json() as { code: string }).code).toBe('RECEIPT_NOT_FOUND')
+  })
+
+  it('admin download requires order:read', async () => {
+    const { order, receiptNumber } = await paidCodOrder()
+    const path = `/${order.id}/receipt.pdf`
+    expect((await adminRequest(createAdminApp('customer'), path)).status).toBe(403)
+    await expectPdf(await adminRequest(createAdminApp('support'), path), receiptNumber)
+
+    const unreceipted = await placeCod()
+    const missing = await adminRequest(createAdminApp('owner'), `/${unreceipted.id}/receipt.pdf`)
+    expect(missing.status).toBe(404)
+    expect((await missing.json() as { code: string }).code).toBe('RECEIPT_NOT_FOUND')
+  })
+
+  it('cancelled receipt still downloads', async () => {
+    const { orders } = services()
+    const { order, receiptNumber } = await paidCodOrder()
+    await orders.cancelReceipt(order.id, 'mistake', staffActor, 'receipts-pdf-cancel')
+    await expectPdf(await adminRequest(createAdminApp('owner'), `/${order.id}/receipt.pdf`), receiptNumber)
   })
 })

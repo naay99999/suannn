@@ -25,6 +25,7 @@ import { enqueueOrderEmail } from './outbox'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
 import { issueReceiptInTransaction } from '../receipts/issue'
+import type { ReceiptSnapshot } from '../receipts/types'
 import type {
   OrderDetail,
   OrderPage,
@@ -354,6 +355,36 @@ export class OrderService {
       const detail = await readOrderDetail(tx, orderId)
       const checkout = order.status === 'pending_payment' ? await readOpenStripeCheckout(tx, orderId) : null
       return checkout ? { ...detail, checkout } : detail
+    })
+  }
+
+  // Same principal check as the order detail reads, except a foreign customer order is reported as not found.
+  async readReceipt(orderId: string, principal: OrderPrincipal): Promise<{
+    snapshot: ReceiptSnapshot
+    status: 'issued' | 'cancelled'
+    receiptNumber: string
+  }> {
+    assertOrderId(orderId)
+    assertPrincipal(principal)
+    return this.db.transaction(async (tx) => {
+      const [order] = await tx.select().from(commerceOrder).where(eq(commerceOrder.id, orderId)).limit(1)
+      if (!order) throw new DomainError('ORDER_NOT_FOUND')
+      try {
+        assertCanAccess(order, principal)
+      } catch (error) {
+        // Downloads never confirm that another customer's order exists.
+        if (error instanceof DomainError && error.code === 'ORDER_ACCESS_DENIED') throw new DomainError('ORDER_NOT_FOUND')
+        throw error
+      }
+      const [saved] = await tx.select({
+        snapshot: receipt.snapshot, status: receipt.status, receiptNumber: receipt.receiptNumber,
+      }).from(receipt).where(eq(receipt.orderId, orderId)).limit(1)
+      if (!saved) throw new DomainError('RECEIPT_NOT_FOUND')
+      return {
+        snapshot: saved.snapshot as unknown as ReceiptSnapshot,
+        status: saved.status as 'issued' | 'cancelled',
+        receiptNumber: saved.receiptNumber,
+      }
     })
   }
 
