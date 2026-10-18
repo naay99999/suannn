@@ -104,10 +104,10 @@ let unlock: (() => Promise<void>) | undefined
 const address = {
   recipientName: 'Mali Buyer', addressLine1: '99 Main Road',
   subdistrict: 'Talat Noi', district: 'Samphanthawong', province: 'Bangkok', postalCode: '10100',
+  phone: '0812345678',
 }
 
 beforeAll(async () => {
-  phone: '0812345678',
   unlock = await lockTestDatabase(database)
   await resetTestDatabase(database)
   await migrateTestDatabase(database)
