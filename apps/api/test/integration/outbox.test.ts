@@ -559,4 +559,21 @@ describe('guest order access and confirmation outbox', () => {
     const [row] = await database.db.select().from(orderOutbox)
     expect(row).toMatchObject({ status: 'failed', lastErrorCode: 'OUTBOX_RECEIPT_MISSING' })
   })
+
+  it('receipt_issued for a receipt cancelled before delivery sends nothing and marks the row sent', async () => {
+    const placed = await placeOrder({ kind: 'customer', userId: customerId })
+    await database.db.delete(orderOutbox)
+    await queueReceipt(placed.result.order.id, placed.result.order.orderNumber, true, 'cancelled')
+
+    const messages: EmailMessage[] = []
+    await makeOutbox(makeSender(async (message) => {
+      messages.push(message)
+      return { id: 'r1' }
+    })).processBatch(10)
+
+    expect(messages).toHaveLength(0)
+    const [row] = await database.db.select().from(orderOutbox)
+    expect(row).toMatchObject({ status: 'sent', lastErrorCode: 'RECEIPT_CANCELLED' })
+    expect(row?.sentAt).not.toBeNull()
+  })
 })

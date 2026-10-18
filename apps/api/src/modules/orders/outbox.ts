@@ -205,6 +205,19 @@ export class OrderOutbox {
         await this.markFailed(row, 'OUTBOX_RECEIPT_MISSING')
         return
       }
+      if (saved.status !== 'issued') {
+        await this.db.update(orderOutbox).set({
+          status: 'sent',
+          sentAt: sql`transaction_timestamp()`,
+          claimedAt: null,
+          lastErrorCode: 'RECEIPT_CANCELLED',
+        }).where(and(
+          eq(orderOutbox.id, row.id),
+          eq(orderOutbox.status, 'processing'),
+          eq(orderOutbox.attemptCount, row.attemptCount),
+        ))
+        return
+      }
       content = receiptIssuedEmail(row.orderId, order.orderNumber, saved.receiptNumber, this.storefrontUrl, accessToken ?? undefined)
       try {
         const pdf = await renderReceiptPdf(saved.snapshot as unknown as ReceiptSnapshot, saved.status)

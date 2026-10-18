@@ -35,3 +35,21 @@ test('summary shows billing and receipt number', () => {
   expect(screen.getByText('RC261018-00001')).toBeTruthy()
   expect(screen.getByRole('button', { name: 'ดาวน์โหลดใบเสร็จ' })).toBeTruthy()
 })
+
+test('summary hints at a missing receipt only when one can be issued', () => {
+  const base = {
+    id: '00000000-0000-4000-8000-000000000002', orderNumber: 'SN-100', status: 'delivered', customerId: null, contactEmail: 'c@example.test', contactPhone: '0800000000', recipientName: 'Ship Name',
+    addressLine1: '1 Main', addressLine2: null, subdistrict: 'Suthep', district: 'Mueang', province: 'Chiang Mai', postalCode: '50200', subtotalSatang: 10000, shippingSatang: 0, totalSatang: 10000,
+    currency: 'THB', paymentMethod: 'cod', createdAt: new Date('2026-10-01T00:00:00Z'), items: [],
+    payment: { id: 'p', method: 'cod', provider: 'cod', amountSatang: 10000, currency: 'THB', status: 'collected' },
+  }
+  const hint = /ยังไม่มีใบเสร็จสำหรับคำสั่งซื้อนี้/
+  render(<OrderDetailSummary order={{ ...base, receipt: null } as unknown as OrderDetail} />)
+  expect(screen.getByText(hint)).toBeTruthy()
+  cleanup()
+  render(<OrderDetailSummary order={{ ...base, receipt: { number: 'RC261018-00001', kind: 'receipt', status: 'issued', issuedAt: new Date() } } as unknown as OrderDetail} />)
+  expect(screen.queryByText(hint)).toBeNull()
+  cleanup()
+  render(<OrderDetailSummary order={{ ...base, status: 'shipped', receipt: null } as unknown as OrderDetail} />)
+  expect(screen.queryByText(hint)).toBeNull()
+})

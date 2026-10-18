@@ -58,11 +58,11 @@ const commerceSettings = {
   updatedAt: new Date('2026-09-27T00:00:00.000Z'),
 }
 
-function createHarness(role = 'owner') {
+function createHarness(role = 'owner', getDetail: () => unknown = () => detail) {
   const calls: Array<{ method: string; args: unknown[] }> = []
   const orders = {
     listStaff: async (...args: unknown[]) => { calls.push({ method: 'orders.listStaff', args }); return page },
-    getForPrincipal: async (...args: unknown[]) => { calls.push({ method: 'orders.getForPrincipal', args }); return detail },
+    getForPrincipal: async (...args: unknown[]) => { calls.push({ method: 'orders.getForPrincipal', args }); return getDetail() },
     advanceFulfillment: async (...args: unknown[]) => { calls.push({ method: 'orders.advanceFulfillment', args }); return detail },
     cancel: async (...args: unknown[]) => { calls.push({ method: 'orders.cancel', args }); return detail },
     collectCod: async (...args: unknown[]) => { calls.push({ method: 'orders.collectCod', args }); return detail },
@@ -225,6 +225,22 @@ describe('admin order and commerce settings HTTP contracts', () => {
     expect(await responses[5]?.text()).not.toContain('guest-access-secret')
     expect(updateCall?.args[0]).toEqual({ shippingFeeSatang: 500, checkoutEnabled: false })
     expect(updateCall?.args[1]).toMatchObject({ userId: 'staff-1', auditContext: { requestId: expect.any(String) } })
+  })
+
+  it('includes billing on the admin order detail without leaking guest-access secrets', async () => {
+    const billing = {
+      name: 'Buyer Co', phone: '+66811111111', addressLine1: '9 Billing Road', addressLine2: null,
+      subdistrict: 'A', district: 'B', province: 'C', postalCode: '10110',
+    }
+    const { app } = await createHarness('owner', () => ({
+      ...detail, billing, guestAccessToken: 'guest-access-secret', guestAccessTokenHash: 'hash-secret',
+    }))
+    const response = await app.handle(request(`/api/v1/admin/orders/${orderId}`))
+    expect(response.status).toBe(200)
+    const text = await response.text()
+    expect(JSON.parse(text).billing).toEqual(billing)
+    expect(text).not.toContain('guest-access-secret')
+    expect(text).not.toContain('hash-secret')
   })
 
   it('requires an active staff session and rejects customer, inactive staff, and insufficient roles', async () => {

@@ -97,6 +97,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
     district: order.district,
     province: order.province,
     postalCode: order.postalCode,
+    ...(order.billing ? { billing: order.billing } : {}),
     subtotalSatang: order.subtotalSatang,
     shippingSatang: order.shippingSatang,
     totalSatang: order.totalSatang,
