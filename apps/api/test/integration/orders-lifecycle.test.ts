@@ -509,6 +509,7 @@ describe('COD order lifecycle', () => {
     expect(secondPage.nextCursor).toBeNull()
     expect(staffPage.items).toHaveLength(3)
     expect(staffDetail.id).toBe(second.result.order.id)
+    expect(staffPage.items.find(({ id }) => id === second.result.order.id)).toEqual(staffDetail)
   })
 
   it('keeps count adjustment within reversible capacity while cancellation races the count', async () => {
