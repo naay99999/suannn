@@ -99,6 +99,7 @@ const app = await createApp(config, {
   } as never,
   products: {} as ProductService,
   farms: {} as never,
+  media: {} as never,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit),
     inventoryReadRepository,
@@ -234,6 +235,7 @@ describe('API routes', () => {
       'Admin Store Announcement',
       'Admin Products',
       'Admin Farms',
+      'Admin Media',
       'Admin Inventory',
       'Sign-in',
       'Account Recovery',
@@ -381,7 +383,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(117)
+    expect(operations).toHaveLength(122)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()
@@ -393,7 +395,7 @@ describe('API routes', () => {
           expect(specification.components.securitySchemes[scheme]).toBeDefined()
         }
       }
-      expect(operation.responses?.['200'] ?? operation.responses?.['201']).toBeDefined()
+      expect(operation.responses?.['200'] ?? operation.responses?.['201'] ?? operation.responses?.['204']).toBeDefined()
     }
     const references = JSON.stringify(specification).match(/#\/components\/schemas\/[^"\\]+/g) ?? []
     for (const reference of references) {

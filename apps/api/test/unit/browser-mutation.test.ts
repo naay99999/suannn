@@ -13,6 +13,7 @@ function createProbe() {
     .use(createBrowserMutationPlugin(config))
     .post('/admin', () => ({ mutations: ++mutations }), { browserMutation: 'admin' })
     .post('/storefront', () => ({ mutations: ++mutations }), { browserMutation: 'storefront' })
+    .post('/upload', () => ({ mutations: ++mutations }), { browserUpload: 'admin' })
     .get('/admin', () => ({ readOnly: true }))
     .head('/admin', () => '')
 
@@ -68,6 +69,21 @@ describe('browser mutation CSRF policy', () => {
     }))
 
     expect(response.status).toBe(200)
+    expect(probe.mutations()).toBe(1)
+  })
+
+  it('lets browserUpload accept multipart from the trusted origin only', async () => {
+    const probe = createProbe()
+    const send = (headers: Record<string, string>) => probe.app.handle(new Request('http://localhost/upload', {
+      method: 'POST', headers, body: 'x',
+    }))
+    const multipart = 'multipart/form-data; boundary=test'
+
+    expect((await send({ origin: testEnv.ADMIN_URL, 'content-type': multipart })).status).toBe(200)
+    expect((await send({ origin: testEnv.ADMIN_URL, 'content-type': 'application/json' })).status).toBe(403)
+    expect((await send({ origin: testEnv.STOREFRONT_URL, 'content-type': multipart })).status).toBe(403)
+    expect((await send({ 'content-type': multipart })).status).toBe(403)
+    expect((await send({ origin: testEnv.ADMIN_URL, 'content-type': multipart, 'sec-fetch-site': 'cross-site' })).status).toBe(403)
     expect(probe.mutations()).toBe(1)
   })
 

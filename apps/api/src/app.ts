@@ -23,6 +23,7 @@ import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
 import { createAdminReceiptSettingsModule } from './modules/receipts'
 import { createAdminStoreAnnouncementModule, createStoreAnnouncementModule } from './modules/store-announcement'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
+import { createAdminMediaModule } from './modules/media'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
 import type { CustomerProfileService } from './modules/customer/profile/service'
@@ -46,6 +47,7 @@ import type { CommerceSettingsService } from './modules/commerce-settings/servic
 import type { ReceiptSettingsService } from './modules/receipts/settings'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import type { FarmService } from './modules/farms/service'
+import type { MediaService } from './modules/media/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
@@ -70,6 +72,7 @@ export interface AppDependencies {
   systemSettings: SystemSettingsService
   products: ProductService
   farms: FarmService
+  media: MediaService
   inventory: InventoryService
   cart: CartService
   quote: QuoteService
@@ -138,7 +141,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createStoreProductsModule(dependencies.products))
     .use(createStoreFarmsModule(dependencies.farms))
     .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
-    .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
+    .use(new Elysia({ name: 'admin-farms-and-media' })
+      .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
+      .use(createAdminMediaModule(config, dependencies.auth, dependencies.media, dependencies.limiter)))
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))

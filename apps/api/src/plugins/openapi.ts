@@ -30,6 +30,7 @@ export const apiTags = [
   { name: 'Admin Store Announcement', description: 'Staff controls for the storefront promotion bar.' },
   { name: 'Admin Products', description: 'Staff catalog management for products and variants.' },
   { name: 'Admin Farms', description: 'Staff management for farm profiles and product sources.' },
+  { name: 'Admin Media', description: 'Staff media library for uploading and managing shared images.' },
   { name: 'Admin Inventory', description: 'Staff inventory lots, stock movements, and reservations.' },
   { name: 'Sign-in', description: 'Sign in with email and password.' },
   { name: 'Account Recovery', description: 'Change or reset an account password.' },

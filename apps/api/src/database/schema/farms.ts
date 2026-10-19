@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, boolean } from 'drizzle-orm/pg-core'
+import { mediaAsset } from './media'
 import { product } from './products'
 
 export const farm = pgTable('farm', {
@@ -16,6 +17,8 @@ export const farm = pgTable('farm', {
   coverImageAlt: text('cover_image_alt'),
   portraitImageUrl: text('portrait_image_url'),
   portraitImageAlt: text('portrait_image_alt'),
+  coverMediaId: uuid('cover_media_id').references(() => mediaAsset.id, { onDelete: 'restrict' }),
+  portraitMediaId: uuid('portrait_media_id').references(() => mediaAsset.id, { onDelete: 'restrict' }),
   status: text('status', { enum: ['draft', 'published', 'archived'] }).default('draft').notNull(),
   isDemo: boolean('is_demo').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
