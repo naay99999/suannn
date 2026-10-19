@@ -13,6 +13,7 @@ import { mediaApi, type MediaDetail } from '@/lib/media/api'
 import { formatFileSize } from '@/lib/media/format'
 import { invalidateMedia, mediaQuery } from '@/lib/media/queries'
 import { hasPermission } from '@/lib/permissions'
+import { CopyableId } from '@/pages/inventory/_components/copyable-id'
 import { ConfirmActionDialog } from '@/pages/products/_components/product-actions'
 
 export function MediaDetailSheet({ mediaId, onClose }: { mediaId: string | null; onClose: () => void }) {
@@ -80,6 +81,7 @@ function MediaDetailBody({ media, onDeleted }: { media: MediaDetail; onDeleted: 
       <p className="text-sm text-muted-foreground">
         {media.width}×{media.height} · {formatFileSize(media.byteSize)}
       </p>
+      <CopyableId label="ลิงก์รูปภาพ" value={media.url} />
       <form
         onSubmit={(event) => { event.preventDefault(); saveAlt.mutate() }}
       >

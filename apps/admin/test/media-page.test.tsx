@@ -166,6 +166,22 @@ test('saves alt text', async () => {
   await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(unusedId, 'ทุเรียนหมอนทอง'))
 })
 
+test('copies the display URL from the detail sheet', async () => {
+  mockList()
+  track(spyOn(mediaApi, 'get').mockImplementation(async () => unusedDetail))
+  const user = userEvent.setup()
+  const writeText = track(spyOn(navigator.clipboard, 'writeText').mockImplementation(async () => undefined))
+  renderMedia()
+
+  await user.click(await screen.findByRole('button', { name: 'unused.jpg' }))
+  const sheet = await screen.findByRole('dialog', { name: 'รายละเอียดรูปภาพ' })
+  expect(within(sheet).getByText(unusedDetail.url)).toBeTruthy()
+  await user.click(await within(sheet).findByRole('button', { name: 'คัดลอกลิงก์รูปภาพ' }))
+
+  expect(writeText).toHaveBeenCalledWith(unusedDetail.url)
+  expect(await within(sheet).findByText('คัดลอกแล้ว')).toBeTruthy()
+})
+
 test('hides write controls from read-only staff', async () => {
   mockList()
   track(spyOn(mediaApi, 'get').mockImplementation(async () => unusedDetail))
