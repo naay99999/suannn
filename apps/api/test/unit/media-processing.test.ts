@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'bun:test'
 import sharp from 'sharp'
-import { maxUploadBytes, processImage } from '../../src/modules/media/processing'
+import { maxUploadBytes, processImage, withProcessingSlot } from '../../src/modules/media/processing'
 import { DomainError } from '../../src/shared/domain-error'
 
 const background = { r: 40, g: 120, b: 60 }
@@ -85,5 +85,58 @@ describe('processImage', () => {
     const result = await processImage(input)
 
     expect(result.contentHash).toBe(createHash('sha256').update(input).digest('hex'))
+  })
+
+  it('flattens an animated input to a single frame', async () => {
+    const frame = (r: number) => sharp({
+      create: { width: 300, height: 300, channels: 3, background: { r, g: 0, b: 0 } },
+    }).png().toBuffer()
+    const animated = await sharp([await frame(255), await frame(0)], { join: { animated: true } }).webp().toBuffer()
+    expect((await sharp(animated).metadata()).pages).toBe(2)
+
+    const result = await processImage(new Uint8Array(animated))
+    const display = await sharp(result.display).metadata()
+    const pixel = await sharp(result.display).raw().toBuffer()
+
+    expect(display.pages ?? 1).toBe(1)
+    expect(display).toMatchObject({ width: 300, height: 300 })
+    expect(pixel[0]).toBeGreaterThan(200)
+  })
+
+  it('rejects images over 12,000px on either side', async () => {
+    const wide = sharp({ create: { width: 12_001, height: 200, channels: 3, background } })
+    const tall = sharp({ create: { width: 200, height: 12_001, channels: 3, background } })
+
+    await expectInvalid(new Uint8Array(await wide.png().toBuffer()))
+    await expectInvalid(new Uint8Array(await tall.png().toBuffer()))
+  })
+})
+
+describe('withProcessingSlot', () => {
+  it('runs at most two jobs at once and starts queued jobs as slots free up', async () => {
+    let running = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    const job = () => withProcessingSlot(async () => {
+      running += 1
+      peak = Math.max(peak, running)
+      await new Promise<void>(resolve => releases.push(resolve))
+      running -= 1
+    })
+    const jobs = [job(), job(), job(), job()]
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+
+    await settle()
+    expect(running).toBe(2)
+    releases.shift()!()
+    await settle()
+    expect(running).toBe(2)
+    while (releases.length > 0) {
+      releases.shift()!()
+      await settle()
+    }
+    await Promise.all(jobs)
+    expect(peak).toBe(2)
+    expect(running).toBe(0)
   })
 })

@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { auditLog, farm, mediaAsset, product, productImage, user } from '../../src/database/schema'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
+import { processImage } from '../../src/modules/media/processing'
 import { MediaRepository } from '../../src/modules/media/repository'
 import { MediaService } from '../../src/modules/media/service'
 import type { MediaActor } from '../../src/modules/media/types'
@@ -114,6 +115,21 @@ describe('media library persistence', () => {
     expect(second.item.id).toBe(first.item.id)
     expect(storage.objects.size).toBe(objects)
     expect(await mediaCount()).toBe(1)
+  })
+
+  it('does not decode bytes that are already in the library', async () => {
+    const { repository, storage } = setup()
+    let processed = 0
+    const service = new MediaService(repository, storage, (input) => {
+      processed += 1
+      return processImage(input)
+    })
+    const bytes = await image(25)
+    const first = await service.upload(bytes, 'a.jpg', null, actor)
+    const second = await service.upload(bytes, 'b.jpg', null, actor)
+
+    expect(second).toMatchObject({ created: false, item: { id: first.item.id } })
+    expect(processed).toBe(1)
   })
 
   it('does not insert a row when storage put fails', async () => {

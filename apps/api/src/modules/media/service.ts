@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { DomainError } from '../../shared/domain-error'
 import { isContentHashConflict, type MediaRepository } from './repository'
 import { normalizeAlt, normalizeFilename } from './policy'
-import { processImage } from './processing'
+import { assertUploadSize, hashMediaBytes, processImage } from './processing'
 import { mediaKeys, type MediaStorage } from './storage'
 import type { MediaActor, MediaListQuery, StaffMediaItem } from './types'
 
@@ -10,6 +10,7 @@ export class MediaService {
   constructor(
     private readonly repository: MediaRepository,
     private readonly storage: MediaStorage | null,
+    private readonly process: typeof processImage = processImage,
   ) {}
 
   private requireStorage() {
@@ -35,10 +36,12 @@ export class MediaService {
     const storage = this.requireStorage()
     const normalizedAlt = normalizeAlt(alt)
     const originalFilename = normalizeFilename(filename)
-    const processed = await processImage(file)
-
-    const existing = await this.repository.findByHash(processed.contentHash)
+    assertUploadSize(file)
+    // Duplicate bytes resolve to the existing item without paying for a decode.
+    const existing = await this.repository.findByHash(hashMediaBytes(file))
     if (existing) return { item: existing, created: false }
+
+    const processed = await this.process(file)
 
     const id = randomUUID()
     const keys = mediaKeys(id)
