@@ -168,8 +168,8 @@ test('shows real read-only product fields and variants after following a row lin
   await userEvent.setup().click(await screen.findByRole('link', { name: 'มะม่วงน้ำดอกไม้' }))
 
   expect(await screen.findByRole('heading', { name: 'มะม่วงน้ำดอกไม้' })).toBeTruthy()
-  expect(screen.getByText('มะม่วงสุกหวานจากสวน')).toBeTruthy()
-  expect(screen.getByText('ปลูกในสวนครอบครัว')).toBeTruthy()
+  expect(screen.getByDisplayValue('มะม่วงสุกหวานจากสวน')).toBeTruthy()
+  expect(screen.getByDisplayValue('ปลูกในสวนครอบครัว')).toBeTruthy()
   expect(screen.getByText('MANGO-1KG')).toBeTruthy()
   expect(screen.getByText('ขนาด 1 กิโลกรัม')).toBeTruthy()
   expect(screen.queryByRole('button', { name: /แก้ไข|บันทึก|เพิ่มรูปแบบ/i })).toBeNull()

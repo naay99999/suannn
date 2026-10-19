@@ -4,12 +4,14 @@ import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select'
 import { Textarea } from '@workspace/ui/components/textarea'
 import { toast } from '@workspace/ui/components/toast'
 import { Link } from 'react-router'
+import { cn } from '@workspace/ui/lib/utils'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { catalogApi, type ProductDetail } from '@/lib/catalog/api'
 import {
@@ -20,9 +22,9 @@ import {
   toProductUpdateInput,
   type ProductCreateValues,
   type ProductEditValues,
+  vatItems,
 } from '@/lib/catalog/forms'
 import { catalogKeys, invalidateCatalog, productsQuery } from '@/lib/catalog/queries'
-import { ConfirmActionDialog } from './product-actions'
 
 const emptyValues: ProductCreateValues = {
   slug: '',
@@ -37,14 +39,9 @@ const emptyValues: ProductCreateValues = {
   imageAlt: '',
 }
 
-const vatItems = [
-  { label: 'ยกเว้น VAT (สินค้าเกษตรสด)', value: 'exempt' },
-  { label: 'VAT 7%', value: 'standard' },
-]
-
 type ProductFormProps =
   | { mode: 'create'; onCreated: (productId: string) => void; onDirtyChange: (dirty: boolean) => void }
-  | { mode: 'edit'; product: ProductDetail; onCancel: () => void; onSaved: () => void; onDirtyChange: (dirty: boolean) => void }
+  | { mode: 'edit'; product: ProductDetail; readOnlyReason?: string; onDirtyChange: (dirty: boolean) => void }
 
 function errorForCreate(error: unknown): string {
   const message = apiErrorMessage(error)
@@ -85,10 +82,11 @@ export function ProductForm(props: ProductFormProps) {
   const [serverError, setServerError] = useState<string | null>(null)
   const [createdProductId, setCreatedProductId] = useState<string | null>(null)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
-  const [confirmCancel, setConfirmCancel] = useState(false)
   const [createRecoveryStatus, setCreateRecoveryStatus] = useState<'idle' | 'checking' | 'ready' | 'failed'>('idle')
   const onCreated = props.mode === 'create' ? props.onCreated : null
   const onDirtyChange = props.onDirtyChange
+  const editProduct = props.mode === 'edit' ? props.product : null
+  const readOnlyReason = props.mode === 'edit' ? props.readOnlyReason : undefined
   const watchedImageUrl = useWatch({ control: form.control, name: 'imageUrl' })
   const watchedImageAlt = useWatch({ control: form.control, name: 'imageAlt' })
 
@@ -101,6 +99,11 @@ export function ProductForm(props: ProductFormProps) {
   }, [form.formState.isDirty, onDirtyChange])
 
   useEffect(() => () => onDirtyChange(false), [onDirtyChange])
+
+  // Pick up server changes (another tab, a variant save) unless the staff member has unsaved edits.
+  useEffect(() => {
+    if (editProduct && !form.formState.isDirty) form.reset(fromProduct(editProduct))
+  }, [editProduct, form])
 
   const refreshCatalogAfterUncertainCreate = async () => {
     setCreateRecoveryStatus('checking')
@@ -129,7 +132,6 @@ export function ProductForm(props: ProductFormProps) {
         toast.add({ title: 'บันทึกข้อมูลสินค้าแล้ว', type: 'success' })
         form.reset(values)
         onDirtyChange(false)
-        props.onSaved()
       }
     } catch (error) {
       setServerError(props.mode === 'create' ? errorForCreate(error) : apiErrorMessage(error))
@@ -145,115 +147,138 @@ export function ProductForm(props: ProductFormProps) {
 
   const errors = form.formState.errors
   const pending = form.formState.isSubmitting
+  const locked = pending || Boolean(readOnlyReason)
+  const dirty = form.formState.isDirty
   const imageFailed = Boolean(watchedImageUrl && failedImageUrl === watchedImageUrl)
+  const showActionBar = isCreate || dirty || pending || Boolean(serverError)
 
   return (
-    <section className="flex flex-col gap-5 rounded-lg border p-4 sm:p-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold">{isCreate ? 'ข้อมูลสินค้าใหม่' : 'แก้ไขข้อมูลสินค้า'}</h2>
-        <p className="text-sm text-muted-foreground">ข้อมูลที่จำเป็นสำหรับจัดการสินค้าในแค็ตตาล็อก</p>
-      </div>
-      <form className="flex flex-col gap-6" noValidate onSubmit={onSubmit}>
-        <FieldGroup>
-          <div className="grid gap-5 md:grid-cols-2">
+    <form aria-label={isCreate ? 'ข้อมูลสินค้าใหม่' : 'ข้อมูลสินค้า'} className="flex flex-col gap-6" noValidate onSubmit={onSubmit}>
+      {readOnlyReason && <p className="rounded-surface border bg-muted/50 px-4 py-3 text-sm text-muted-foreground" role="status">{readOnlyReason}</p>}
+
+      <Card aria-labelledby="product-basics-title" role="region">
+        <CardHeader>
+          <CardTitle><h2 id="product-basics-title">ข้อมูลหลัก</h2></CardTitle>
+          <CardDescription>ชื่อ หมวดหมู่ และภาษีที่ใช้คำนวณราคา</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <div className="grid gap-5 md:grid-cols-2">
+              <FormInput disabled={locked} id="product-name" label="ชื่อสินค้า" error={errors.name?.message} {...form.register('name')} required />
+              <FormInput disabled={locked} id="product-english-name" label="ชื่อภาษาอังกฤษ" error={errors.englishName?.message} {...form.register('englishName')} />
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <Field data-invalid={Boolean(errors.category)}>
+                <FieldLabel htmlFor="product-category">หมวดหมู่</FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <Select disabled={locked} items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={(value) => {
+                      field.onChange(value)
+                      if (isCreate && !vatTouched.current && (value === 'fresh' || value === 'processed')) {
+                        form.setValue('vatTreatment', defaultVatTreatment(value))
+                      }
+                    }} value={field.value}>
+                      <SelectTrigger aria-describedby={errors.category ? 'product-category-error' : undefined} aria-invalid={Boolean(errors.category)} aria-required="true" id="product-category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent><SelectGroup>
+                        <SelectItem value="fresh">สินค้าสด</SelectItem>
+                        <SelectItem value="processed">สินค้าแปรรูป</SelectItem>
+                      </SelectGroup></SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldError id="product-category-error">{errors.category?.message}</FieldError>
+              </Field>
+              <Field data-invalid={Boolean(errors.vatTreatment)}>
+                <FieldLabel htmlFor="product-vat-treatment">ภาษีมูลค่าเพิ่ม</FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="vatTreatment"
+                  render={({ field }) => (
+                    <Select disabled={locked} items={vatItems} onValueChange={(value) => {
+                      vatTouched.current = true
+                      field.onChange(value)
+                    }} value={field.value}>
+                      <SelectTrigger aria-describedby={errors.vatTreatment ? 'product-vat-treatment-error' : undefined} aria-invalid={Boolean(errors.vatTreatment)} aria-required="true" id="product-vat-treatment">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent><SelectGroup>
+                        {vatItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                      </SelectGroup></SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldError id="product-vat-treatment-error">{errors.vatTreatment?.message}</FieldError>
+              </Field>
+            </div>
             <FormInput
               id="product-slug"
               label="ชื่อ URL สินค้า"
-              description={isCreate ? 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลาง' : 'ชื่อ URL เปลี่ยนไม่ได้หลังสร้างสินค้า'}
+              description={isCreate ? 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลาง เปลี่ยนไม่ได้หลังสร้าง' : 'ชื่อ URL เปลี่ยนไม่ได้หลังสร้างสินค้า'}
               error={errors.slug?.message}
               disabled={pending}
+              className={cn(!isCreate && 'bg-muted/50 font-mono text-muted-foreground')}
               {...form.register('slug')}
               required={isCreate}
-              readOnly={!isCreate}
+              readOnly={!isCreate || Boolean(readOnlyReason)}
             />
-            <FormInput disabled={pending} id="product-name" label="ชื่อสินค้า" error={errors.name?.message} {...form.register('name')} required />
-          </div>
-          <Field data-invalid={Boolean(errors.category)}>
-            <FieldLabel htmlFor="product-category">หมวดหมู่</FieldLabel>
-            <Controller
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <Select disabled={pending} items={[{ label: 'สินค้าสด', value: 'fresh' }, { label: 'สินค้าแปรรูป', value: 'processed' }]} onValueChange={(value) => {
-                  field.onChange(value)
-                  if (isCreate && !vatTouched.current && (value === 'fresh' || value === 'processed')) {
-                    form.setValue('vatTreatment', defaultVatTreatment(value))
-                  }
-                }} value={field.value}>
-                  <SelectTrigger aria-describedby={errors.category ? 'product-category-error' : undefined} aria-invalid={Boolean(errors.category)} aria-required="true" id="product-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent><SelectGroup>
-                    <SelectItem value="fresh">สินค้าสด</SelectItem>
-                    <SelectItem value="processed">สินค้าแปรรูป</SelectItem>
-                  </SelectGroup></SelectContent>
-                </Select>
-              )}
-            />
-            <FieldError id="product-category-error">{errors.category?.message}</FieldError>
-          </Field>
-          <Field data-invalid={Boolean(errors.vatTreatment)}>
-            <FieldLabel htmlFor="product-vat-treatment">ภาษีมูลค่าเพิ่ม</FieldLabel>
-            <Controller
-              control={form.control}
-              name="vatTreatment"
-              render={({ field }) => (
-                <Select disabled={pending} items={vatItems} onValueChange={(value) => {
-                  vatTouched.current = true
-                  field.onChange(value)
-                }} value={field.value}>
-                  <SelectTrigger aria-describedby={errors.vatTreatment ? 'product-vat-treatment-error' : undefined} aria-invalid={Boolean(errors.vatTreatment)} aria-required="true" id="product-vat-treatment">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent><SelectGroup>
-                    {vatItems.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
-                  </SelectGroup></SelectContent>
-                </Select>
-              )}
-            />
-            <FieldError id="product-vat-treatment-error">{errors.vatTreatment?.message}</FieldError>
-          </Field>
-          <FormInput disabled={pending} id="product-english-name" label="ชื่อภาษาอังกฤษ" error={errors.englishName?.message} {...form.register('englishName')} />
-          <FormTextarea disabled={pending} id="product-description" label="คำอธิบาย" description="ข้อมูลนี้จำเป็นก่อนเผยแพร่สินค้า" error={errors.description?.message} {...form.register('description')} />
-          <FormTextarea disabled={pending} id="product-origin-story" label="เรื่องราวจากสวน" error={errors.originStory?.message} {...form.register('originStory')} />
-          <FormTextarea disabled={pending} id="product-storage-instructions" label="วิธีเก็บรักษา" error={errors.storageInstructions?.message} {...form.register('storageInstructions')} />
-          <div className="grid gap-5 md:grid-cols-2">
-            <FormInput disabled={pending} id="product-image-url" label="URL รูปสินค้า HTTPS" description="วาง URL รูปภาพ HTTPS ที่เปิดดูได้ ไม่มีระบบอัปโหลดรูป" error={errors.imageUrl?.message} {...form.register('imageUrl')} />
-            <FormInput disabled={pending} id="product-image-alt" label="คำอธิบายรูปภาพ" description="อธิบายสิ่งสำคัญในภาพสำหรับผู้ใช้โปรแกรมอ่านหน้าจอ" error={errors.imageAlt?.message} {...form.register('imageAlt')} />
-          </div>
-        </FieldGroup>
+          </FieldGroup>
+        </CardContent>
+      </Card>
 
-        <div className="flex flex-col gap-3 rounded-md border p-4">
-          <h3 className="font-medium">ตัวอย่างรูปสินค้า</h3>
+      <Card aria-labelledby="product-image-title" role="region">
+        <CardHeader>
+          <CardTitle><h2 id="product-image-title">รูปภาพ</h2></CardTitle>
+          <CardDescription>วาง URL รูปภาพ HTTPS ที่เปิดดูได้ ยังไม่มีระบบอัปโหลดรูป</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
           {watchedImageUrl && !imageFailed
-            ? <img alt={watchedImageAlt || ''} className="max-h-64 w-full rounded-md border object-contain" onError={() => setFailedImageUrl(watchedImageUrl)} src={watchedImageUrl} />
-            : <div aria-label="ไม่มีรูปภาพ" className="grid min-h-32 place-items-center rounded-md bg-muted text-sm text-muted-foreground" role="img">{imageFailed ? 'โหลดรูปภาพไม่ได้' : 'ยังไม่มีรูปสินค้า'}</div>}
-        </div>
+            ? <img alt={watchedImageAlt || 'ตัวอย่างรูปสินค้า'} className="aspect-square w-full rounded-field border bg-muted object-cover" onError={() => setFailedImageUrl(watchedImageUrl)} src={watchedImageUrl} />
+            : <div aria-label={imageFailed ? 'โหลดรูปภาพไม่ได้' : 'ไม่มีรูปภาพ'} className="grid aspect-square w-full place-items-center rounded-field border border-dashed bg-muted/50 p-3 text-center text-xs text-muted-foreground" role="img">{imageFailed ? 'โหลดรูปภาพไม่ได้' : 'ยังไม่มีรูปสินค้า'}</div>}
+          <FieldGroup>
+            <FormInput disabled={locked} id="product-image-url" label="URL รูปสินค้า HTTPS" error={errors.imageUrl?.message} inputMode="url" placeholder="https://" {...form.register('imageUrl')} />
+            <FormInput disabled={locked} id="product-image-alt" label="คำอธิบายรูปภาพ" description="อธิบายสิ่งสำคัญในภาพสำหรับผู้ใช้โปรแกรมอ่านหน้าจอ" error={errors.imageAlt?.message} {...form.register('imageAlt')} />
+          </FieldGroup>
+        </CardContent>
+      </Card>
 
-        {serverError && <div aria-live="assertive" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{serverError}</div>}
+      <Card aria-labelledby="product-content-title" role="region">
+        <CardHeader>
+          <CardTitle><h2 id="product-content-title">เนื้อหาสำหรับลูกค้า</h2></CardTitle>
+          <CardDescription>แสดงในหน้าสินค้าของหน้าร้าน</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <FormTextarea disabled={locked} id="product-description" label="คำอธิบาย" description="ข้อมูลนี้จำเป็นก่อนเผยแพร่สินค้า" error={errors.description?.message} {...form.register('description')} />
+            <FormTextarea disabled={locked} id="product-origin-story" label="เรื่องราวจากสวน" error={errors.originStory?.message} {...form.register('originStory')} />
+            <FormTextarea disabled={locked} id="product-storage-instructions" label="วิธีเก็บรักษา" error={errors.storageInstructions?.message} {...form.register('storageInstructions')} />
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
+      {showActionBar && !readOnlyReason && <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-surface border bg-card/95 px-4 py-3 shadow-lg backdrop-blur supports-backdrop-filter:bg-card/80">
+        {serverError && <p aria-live="assertive" className="text-sm text-destructive" role="alert">{serverError}</p>}
         {createRecoveryStatus === 'checking' && <p className="text-sm text-muted-foreground" role="status">กำลังตรวจสอบรายการสินค้าล่าสุด...</p>}
-        {createRecoveryStatus === 'ready' && <Link className={buttonVariants({ variant: 'outline' })} to="/products">ตรวจสอบรายการสินค้า</Link>}
-        {createRecoveryStatus === 'failed' && <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-destructive" role="alert">อัปเดตรายการสินค้าไม่สำเร็จ กรุณาตรวจสอบรายการก่อนสร้างสินค้าอีกครั้ง</p>
-          <Button disabled={pending} onClick={() => void refreshCatalogAfterUncertainCreate()} type="button" variant="outline">ลองโหลดรายการสินค้าอีกครั้ง</Button>
-        </div>}
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={pending || (props.mode === 'create' && createRecoveryStatus !== 'idle')} type="submit">{pending ? 'กำลังบันทึก...' : isCreate ? 'สร้างสินค้า' : 'บันทึกสินค้า'}</Button>
-          {props.mode === 'edit' && <Button disabled={pending} onClick={() => form.formState.isDirty ? setConfirmCancel(true) : props.onCancel()} type="button" variant="outline">ยกเลิกการแก้ไข</Button>}
+        {createRecoveryStatus === 'failed' && <p className="text-sm text-destructive" role="alert">อัปเดตรายการสินค้าไม่สำเร็จ กรุณาตรวจสอบรายการก่อนสร้างสินค้าอีกครั้ง</p>}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground" role="status">
+            {isCreate ? 'สินค้าจะถูกสร้างเป็นฉบับร่าง แล้วเพิ่มรูปแบบสินค้าได้ในขั้นถัดไป' : pending ? 'กำลังบันทึก...' : 'มีการแก้ไขที่ยังไม่บันทึก'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {createRecoveryStatus === 'ready' && <Link className={buttonVariants({ variant: 'outline' })} to="/products">ตรวจสอบรายการสินค้า</Link>}
+            {createRecoveryStatus === 'failed' && <Button disabled={pending} onClick={() => void refreshCatalogAfterUncertainCreate()} type="button" variant="outline">ลองโหลดรายการสินค้าอีกครั้ง</Button>}
+            {editProduct && <Button disabled={pending} onClick={() => {
+              form.reset(fromProduct(editProduct))
+              setServerError(null)
+            }} type="button" variant="ghost">ทิ้งการแก้ไข</Button>}
+            <Button disabled={pending || (isCreate && createRecoveryStatus !== 'idle')} type="submit">{pending ? 'กำลังบันทึก...' : isCreate ? 'สร้างสินค้า' : 'บันทึกสินค้า'}</Button>
+          </div>
         </div>
-      </form>
-      {props.mode === 'edit' && <ConfirmActionDialog
-        open={confirmCancel}
-        title="ทิ้งการแก้ไขสินค้า?"
-        description="ข้อมูลที่แก้ไขยังไม่ได้บันทึกจะหายไป"
-        confirmLabel="ทิ้งการเปลี่ยนแปลง"
-        onOpenChange={setConfirmCancel}
-        onConfirm={() => {
-          setConfirmCancel(false)
-          props.onCancel()
-        }}
-      />}
-    </section>
+      </div>}
+    </form>
   )
 }
 

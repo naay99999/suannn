@@ -174,7 +174,7 @@ test('edits every mutable product field while keeping slug read-only and out of 
   queryClient.setQueryData(catalogKeys.lists(), { items: [], nextCursor: null })
   queryClient.setQueryData(['inventory', 'lots'], { items: [] })
 
-  await user.click(await screen.findByRole('button', { name: 'แก้ไขสินค้า' }))
+  await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
   expect((screen.getByRole('textbox', { name: 'ชื่อ URL สินค้า' }) as HTMLInputElement).readOnly).toBe(true)
   await user.clear(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }))
   await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'มะม่วงชุดใหม่')
@@ -209,7 +209,7 @@ test('disables product inputs while a save is pending', async () => {
   stub('get', async () => detail)
   renderCatalog(`/products/${productId}`)
 
-  await user.click(await screen.findByRole('button', { name: 'แก้ไขสินค้า' }))
+  await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
   await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'ใหม่')
   await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }).matches(':disabled')).toBe(true))
@@ -224,7 +224,7 @@ test('keeps product edits protected by the shared detail-page blocker', async ()
   stub('get', async () => detail)
   const { router } = renderCatalog(`/products/${productId}`)
 
-  await user.click(await screen.findByRole('button', { name: 'แก้ไขสินค้า' }))
+  await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
   await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'เพิ่มเติม')
   await act(async () => { await router.navigate('/products') })
 
@@ -327,9 +327,8 @@ test('shows published product prerequisites and requires confirmation before unp
   stub('get', async () => published)
   renderCatalog(`/products/${productId}`)
 
-  await screen.findByText('รายละเอียด')
-  expect(screen.getByRole('heading', { name: 'เงื่อนไขการเผยแพร่' })).toBeTruthy()
-  expect(screen.getAllByText('คำอธิบาย').length).toBeGreaterThan(1)
+  await screen.findByRole('heading', { name: 'รูปแบบสินค้า' })
+  expect(screen.queryByRole('heading', { name: 'เงื่อนไขการเผยแพร่' })).toBeNull()
   await user.click(screen.getByRole('button', { name: 'นำสินค้าออกจากการเผยแพร่' }))
   expect(await screen.findByRole('heading', { name: 'ยืนยันนำสินค้าออกจากการเผยแพร่' })).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'ยืนยันนำออกจากการเผยแพร่' }))
@@ -343,6 +342,8 @@ test('publishes a complete draft only after staff confirms the action', async ()
   renderCatalog(`/products/${productId}`)
 
   await screen.findByText('MANGO-1KG')
+  expect(screen.getByRole('heading', { name: 'เงื่อนไขการเผยแพร่' })).toBeTruthy()
+  expect(screen.getByText('6/6 ครบแล้ว')).toBeTruthy()
   const publishButton = screen.getByRole('button', { name: 'เผยแพร่สินค้า' })
   expect((publishButton as HTMLButtonElement).disabled).toBe(false)
   await user.click(publishButton)
@@ -359,7 +360,8 @@ test('archives a product only after confirmation and returns to the catalog', as
   const { router } = renderCatalog(`/products/${productId}`)
 
   await screen.findByText('MANGO-1KG')
-  await user.click(screen.getByRole('button', { name: 'เก็บสินค้า' }))
+  await user.click(screen.getByRole('button', { name: 'การดำเนินการเพิ่มเติม' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'เก็บสินค้า' }))
   expect(await screen.findByRole('heading', { name: 'ยืนยันเก็บสินค้า' })).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'ยืนยันเก็บสินค้า', exact: true }))
   await waitFor(() => expect(archiveSpy).toHaveBeenCalledWith(productId))
@@ -568,7 +570,8 @@ test('keeps fulfillment catalog access read-only, including product and variant 
 
   await screen.findByText('MANGO-1KG')
   expect(screen.queryByRole('button', { name: /แก้ไขสินค้า|บันทึกสินค้า|เพิ่มรูปแบบสินค้า|เผยแพร่|เก็บถาวร/i })).toBeNull()
-  expect(screen.queryByRole('textbox')).toBeNull()
+  expect(screen.getByText('บัญชีนี้ดูข้อมูลสินค้าได้อย่างเดียว')).toBeTruthy()
+  expect(screen.getAllByRole('textbox').every((field) => field.matches(':disabled') || (field as HTMLInputElement).readOnly)).toBe(true)
   expect(screen.getByText('฿189.00')).toBeTruthy()
 })
 

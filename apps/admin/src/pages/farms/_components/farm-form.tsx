@@ -155,6 +155,7 @@ export function FarmForm(props: FarmFormProps) {
         title="ทิ้งการแก้ไขฟาร์ม?"
         description="ข้อมูลที่แก้ไขยังไม่ได้บันทึกจะหายไป"
         confirmLabel="ทิ้งการเปลี่ยนแปลง"
+        confirmVariant="destructive"
         onOpenChange={setConfirmCancel}
         onConfirm={() => {
           setConfirmCancel(false)

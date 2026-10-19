@@ -81,6 +81,7 @@ export function FarmActions({ farm }: { farm: Farm }) {
         title={actionCopy[pendingAction].title}
         description={actionCopy[pendingAction].description}
         confirmLabel={actionCopy[pendingAction].confirm}
+        confirmVariant={pendingAction === 'archive' ? 'destructive' : 'default'}
         pending={mutation.isPending}
         onOpenChange={(open) => !open && !mutation.isPending && setPendingAction(null)}
         onConfirm={() => mutation.mutate(pendingAction)}

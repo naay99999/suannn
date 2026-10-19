@@ -121,3 +121,8 @@ export function toVariantUpdateInput(values: VariantEditValues): VariantUpdateIn
     minRemainingShelfLifeDays: values.minRemainingShelfLifeDays,
   }
 }
+
+export const vatItems = [
+  { label: 'ยกเว้น VAT (สินค้าเกษตรสด)', value: 'exempt' },
+  { label: 'VAT 7%', value: 'standard' },
+]

@@ -207,6 +207,7 @@ export function VariantDialog({ open, variant, onOpenChange, onDirtyChange, late
         title="ทิ้งการเปลี่ยนแปลงรูปแบบสินค้า?"
         description="ข้อมูลที่แก้ไขในหน้าต่างนี้จะหายไป"
         confirmLabel="ทิ้งการเปลี่ยนแปลง"
+        confirmVariant="destructive"
         onOpenChange={setConfirmDiscard}
         onConfirm={() => {
           setConfirmDiscard(false)

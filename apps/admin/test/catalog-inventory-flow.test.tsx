@@ -443,7 +443,6 @@ test('owner completes catalog, stock, release, and confirmation workflows throug
   expect(boundary.count('POST', '/products')).toBe(1)
 
   let detailReads = boundary.count('GET', `/products/${productId}`)
-  await user.click(screen.getByRole('button', { name: 'แก้ไขสินค้า' }))
   const productName = screen.getByRole('textbox', { name: 'ชื่อสินค้า' })
   await user.clear(productName)
   await user.type(productName, 'มะม่วงทดสอบชุดใหม่')
@@ -548,7 +547,8 @@ test('fulfillment reads catalog and adjusts stock without sending any product wr
 
   await user.click(await screen.findByRole('link', { name: 'มะม่วงทดสอบ' }))
   await screen.findByRole('heading', { name: 'มะม่วงทดสอบ' })
-  expect(screen.queryByRole('button', { name: 'แก้ไขสินค้า' })).toBeNull()
+  expect(screen.getAllByRole('textbox').every((field) => field.matches(':disabled') || (field as HTMLInputElement).readOnly)).toBe(true)
+  expect(screen.queryByRole('button', { name: 'บันทึกสินค้า' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'เพิ่มรูปแบบสินค้า' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'นำสินค้าออกจากการเผยแพร่' })).toBeNull()
   await user.click(screen.getByRole('link', { name: 'ดูสต็อก MANGO-1KG' }))

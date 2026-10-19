@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
+import { Add01Icon, Archive02Icon, ArrowDown01Icon, PencilEdit02Icon, WarehouseIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@workspace/ui/components/badge'
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@workspace/ui/components/breadcrumb'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@workspace/ui/components/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
+import { Skeleton } from '@workspace/ui/components/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@workspace/ui/components/table'
 import { QueryState } from '@/components/query-state'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
@@ -16,14 +21,11 @@ import { catalogKeys, invalidateCatalog, productQuery } from '@/lib/catalog/quer
 import { toast } from '@workspace/ui/components/toast'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
-import { ProductActions, ConfirmActionDialog } from './_components/product-actions'
+import { ProductHeaderActions, PublicationChecklist, ConfirmActionDialog } from './_components/product-actions'
 import { VariantDialog } from './_components/variant-dialog'
 import { ProductFarms } from './_components/product-farms'
+import { IconTooltip } from './_components/icon-tooltip'
 import { cn } from '@workspace/ui/lib/utils'
-
-function categoryLabel(category: ProductDetail['category']) {
-  return category === 'fresh' ? 'สินค้าสด' : 'สินค้าแปรรูป'
-}
 
 function statusLabel(status: ProductDetail['status']) {
   return status === 'published' ? 'เผยแพร่แล้ว' : status === 'draft' ? 'ร่าง' : 'เก็บถาวร'
@@ -35,16 +37,6 @@ function detailState(error: unknown) {
   return { kind: 'error' as const, message: apiErrorMessage(error) }
 }
 
-function ProductImage({ product }: { product: ProductDetail }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null)
-
-  if (!product.imageUrl || failedUrl === product.imageUrl) {
-    return <div aria-label={failedUrl ? 'โหลดรูปภาพไม่ได้' : 'ไม่มีรูปภาพ'} className="grid min-h-48 place-items-center rounded-md bg-muted text-sm text-muted-foreground" role="img">{failedUrl ? 'โหลดรูปภาพไม่ได้' : 'ไม่มีรูปภาพสินค้า'}</div>
-  }
-
-  return <img alt={product.imageAlt || product.name} className="max-h-72 w-full rounded-md border object-contain" onError={() => setFailedUrl(product.imageUrl)} src={product.imageUrl} />
-}
-
 function ProductDetail({ product }: { product: ProductDetail }) {
   const queryClient = useQueryClient()
   const session = queryClient.getQueryData(authSessionQuery.queryKey)
@@ -52,7 +44,9 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const canCreate = hasPermission(session, 'catalog:create')
   const canDelete = hasPermission(session, 'catalog:delete')
   const canReadInventory = hasPermission(session, 'inventory:read')
-  const [editing, setEditing] = useState(false)
+  const productArchived = product.status === 'archived'
+  const canEditProduct = canUpdate && !productArchived
+  const canAddVariant = canCreate && !productArchived
   const [productDirty, setProductDirty] = useState(false)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
   const [variantDirty, setVariantDirty] = useState(false)
@@ -60,8 +54,12 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const [variantConflictRefreshFailed, setVariantConflictRefreshFailed] = useState(false)
   const [variantBeingArchived, setVariantBeingArchived] = useState<Variant | null>(null)
   const [variantError, setVariantError] = useState<string | null>(null)
+  const [showArchivedVariants, setShowArchivedVariants] = useState(false)
   const unsavedConfirmation = useUnsavedChanges(productDirty || variantDirty)
-  const activeVariants = product.variants.filter((variant) => !variant.archivedAt)
+  const orderedVariants = [...product.variants].sort((left, right) => left.displayOrder - right.displayOrder)
+  const activeVariants = orderedVariants.filter((variant) => !variant.archivedAt)
+  const archivedVariants = orderedVariants.filter((variant) => variant.archivedAt)
+  const archivedVisible = showArchivedVariants || activeVariants.length === 0
   const archiveVariantMutation = useMutation({
     mutationFn: (variant: Variant) => catalogApi.archiveVariant(product.id, variant.id),
     retry: false,
@@ -76,6 +74,12 @@ function ProductDetail({ product }: { product: ProductDetail }) {
       await invalidateCatalog(queryClient, product.id)
     },
   })
+
+  const openVariantDialog = (variant: Variant | null) => {
+    setVariantBeingEdited(variant)
+    setVariantConflictRefreshFailed(false)
+    setVariantDialogOpen(true)
+  }
 
   const refreshVariantConflict = async (variantId?: string) => {
     let refreshFailed = false
@@ -106,106 +110,154 @@ function ProductDetail({ product }: { product: ProductDetail }) {
     setVariantError(null)
   }
 
+  const variantRow = (variant: Variant) => {
+    const archived = Boolean(variant.archivedAt)
+    const lastActiveVariant = product.status === 'published' && !archived && activeVariants.length === 1
+    const canArchive = canDelete && !archived && !productArchived && !lastActiveVariant
+    const archiveReasonId = `variant-${variant.id}-archive-reason`
+    return <TableRow className={cn(archived && 'text-muted-foreground')} key={variant.id}>
+      <TableCell className={cn('font-medium', !archived && 'text-foreground')}>{variant.sku}</TableCell>
+      <TableCell>{variant.name}</TableCell>
+      <TableCell>
+        <span>{variant.unit}</span>
+        <span className="text-muted-foreground"> · ≥{variant.minRemainingShelfLifeDays} วัน</span>
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{formatMoney(variant.priceSatang)}</TableCell>
+      <TableCell><Badge variant={archived ? 'outline' : variant.salesEnabled ? 'success' : 'secondary'}>
+        {archived ? 'เก็บถาวร' : variant.salesEnabled ? 'เปิดขาย' : 'ปิดขาย'}
+      </Badge></TableCell>
+      <TableCell>
+        <div className="flex justify-end gap-0.5">
+          {canReadInventory && <IconTooltip label="ดูสต็อก">
+            <Link aria-label={`ดูสต็อก ${variant.sku}`} className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })} to={`/inventory/variants/${variant.id}?productId=${product.id}`}>
+              <HugeiconsIcon icon={WarehouseIcon} strokeWidth={2} />
+            </Link>
+          </IconTooltip>}
+          {!archived && canUpdate && !productArchived && <IconTooltip label="แก้ไขรูปแบบ">
+            <Button aria-label={`แก้ไขรูปแบบ ${variant.sku}`} onClick={() => openVariantDialog(variant)} size="icon-sm" variant="ghost">
+              <HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} />
+            </Button>
+          </IconTooltip>}
+          {!archived && canDelete && !productArchived && (lastActiveVariant
+            ? <IconTooltip label="สินค้าที่เผยแพร่แล้วต้องมีรูปแบบที่ใช้งานได้อย่างน้อยหนึ่งรายการ">
+              <span className="inline-flex rounded-control outline-none focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0}>
+                <Button aria-describedby={archiveReasonId} aria-label={`เก็บรูปแบบสินค้า ${variant.sku}`} disabled size="icon-sm" variant="ghost">
+                  <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+                </Button>
+                <span className="sr-only" id={archiveReasonId}>สินค้าที่เผยแพร่แล้วต้องมีรูปแบบที่ใช้งานได้อย่างน้อยหนึ่งรายการ</span>
+              </span>
+            </IconTooltip>
+            : <IconTooltip label="เก็บรูปแบบสินค้า">
+              <Button aria-label={`เก็บรูปแบบสินค้า ${variant.sku}`} disabled={!canArchive || archiveVariantMutation.isPending} onClick={() => setVariantBeingArchived(variant)} size="icon-sm" variant="ghost">
+                <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+              </Button>
+            </IconTooltip>)}
+        </div>
+      </TableCell>
+    </TableRow>
+  }
+
   return (
-    <section className="flex flex-col gap-6 px-4 lg:px-6">
-      <div className="flex flex-col gap-4">
-        <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/products">กลับไปหน้าสินค้า</Link>
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{product.name}</h1>
-            <Badge variant={product.status === 'published' ? 'success' : product.status === 'draft' ? 'warning' : 'outline'}>{statusLabel(product.status)}</Badge>
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 lg:px-6">
+      <header className="flex flex-col gap-3">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem><BreadcrumbLink render={<Link to="/products" />}>สินค้า</BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem><BreadcrumbPage className="max-w-64 truncate">{product.name}</BreadcrumbPage></BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-headline font-semibold tracking-tight text-balance">{product.name}</h1>
+              <Badge variant={product.status === 'published' ? 'success' : product.status === 'draft' ? 'warning' : 'outline'}>{statusLabel(product.status)}</Badge>
+            </div>
+            {product.englishName && <p className="text-muted-foreground">{product.englishName}</p>}
           </div>
-          {product.englishName && <p className="text-muted-foreground">{product.englishName}</p>}
-          <p className="text-sm text-muted-foreground">{categoryLabel(product.category)} · {product.slug}</p>
+          <ProductHeaderActions formDirty={productDirty} product={product} />
         </div>
-        {!editing && canUpdate && product.status !== 'archived' && <Button className="w-fit" onClick={() => setEditing(true)} variant="outline">แก้ไขสินค้า</Button>}
-      </div>
+      </header>
 
-      {editing
-        ? <ProductForm mode="edit" onCancel={() => setEditing(false)} onDirtyChange={setProductDirty} onSaved={() => setEditing(false)} product={product} />
-        : <div className="grid gap-6 lg:grid-cols-2">
-          <section className="flex flex-col gap-3 rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">รายละเอียด</h2>
-            <dl className="grid gap-4 text-sm">
-              <DetailField label="คำอธิบาย" value={product.description} />
-              <DetailField label="เรื่องราวจากสวน" value={product.originStory} />
-              <DetailField label="วิธีเก็บรักษา" value={product.storageInstructions} />
-              <DetailField label="แก้ไขล่าสุด" value={formatTimestamp(product.updatedAt)} />
-            </dl>
-          </section>
-          <section className="flex flex-col gap-3 rounded-lg border p-4">
-            <h2 className="text-lg font-semibold">รูปสินค้า</h2>
-            <ProductImage product={product} />
-          </section>
-        </div>}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <ProductForm
+              mode="edit"
+              onDirtyChange={setProductDirty}
+              product={product}
+              readOnlyReason={productArchived ? 'สินค้านี้ถูกเก็บถาวรแล้ว จึงแก้ไขข้อมูลไม่ได้' : !canUpdate ? 'บัญชีนี้ดูข้อมูลสินค้าได้อย่างเดียว' : undefined}
+            />
 
-      {!editing && <ProductActions product={product} />}
+            <Card aria-labelledby="product-variants-title" role="region">
+              <CardHeader>
+                <CardTitle><h2 id="product-variants-title">รูปแบบสินค้า</h2></CardTitle>
+                <CardDescription>SKU เปลี่ยนไม่ได้หลังสร้าง และรูปแบบที่เก็บถาวรยังคงแสดงในประวัติสินค้า</CardDescription>
+                {canAddVariant && <CardAction>
+                  <Button onClick={() => openVariantDialog(null)} size="sm">
+                    <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} strokeWidth={2} />
+                    เพิ่มรูปแบบสินค้า
+                  </Button>
+                </CardAction>}
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 px-0">
+                {variantError && <p aria-live="assertive" className="px-(--card-spacing) text-sm text-destructive" role="alert">{variantError}</p>}
+                <div className="overflow-x-auto border-y">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="pl-(--card-spacing)">SKU</TableHead>
+                        <TableHead>ชื่อรูปแบบ</TableHead>
+                        <TableHead>หน่วย · อายุขั้นต่ำ</TableHead>
+                        <TableHead className="text-right">ราคา</TableHead>
+                        <TableHead>การขาย</TableHead>
+                        <TableHead className="pr-(--card-spacing)"><span className="sr-only">การดำเนินการ</span></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="[&_td:first-child]:pl-(--card-spacing) [&_td:last-child]:pr-(--card-spacing)">
+                      {orderedVariants.length > 0
+                        ? <>
+                          {activeVariants.map(variantRow)}
+                          {archivedVariants.length > 0 && activeVariants.length > 0 && <TableRow className="hover:bg-transparent">
+                            <TableCell className="py-1" colSpan={6}>
+                              <Button aria-controls="archived-variant-rows" aria-expanded={archivedVisible} className="-ml-2 text-muted-foreground" onClick={() => setShowArchivedVariants((value) => !value)} size="sm" variant="ghost">
+                                <HugeiconsIcon className={cn('transition-transform', !archivedVisible && '-rotate-90')} data-icon="inline-start" icon={ArrowDown01Icon} strokeWidth={2} />
+                                เก็บถาวรแล้ว ({archivedVariants.length})
+                              </Button>
+                            </TableCell>
+                          </TableRow>}
+                          {archivedVisible && archivedVariants.map(variantRow)}
+                        </>
+                        : <TableRow><TableCell className="p-0" colSpan={6}><Empty className="min-h-32 border-0"><EmptyHeader><EmptyTitle>ยังไม่มีรูปแบบสินค้า</EmptyTitle><EmptyDescription>เพิ่มรูปแบบสินค้าเพื่อกำหนด SKU หน่วย และราคา</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
 
-      {!editing && <ProductFarms product={product} />}
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-semibold">รูปแบบสินค้า</h2>
-            <p className="text-sm text-muted-foreground">SKU เปลี่ยนไม่ได้หลังสร้าง และรูปแบบที่เก็บถาวรยังคงแสดงในประวัติสินค้า</p>
+            <ProductFarms product={product} />
           </div>
-          {canCreate && product.status !== 'archived' && <Button onClick={() => {
-            setVariantBeingEdited(null)
-            setVariantConflictRefreshFailed(false)
-            setVariantDialogOpen(true)
-          }}>เพิ่มรูปแบบสินค้า</Button>}
+
+          <aside aria-label="ข้อมูลสรุปสินค้า" className="flex flex-col gap-6">
+            <PublicationChecklist
+              onAddVariant={canAddVariant ? () => openVariantDialog(null) : undefined}
+              canEdit={canEditProduct}
+              product={product}
+            />
+            <Card aria-labelledby="product-meta-title" role="region" size="sm">
+              <CardHeader>
+                <CardTitle><h2 id="product-meta-title">ประวัติ</h2></CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+                  <MetaField label="สร้างเมื่อ" value={formatTimestamp(product.createdAt)} />
+                  {product.publishedAt && <MetaField label="เผยแพร่เมื่อ" value={formatTimestamp(product.publishedAt)} />}
+                  <MetaField label="แก้ไขล่าสุด" value={formatTimestamp(product.updatedAt)} />
+                </dl>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
-        {variantError && <p aria-live="assertive" className="text-sm text-destructive" role="alert">{variantError}</p>}
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>ชื่อรูปแบบ</TableHead>
-                <TableHead>หน่วย</TableHead>
-                <TableHead className="text-right">ราคา</TableHead>
-                <TableHead>การขาย</TableHead>
-                <TableHead>ลำดับ</TableHead>
-                <TableHead>อายุคงเหลือขั้นต่ำ</TableHead>
-                <TableHead><span className="sr-only">การดำเนินการ</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {product.variants.length > 0
-                ? product.variants.map((variant) => {
-                  const lastActiveVariant = product.status === 'published' && !variant.archivedAt && activeVariants.length === 1
-                  const canArchive = canDelete && !variant.archivedAt && product.status !== 'archived' && !lastActiveVariant
-                  return <TableRow key={variant.id}>
-                    <TableCell className="font-medium">{variant.sku}</TableCell>
-                    <TableCell>{variant.name}</TableCell>
-                    <TableCell>{variant.unit}</TableCell>
-                    <TableCell className="text-right">{formatMoney(variant.priceSatang)}</TableCell>
-                    <TableCell><Badge variant={variant.archivedAt ? 'outline' : variant.salesEnabled ? 'success' : 'secondary'}>
-                      {variant.archivedAt ? 'เก็บถาวร' : variant.salesEnabled ? 'เปิดขาย' : 'ปิดขาย'}
-                    </Badge></TableCell>
-                    <TableCell>{variant.displayOrder}</TableCell>
-                    <TableCell>{variant.minRemainingShelfLifeDays} วัน</TableCell>
-                    <TableCell>
-                      {canReadInventory && <Link className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mb-2 w-fit')} to={`/inventory/variants/${variant.id}?productId=${product.id}`}>ดูสต็อก {variant.sku}</Link>}
-                      {!variant.archivedAt && <div className="flex flex-wrap gap-2">
-                        {canUpdate && product.status !== 'archived' && <Button onClick={() => {
-                          setVariantBeingEdited(variant)
-                          setVariantConflictRefreshFailed(false)
-                          setVariantDialogOpen(true)
-                        }} size="sm" variant="outline">แก้ไขรูปแบบ {variant.sku}</Button>}
-                        {canDelete && product.status !== 'archived' && <Button disabled={!canArchive || archiveVariantMutation.isPending} onClick={() => setVariantBeingArchived(variant)} size="sm" variant="outline" aria-describedby={lastActiveVariant ? `variant-${variant.id}-archive-reason` : undefined}>
-                          เก็บรูปแบบสินค้า {variant.sku}
-                        </Button>}
-                      </div>}
-                      {lastActiveVariant && <p className="max-w-64 text-xs text-muted-foreground" id={`variant-${variant.id}-archive-reason`}>สินค้าที่เผยแพร่แล้วต้องมีรูปแบบที่ใช้งานได้อย่างน้อยหนึ่งรายการ</p>}
-                    </TableCell>
-                  </TableRow>
-                })
-                : <TableRow><TableCell className="p-0" colSpan={8}><Empty className="min-h-32 border-0"><EmptyHeader><EmptyTitle>ยังไม่มีรูปแบบสินค้า</EmptyTitle><EmptyDescription>เพิ่มรูปแบบสินค้าเพื่อกำหนด SKU หน่วย และราคา</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
+
       {variantDialogOpen && <VariantDialog
         latestProductStatus={product.status}
         latestVariants={product.variants}
@@ -229,6 +281,7 @@ function ProductDetail({ product }: { product: ProductDetail }) {
         title="ยืนยันเก็บรูปแบบสินค้า"
         description={`เก็บ ${variantBeingArchived.sku} ไว้ในประวัติสินค้า รูปแบบและ SKU จะไม่ถูกลบ`}
         confirmLabel="เก็บรูปแบบสินค้า"
+        confirmVariant="destructive"
         pending={archiveVariantMutation.isPending}
         onOpenChange={(open) => !open && setVariantBeingArchived(null)}
         onConfirm={() => archiveVariantMutation.mutate(variantBeingArchived)}
@@ -238,12 +291,35 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   )
 }
 
-function DetailField({ label, value }: { label: string; value: string | null }) {
+function MetaField({ label, value }: { label: string; value: ReactNode }) {
+  return <>
+    <dt className="text-muted-foreground">{label}</dt>
+    <dd className="text-right">{value}</dd>
+  </>
+}
+
+function ProductDetailSkeleton() {
   return (
-    <div className="flex flex-col gap-1">
-      <dt className="font-medium">{label}</dt>
-      <dd className="whitespace-pre-wrap text-muted-foreground">{value || 'ยังไม่มีข้อมูล'}</dd>
-    </div>
+    <section aria-busy="true" aria-live="polite" className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 lg:px-6" role="status">
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-4 w-40" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <Skeleton className="h-9 w-64" />
+          <div className="flex gap-2"><Skeleton className="h-9 w-24" /><Skeleton className="h-9 w-28" /></div>
+        </div>
+      </div>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-64 w-full rounded-surface" />
+          <Skeleton className="h-40 w-full rounded-surface" />
+        </div>
+        <div className="flex flex-col gap-6">
+          <Skeleton className="aspect-square w-full rounded-surface" />
+          <Skeleton className="h-48 w-full rounded-surface" />
+        </div>
+      </div>
+      <span className="sr-only">กำลังโหลดข้อมูล...</span>
+    </section>
   )
 }
 
@@ -257,7 +333,7 @@ export function Component() {
     <QueryState kind="not-found" message="รหัสสินค้าไม่ถูกต้อง" />
     <Link className={cn(buttonVariants({ variant: 'outline' }), 'w-fit')} to="/products">กลับไปหน้าสินค้า</Link>
   </section>
-  if (product.isPending) return <QueryState kind="loading" />
+  if (product.isPending) return <ProductDetailSkeleton />
   if (product.error && !product.data) {
     const state = detailState(product.error)
     return <section className="flex flex-col gap-4 px-4 lg:px-6">
