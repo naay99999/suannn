@@ -32,6 +32,7 @@ import { CommerceSettingsService } from '../../src/modules/commerce-settings/ser
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const secret = new Uint8Array(32).fill(19)
@@ -167,7 +168,7 @@ async function preparePendingOrder() {
   }
   const audit = new AuditService(new AuditRepository(database.db))
   const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
-  const cartService = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db)))
+  const cartService = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db), new MediaUrls(null)))
   const quote = new QuoteService(cartService, settings, secret)
   await cartService.setItem(principal, variantId, 1)
   const quoteResult = await quote.create(principal, new Date())

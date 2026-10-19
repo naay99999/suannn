@@ -13,14 +13,22 @@ const config = loadConfig(testEnv)
 const productId = '00000000-0000-4000-8000-000000000001'
 const variantId = '00000000-0000-4000-8000-000000000002'
 
+const coverImage = {
+  id: '00000000-0000-4000-8000-0000000000a1',
+  url: 'https://cdn.example.test/media/a1/display.webp',
+  thumbUrl: 'https://cdn.example.test/media/a1/thumb.webp',
+  alt: 'Fresh coconut',
+  width: 800,
+  height: 600,
+}
+
 const storeProduct = {
   id: productId,
   slug: 'nam-hom-coconut',
   name: 'น้ำมะพร้าว',
   englishName: 'Coconut water',
   category: 'fresh' as const,
-  imageUrl: 'https://example.com/coconut.jpg',
-  imageAlt: 'Fresh coconut',
+  coverImage,
   minPriceSatang: 2500,
   canPurchase: true,
 }
@@ -32,8 +40,7 @@ const adminProduct = {
   englishName: storeProduct.englishName,
   category: storeProduct.category,
   vatTreatment: 'exempt' as const,
-  imageUrl: storeProduct.imageUrl,
-  imageAlt: storeProduct.imageAlt,
+  images: [coverImage],
   description: 'Fresh coconut water',
   originStory: null,
   storageInstructions: null,
@@ -53,7 +60,7 @@ function createService(overrides: Record<string, (...args: never[]) => unknown> 
     getStoreBySlug: async (slug: string) => {
       calls.push('getStoreBySlug')
       if (slug !== storeProduct.slug) throw new DomainError('PRODUCT_NOT_FOUND')
-      return { ...storeProduct, description: 'Fresh coconut water', originStory: null, storageInstructions: null, farms: [], variants: [
+      return { ...storeProduct, description: 'Fresh coconut water', originStory: null, storageInstructions: null, images: [coverImage], farms: [], variants: [
         { id: variantId, name: '1 litre', unit: 'bottle', priceSatang: 2500, displayOrder: 0, canPurchase: true },
       ] }
     },
@@ -195,6 +202,24 @@ describe('products HTTP contracts', () => {
     expect(calls).toEqual(['replaceFarms'])
   })
 
+  it('accepts imageIds on product writes and rejects the legacy image fields', async () => {
+    const { app, calls } = createApp()
+    const post = (body: object) => app.handle(request('/api/v1/admin/products', {
+      method: 'POST', body: JSON.stringify({ slug: 'coconut', name: 'Coconut', category: 'fresh', ...body }),
+    }, 'catalog_manager'))
+    const patch = (body: object) => app.handle(request(`/api/v1/admin/products/${productId}`, {
+      method: 'PATCH', body: JSON.stringify(body),
+    }, 'catalog_manager'))
+
+    expect((await post({ imageIds: [coverImage.id] })).status).toBe(201)
+    expect((await patch({ imageIds: [] })).status).toBe(200)
+    expect((await post({ imageIds: ['not-a-uuid'] })).status).not.toBe(201)
+    expect((await post({ imageIds: Array(13).fill(coverImage.id) })).status).not.toBe(201)
+    expect((await post({ imageUrl: 'https://example.com/a.jpg' })).status).not.toBe(201)
+    expect((await patch({ imageAlt: 'x' })).status).not.toBe(200)
+    expect(calls).toEqual(['createProduct', 'updateProduct'])
+  })
+
   it('rejects customer and support product writes', async () => {
     const { app, calls } = createApp()
     const body = JSON.stringify({ slug: 'coconut', name: 'Coconut', category: 'fresh' })
@@ -252,11 +277,23 @@ describe('products HTTP contracts', () => {
       method: 'POST', body: JSON.stringify({ slug: 'coconut', name: 'Coconut', category: 'fresh', status: 'published' }),
     }, 'catalog_manager'))
     const unknownQuery = await app.handle(request('/api/v1/admin/products?unexpected=field', {}, 'catalog_manager'))
+    const invalidSort = await app.handle(request('/api/v1/admin/products?sort=price', {}, 'catalog_manager'))
+    const invalidCategory = await app.handle(request('/api/v1/admin/products?category=frozen', {}, 'catalog_manager'))
 
     expect(invalid.status).toBe(422)
     expect(unknown.status).toBe(422)
     expect(unknownQuery.status).toBe(422)
+    expect(invalidSort.status).toBe(422)
+    expect(invalidCategory.status).toBe(422)
     expect(calls).toEqual([])
+  })
+
+  it('accepts the admin list sort, order, and category filters', async () => {
+    const { app, calls } = createApp()
+    const response = await app.handle(request('/api/v1/admin/products?q=coconut&status=draft&category=processed&sort=name&order=desc&limit=25', {}, 'catalog_manager'))
+
+    expect(response.status).toBe(200)
+    expect(calls).toEqual(['listAdmin'])
   })
 
   it('rejects shelf-life requirements above 365 days through the admin HTTP contract', async () => {

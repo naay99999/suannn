@@ -1,8 +1,10 @@
 import { and, asc, count, eq, gt, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
-import { cart, cartItem, product, productVariant } from '../../database/schema'
+import { cart, cartItem, mediaAsset, product, productImage, productVariant } from '../../database/schema'
 import type { InventoryReadRepository } from '../inventory/read-repository'
 import { DomainError } from '../../shared/domain-error'
+import { mediaImageColumns } from '../media/repository'
+import type { MediaUrls } from '../media/urls'
 import type { CartDetail, CartIssueCode, CartLine, CartPrincipal, MergeSkippedLine } from './types'
 
 type CatalogRow = {
@@ -10,8 +12,10 @@ type CatalogRow = {
   productId: string | null
   productSlug: string | null
   productName: string | null
-  productImageUrl: string | null
-  productImageAlt: string | null
+  coverId: string | null
+  coverAlt: string | null
+  coverWidth: number | null
+  coverHeight: number | null
   productStatus: string | null
   productArchivedAt: Date | null
   variantName: string | null
@@ -19,6 +23,11 @@ type CatalogRow = {
   priceSatang: number | null
   salesEnabled: boolean | null
   variantArchivedAt: Date | null
+}
+
+const cover = mediaImageColumns(mediaAsset)
+const catalogCover = {
+  coverId: cover.id, coverAlt: cover.alt, coverWidth: cover.width, coverHeight: cover.height,
 }
 
 type StoredCartLine = { variantId: string; quantity: number }
@@ -53,6 +62,7 @@ export class CartRepository {
   constructor(
     private readonly db: Database,
     private readonly inventory: Pick<InventoryReadRepository, 'getSellableVariantIds'>,
+    private readonly urls: MediaUrls,
   ) {}
 
   async get(principal: CartPrincipal): Promise<CartDetail> {
@@ -262,8 +272,7 @@ export class CartRepository {
       productId: product.id,
       productSlug: product.slug,
       productName: product.name,
-      productImageUrl: product.imageUrl,
-      productImageAlt: product.imageAlt,
+      ...catalogCover,
       productStatus: product.status,
       productArchivedAt: product.archivedAt,
       variantName: productVariant.name,
@@ -273,8 +282,10 @@ export class CartRepository {
       variantArchivedAt: productVariant.archivedAt,
     }).from(productVariant)
       .innerJoin(product, eq(productVariant.productId, product.id))
+      .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
+      .leftJoin(mediaAsset, eq(mediaAsset.id, productImage.mediaId))
       .where(eq(productVariant.id, variantId))
-      .for('update')
+      .for('update', { of: [productVariant, product] })
       .limit(1)
     if (!row) throw new DomainError('CART_VARIANT_UNAVAILABLE')
     return row
@@ -288,8 +299,7 @@ export class CartRepository {
       productId: product.id,
       productSlug: product.slug,
       productName: product.name,
-      productImageUrl: product.imageUrl,
-      productImageAlt: product.imageAlt,
+      ...catalogCover,
       productStatus: product.status,
       productArchivedAt: product.archivedAt,
       variantName: productVariant.name,
@@ -299,6 +309,8 @@ export class CartRepository {
       variantArchivedAt: productVariant.archivedAt,
     }).from(productVariant)
       .leftJoin(product, eq(productVariant.productId, product.id))
+      .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
+      .leftJoin(mediaAsset, eq(mediaAsset.id, productImage.mediaId))
       .where(inArray(productVariant.id, requestedIds))
     return new Map(rows.map((row) => [row.variantId, row]))
   }
@@ -309,13 +321,16 @@ export class CartRepository {
     sellableVariantIds: ReadonlySet<string>,
   ): CartLine {
     const issues = issuesFor(catalog, sellableVariantIds)
+    const coverImage = catalog ? this.urls.image({
+      id: catalog.coverId, alt: catalog.coverAlt, width: catalog.coverWidth, height: catalog.coverHeight,
+    }) : null
     return {
       variantId: line.variantId,
       productId: catalog?.productId ?? null,
       productSlug: catalog?.productSlug ?? null,
       productName: catalog?.productName ?? null,
-      productImageUrl: catalog?.productImageUrl ?? null,
-      productImageAlt: catalog?.productImageAlt ?? null,
+      productImageUrl: coverImage?.thumbUrl ?? null,
+      productImageAlt: coverImage?.alt ?? null,
       variantName: catalog?.variantName ?? null,
       unit: catalog?.unit ?? null,
       quantity: line.quantity,

@@ -3,6 +3,7 @@ import { DomainError, mapDomainError } from '../../src/shared/domain-error'
 import {
   assertPublishable,
   assertVariantArchivable,
+  normalizeImageIds,
   normalizeProductCreate,
   normalizeProductUpdate,
   normalizeSlug,
@@ -10,7 +11,12 @@ import {
   normalizeVariantCreate,
   normalizeVariantUpdate,
 } from '../../src/modules/products/policy'
+import { mapProductImageError } from '../../src/modules/products/product-images'
 import type { AdminProduct, AdminVariant, CreateProductInput } from '../../src/modules/products/types'
+
+const mediaA = '3f2b8f0e-1c5a-4a7e-9d7b-0a1b2c3d4e5f'
+const mediaB = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+const image = { id: mediaA, url: 'https://cdn.test/a/display.webp', thumbUrl: 'https://cdn.test/a/thumb.webp', alt: 'Fresh tomatoes', width: 800, height: 600 }
 
 const createProductInput: CreateProductInput = {
   slug: 'fresh-tomato',
@@ -28,8 +34,7 @@ function publishedProduct(overrides: Partial<AdminProduct> = {}): AdminProduct {
     category: 'fresh',
     originStory: null,
     storageInstructions: null,
-    imageUrl: 'https://images.example.test/tomato.jpg',
-    imageAlt: 'Fresh tomatoes',
+    images: [image],
     status: 'published',
     createdAt: new Date('2026-01-01T00:00:00Z'),
     updatedAt: new Date('2026-01-01T00:00:00Z'),
@@ -100,7 +105,7 @@ describe('product catalog policy', () => {
     expect(() => normalizeSku('tomato/500g')).toThrow('INVALID_PRODUCT')
   })
 
-  it('trims product create and update text and requires valid HTTPS image URLs', () => {
+  it('trims product create and update text', () => {
     expect(normalizeProductCreate({
       ...createProductInput,
       name: '  Fresh tomato  ',
@@ -108,20 +113,41 @@ describe('product catalog policy', () => {
       description: '  A local crop.  ',
       originStory: '  Grown nearby.  ',
       storageInstructions: '  Keep cool.  ',
-      imageUrl: '  https://images.example.test/tomato.jpg  ',
-      imageAlt: '  Ripe tomatoes  ',
     })).toMatchObject({
       name: 'Fresh tomato',
       englishName: 'Tomato',
       description: 'A local crop.',
       originStory: 'Grown nearby.',
       storageInstructions: 'Keep cool.',
-      imageUrl: 'https://images.example.test/tomato.jpg',
-      imageAlt: 'Ripe tomatoes',
     })
     expect(normalizeProductUpdate({ description: '  Updated copy  ' })).toEqual({ description: 'Updated copy' })
-    expect(() => normalizeProductCreate({ ...createProductInput, imageUrl: 'http://images.example.test/tomato.jpg' }))
+    expect(() => normalizeProductCreate({ ...createProductInput, imageUrl: 'https://images.example.test/tomato.jpg' } as never))
       .toThrow('INVALID_PRODUCT')
+    expect(() => normalizeProductCreate({ ...createProductInput, imageAlt: 'Ripe tomatoes' } as never))
+      .toThrow('INVALID_PRODUCT')
+  })
+
+  it('normalizes gallery image IDs', () => {
+    expect(normalizeImageIds(undefined)).toBeUndefined()
+    expect(normalizeImageIds([])).toEqual([])
+    expect(normalizeImageIds([mediaB, mediaA.toUpperCase()])).toEqual([mediaB, mediaA])
+    expect(normalizeProductCreate({ ...createProductInput, imageIds: [mediaA] }).imageIds).toEqual([mediaA])
+    expect(normalizeProductUpdate({ imageIds: [] })).toEqual({ imageIds: [] })
+    expect(() => normalizeImageIds('x')).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeImageIds(['not-a-uuid'])).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeImageIds([mediaA, mediaA])).toThrow('INVALID_PRODUCT')
+    expect(() => normalizeImageIds([mediaA, mediaA.toUpperCase()])).toThrow('INVALID_PRODUCT')
+    const many = Array.from({ length: 13 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+    expect(() => normalizeImageIds(many)).toThrow('INVALID_PRODUCT')
+    expect(normalizeImageIds(many.slice(0, 12))).toHaveLength(12)
+  })
+
+  it('maps a media foreign-key violation on product images to INVALID_PRODUCT', () => {
+    const fk = { code: '23503', constraint: 'product_image_media_id_media_asset_id_fk' }
+    expect(mapProductImageError({ cause: fk })).toBeInstanceOf(DomainError)
+    expect((mapProductImageError(fk) as DomainError).code).toBe('INVALID_PRODUCT')
+    const other = { code: '23503', constraint: 'product_variant_product_id_fk' }
+    expect(mapProductImageError(other)).toBe(other)
   })
 
   it('enforces product text limits, nonblank required fields, and known input fields', () => {
@@ -129,18 +155,16 @@ describe('product catalog policy', () => {
     expect(() => normalizeProductCreate({ ...createProductInput, name: 'x'.repeat(161) })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, slug: `a${'b'.repeat(100)}` })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, description: 'x'.repeat(5001) })).toThrow('INVALID_PRODUCT')
-    expect(() => normalizeProductCreate({ ...createProductInput, imageAlt: 'x'.repeat(201) })).toThrow('INVALID_PRODUCT')
-    expect(() => normalizeProductCreate({ ...createProductInput, imageUrl: `https://${'x'.repeat(2040)}.test` })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, id: 'caller-id' } as never)).toThrow('INVALID_PRODUCT')
-    expect(() => normalizeProductUpdate({ slug: 'changed-slug' } as never)).toThrow('INVALID_PRODUCT')
+    expect(normalizeProductUpdate({ slug: '  Changed-Slug  ' })).toEqual({ slug: 'changed-slug' })
+    expect(() => normalizeProductUpdate({ slug: 'not a slug' })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductUpdate({ id: 'caller-id' } as never)).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, englishName: 'x'.repeat(161) })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, originStory: 'x'.repeat(5001) })).toThrow('INVALID_PRODUCT')
     expect(() => normalizeProductCreate({ ...createProductInput, storageInstructions: 'x'.repeat(5001) })).toThrow('INVALID_PRODUCT')
   })
 
-  it('accepts product text and image values at their exact maximum lengths', () => {
-    const urlPrefix = 'https://images.example.test/'
+  it('accepts product text values at their exact maximum lengths', () => {
     const input = normalizeProductCreate({
       slug: `a${'b'.repeat(99)}`,
       name: 'n'.repeat(160),
@@ -148,8 +172,6 @@ describe('product catalog policy', () => {
       description: 'd'.repeat(5000),
       originStory: 'o'.repeat(5000),
       storageInstructions: 's'.repeat(5000),
-      imageUrl: `${urlPrefix}${'x'.repeat(2048 - urlPrefix.length)}`,
-      imageAlt: 'a'.repeat(200),
       category: 'processed',
     })
     expect(input.slug).toHaveLength(100)
@@ -158,8 +180,6 @@ describe('product catalog policy', () => {
     expect(input.description).toHaveLength(5000)
     expect(input.originStory).toHaveLength(5000)
     expect(input.storageInstructions).toHaveLength(5000)
-    expect(input.imageUrl).toHaveLength(2048)
-    expect(input.imageAlt).toHaveLength(200)
   })
 
   it('normalizes variant create and update text and rejects immutable SKU or IDs', () => {
@@ -211,7 +231,9 @@ describe('product catalog policy', () => {
 
   it('requires complete product content and one valid active variant to publish', () => {
     expect(() => assertPublishable(publishedProduct({ description: '  ' }), [activeVariant()])).toThrow('INVALID_PRODUCT')
-    expect(() => assertPublishable(publishedProduct({ imageAlt: null }), [activeVariant()])).toThrow('INVALID_PRODUCT')
+    expect(() => assertPublishable(publishedProduct({ images: [] }), [activeVariant()])).toThrow('INVALID_PRODUCT')
+    expect(() => assertPublishable(publishedProduct({ images: [{ ...image, alt: null }] }), [activeVariant()])).toThrow('INVALID_PRODUCT')
+    expect(() => assertPublishable(publishedProduct({ images: [image, { ...image, id: mediaB, alt: '  ' }] }), [activeVariant()])).toThrow('INVALID_PRODUCT')
     expect(() => assertPublishable(publishedProduct(), [])).toThrow('INVALID_PRODUCT')
     expect(() => assertPublishable(publishedProduct(), [activeVariant({ archivedAt: new Date() })])).toThrow('INVALID_PRODUCT')
   })

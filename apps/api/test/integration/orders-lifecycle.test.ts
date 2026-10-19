@@ -37,6 +37,7 @@ import type { CommandContext } from '../../src/modules/inventory/types'
 import { OrderService } from '../../src/modules/orders/service'
 import type { OrderPrincipal } from '../../src/modules/orders/types'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const commerceSecret = new Uint8Array(32).fill(29)
@@ -93,7 +94,7 @@ function expiredDate() {
 
 function services() {
   const audit = new AuditService(new AuditRepository(database.db))
-  const cart = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db)))
+  const cart = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db), new MediaUrls(null)))
   const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
   const quote = new QuoteService(cart, settings, commerceSecret)
   const checkout = new CheckoutService(database.db, commerceSecret)

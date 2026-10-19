@@ -1,6 +1,10 @@
 import { t } from 'elysia'
+import { mediaModels } from '../media/model'
 
 const uuid = t.String({ format: 'uuid' })
+const mediaImage = mediaModels['media.image']
+const coverImage = t.Union([mediaImage, t.Null()])
+const imageIds = t.Array(uuid, { maxItems: 12 })
 const nullableString = t.Union([t.String(), t.Null()])
 const nullableDate = t.Union([t.Date(), t.Null()])
 const category = t.Union([t.Literal('fresh'), t.Literal('processed')])
@@ -22,12 +26,11 @@ const productIdentity = {
   name: t.String({ maxLength: 160 }),
   englishName: t.Union([t.String({ maxLength: 160 }), t.Null()]),
   category,
-  imageUrl,
-  imageAlt: t.Union([t.String({ maxLength: 200 }), t.Null()]),
 }
 
 const storeProductSummary = t.Object({
   ...productIdentity,
+  coverImage,
   minPriceSatang: t.Integer({ minimum: 1, maximum: 1_000_000_000 }),
   canPurchase: t.Boolean({ description: 'True when at least one active variant has eligible unreserved inventory in the default warehouse; reservation confirms availability.' }),
 }, { additionalProperties: false })
@@ -54,12 +57,14 @@ const storeProductDetail = t.Object({
   description: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   originStory: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   storageInstructions: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
+  images: t.Array(mediaImage),
   farms: t.Array(t.Object({ ...productFarmRecord.properties }, { additionalProperties: false })),
   variants: t.Array(storeVariant),
 }, { additionalProperties: false })
 
 const adminProductSummary = t.Object({
   ...productIdentity,
+  coverImage,
   status,
   createdAt: t.Date(),
   updatedAt: t.Date(),
@@ -84,6 +89,7 @@ const adminVariant = t.Object({
 
 const adminProductFields = {
   ...productIdentity,
+  images: t.Array(mediaImage),
   vatTreatment,
   description: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
   originStory: t.Union([t.String({ maxLength: 5000 }), t.Null()]),
@@ -123,6 +129,17 @@ const storeQuery = t.Object({
 const adminQuery = t.Object({
   q: t.Optional(t.String({ maxLength: 200 })),
   status: t.Optional(status),
+  category: t.Optional(category),
+  sort: t.Optional(t.Union([
+    t.Literal('createdAt'),
+    t.Literal('updatedAt'),
+    t.Literal('name'),
+    t.Literal('category'),
+    t.Literal('status'),
+  ], { description: 'Sort field. Defaults to createdAt.' })),
+  order: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')], {
+    description: 'Sort direction. Defaults to desc for createdAt and updatedAt, asc otherwise.',
+  })),
   limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100, multipleOf: 1 })),
   cursor: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
 }, { additionalProperties: false })
@@ -136,11 +153,11 @@ const createProductBody = t.Object({
   description: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   originStory: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   storageInstructions: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
-  imageUrl: t.Optional(imageUrl),
-  imageAlt: t.Optional(t.Union([t.String({ maxLength: 200 }), t.Null()])),
+  imageIds: t.Optional(imageIds),
 }, { additionalProperties: false })
 
 const updateProductBody = t.Object({
+  slug: t.Optional(inputSlug),
   name: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
   category: t.Optional(category),
   vatTreatment: t.Optional(vatTreatment),
@@ -148,8 +165,7 @@ const updateProductBody = t.Object({
   description: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   originStory: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
   storageInstructions: t.Optional(t.Union([t.String({ maxLength: 5000 }), t.Null()])),
-  imageUrl: t.Optional(imageUrl),
-  imageAlt: t.Optional(t.Union([t.String({ maxLength: 200 }), t.Null()])),
+  imageIds: t.Optional(imageIds),
 }, { additionalProperties: false, minProperties: 1 })
 
 const createVariantBody = t.Object({

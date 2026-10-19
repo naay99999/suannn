@@ -94,7 +94,10 @@ describe('demo seed fixtures', () => {
     for (const published of products.filter(({ status }) => status === 'published')) {
       const activeVariants = variants.filter(({ productId, archivedAt }) =>
         productId === published.id && archivedAt === null)
-      expect(() => assertPublishable(published as AdminProduct, activeVariants as AdminVariant[])).not.toThrow()
+      expect(() => assertPublishable(
+        { ...published, images: [{ id: published.id!, url: '', thumbUrl: '', alt: 'demo', width: 1, height: 1 }] } as AdminProduct,
+        activeVariants as AdminVariant[],
+      )).not.toThrow()
     }
 
     const operationIds = new Set(operations.map(({ id }) => id!))

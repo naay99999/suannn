@@ -18,12 +18,11 @@ const productTextLimits = {
   description: 5000,
   originStory: 5000,
   storageInstructions: 5000,
-  imageAlt: 200,
 } as const
 
 const variantTextLimits = { name: 120, unit: 40 } as const
-const productCreateFields = ['slug', 'name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageUrl']
-const productUpdateFields = ['name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageUrl']
+const productCreateFields = ['slug', 'name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageIds']
+const productUpdateFields = ['slug', 'name', 'category', 'vatTreatment', ...Object.keys(productTextLimits), 'imageIds']
 const variantCreateFields = ['sku', 'name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
 const variantUpdateFields = ['name', 'unit', 'priceSatang', 'salesEnabled', 'displayOrder', 'minRemainingShelfLifeDays']
 
@@ -60,19 +59,18 @@ function normalizeOptionalTextFields(
   return result
 }
 
-function isHttpsUrl(value: string) {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && Boolean(url.hostname)
-  } catch {
-    return false
-  }
-}
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const maximumImages = 12
 
-function normalizeImageUrl(value: unknown): string | null | undefined {
-  const normalized = normalizeText(value, 2048)
-  if (typeof normalized === 'string' && !isHttpsUrl(normalized)) invalidProduct()
-  return normalized
+export function normalizeImageIds(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > maximumImages) return invalidProduct()
+  const ids = value.map((id) => {
+    if (typeof id !== 'string' || !uuidPattern.test(id)) return invalidProduct()
+    return id.toLowerCase()
+  })
+  if (new Set(ids).size !== ids.length) invalidProduct()
+  return ids
 }
 
 function assertCategory(value: unknown): asserts value is ProductCategory {
@@ -116,7 +114,7 @@ export function normalizeProductCreate(input: CreateProductInput): NormalizedPro
   assertCategory(input.category)
   if (input.vatTreatment !== undefined) assertVatTreatment(input.vatTreatment)
   const vatTreatment: VatTreatment = input.vatTreatment ?? (input.category === 'fresh' ? 'exempt' : 'standard')
-  const imageUrl = normalizeImageUrl(input.imageUrl)
+  const imageIds = normalizeImageIds(input.imageIds)
   const optionalText = normalizeOptionalTextFields(input, productTextLimits)
   return {
     slug,
@@ -124,7 +122,7 @@ export function normalizeProductCreate(input: CreateProductInput): NormalizedPro
     category: input.category,
     vatTreatment,
     ...optionalText,
-    ...(imageUrl !== undefined ? { imageUrl } : {}),
+    ...(imageIds !== undefined ? { imageIds } : {}),
   } as NormalizedProductCreate
 }
 
@@ -135,12 +133,13 @@ export function normalizeProductUpdate(input: UpdateProductInput): UpdateProduct
   if (input.name !== undefined) optionalText.name = normalizeText(input.name, productTextLimits.name, true) as string
   if (input.category !== undefined) assertCategory(input.category)
   if (input.vatTreatment !== undefined) assertVatTreatment(input.vatTreatment)
-  const imageUrl = normalizeImageUrl(input.imageUrl)
+  const imageIds = normalizeImageIds(input.imageIds)
   return {
+    ...(input.slug !== undefined ? { slug: normalizeSlug(input.slug) } : {}),
     ...optionalText,
     ...(input.category !== undefined ? { category: input.category } : {}),
     ...(input.vatTreatment !== undefined ? { vatTreatment: input.vatTreatment } : {}),
-    ...(imageUrl !== undefined ? { imageUrl } : {}),
+    ...(imageIds !== undefined ? { imageIds } : {}),
   }
 }
 
@@ -191,8 +190,8 @@ export function normalizeVariantUpdate(input: UpdateVariantInput): UpdateVariant
 }
 
 export function assertPublishable(product: AdminProduct, activeVariants: AdminVariant[]) {
-  if (!product.name.trim() || !product.description?.trim() || !product.imageAlt?.trim()
-    || !product.imageUrl || !isHttpsUrl(product.imageUrl)) invalidProduct()
+  if (!product.name.trim() || !product.description?.trim() || product.images.length < 1
+    || !product.images.every((image) => image.alt?.trim())) invalidProduct()
   assertCategory(product.category)
   const validVariant = activeVariants.some((variant) =>
     variant.archivedAt === null && variant.productId === product.id

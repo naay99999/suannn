@@ -73,7 +73,7 @@ export function createStoreProductsModule(service: ProductService) {
       response: { 200: 'product.storeDetail', 404: 'http.error', 422: 'http.error' },
       detail: {
         summary: 'Get a published product',
-        description: 'Returns a published product and its active variants. Draft, archived, and unknown products return 404. Storefront access is public.',
+        description: 'Returns a published product and its active variants. A former slug resolves to the product, whose slug field is then the current slug clients should redirect to. Draft, archived, and unknown products return 404. Storefront access is public.',
         tags: ['Store Products'],
         security: [],
       },
@@ -91,13 +91,13 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
     .model(httpModels)
     .model(productModels)
     .get('/', ({ query }) => service.listAdmin(query as AdminProductQuery), {
-      beforeHandle: rejectUnknownQueryFields(['q', 'status', 'limit', 'cursor']),
+      beforeHandle: rejectUnknownQueryFields(['q', 'status', 'category', 'sort', 'order', 'limit', 'cursor']),
       permission: { catalog: ['read'] },
       query: 'product.adminQuery',
       response: { 200: 'product.adminPage', 401: 'http.error', 403: 'http.error', 422: 'http.error' },
       detail: {
         summary: 'List products for catalog management',
-        description: 'Returns product summaries across draft, published, and archived statuses. Requires catalog:read permission.',
+        description: 'Returns product summaries across draft, published, and archived statuses, newest first unless sort and order are given. A cursor is only valid for the filters, sort, and order that produced it. Requires catalog:read permission.',
         tags: ['Admin Products'], security: staffSecurity,
       },
     })
@@ -117,7 +117,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
     }, {
       parse: [parseStrictJsonBody([
         'slug', 'name', 'category', 'vatTreatment', 'englishName', 'description', 'originStory',
-        'storageInstructions', 'imageUrl', 'imageAlt',
+        'storageInstructions', 'imageIds',
       ]), 'json'],
       browserMutation: 'admin',
       permission: { catalog: ['create'] },
@@ -133,8 +133,8 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       params.id, body as UpdateProductInput, productActor(user.id, requestContext),
     ), {
       parse: [parseStrictJsonBody([
-        'name', 'category', 'vatTreatment', 'englishName', 'description', 'originStory',
-        'storageInstructions', 'imageUrl', 'imageAlt',
+        'slug', 'name', 'category', 'vatTreatment', 'englishName', 'description', 'originStory',
+        'storageInstructions', 'imageIds',
       ]), 'json'],
       browserMutation: 'admin',
       permission: { catalog: ['update'] },
@@ -143,7 +143,7 @@ export function createAdminProductsModule(config: AppConfig, auth: Auth, service
       response: { 200: 'product.adminProductMutation', ...errors },
       detail: {
         summary: 'Update product details',
-        description: 'Updates mutable product details. Slugs cannot be changed; edits to a published product must leave it publishable. Requires catalog:update permission.',
+        description: 'Updates product details. Changing the slug keeps the previous slug as a storefront redirect, and a slug reserved by another product returns 409. Edits to a published product must leave it publishable. Requires catalog:update permission.',
         tags: ['Admin Products'], security: staffSecurity,
       },
     })

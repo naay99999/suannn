@@ -45,6 +45,7 @@ import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
 import type { ProductService } from '../../src/modules/products/service'
 import { testEnv } from '../fixtures'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const config = loadConfig(testEnv)
 const database = createDatabase(config.databaseUrl)
@@ -55,7 +56,7 @@ const claims = new IdentityClaimService(database.db, new IdentityClaimRepository
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 let databaseIsReady = true
 const inventoryReadRepository = new InventoryReadRepository(database.db)
-const cart = new CartService(new CartRepository(database.db, inventoryReadRepository))
+const cart = new CartService(new CartRepository(database.db, inventoryReadRepository, new MediaUrls(null)))
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
 const app = await createApp(config, {

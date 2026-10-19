@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto'
 import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { Database, DatabaseTransaction } from '../../database/types'
-import { farm, product, productFarm, productVariant } from '../../database/schema'
+import { farm, mediaAsset, product, productFarm, productImage, productSlugRedirect, productVariant } from '../../database/schema'
 import type { InventoryReadRepository } from '../inventory/read-repository'
 import type { AuditService } from '../audit/service'
 import { readProductFarms, replaceProductFarms } from './farm-associations'
+import { mapProductImageError, readProductImages, replaceProductImages } from './product-images'
+import { mediaImageColumns } from '../media/repository'
+import type { MediaUrls } from '../media/urls'
 import { normalizeFarmIds } from '../farms/policy'
 import { DomainError } from '../../shared/domain-error'
 import { decodeCursor, encodeCursor } from '../../shared/cursor'
 import { assertPublishable, assertVariantArchivable } from './policy'
 import type {
   AdminProductQuery,
+  AdminProductSortField,
   AdminProductSummary,
   AdminProduct,
   AdminVariant,
@@ -37,14 +41,21 @@ const productProjection = {
   vatTreatment: product.vatTreatment,
   originStory: product.originStory,
   storageInstructions: product.storageInstructions,
-  imageUrl: product.imageUrl,
-  imageAlt: product.imageAlt,
   status: product.status,
   createdAt: product.createdAt,
   updatedAt: product.updatedAt,
   publishedAt: product.publishedAt,
   archivedAt: product.archivedAt,
 }
+
+// Cover columns come from a left join on the first gallery slot, so they are all null without one.
+const cover = mediaImageColumns(mediaAsset)
+const coverProjection = {
+  coverId: cover.id, coverAlt: cover.alt, coverWidth: cover.width, coverHeight: cover.height,
+}
+
+type ProductRow = Omit<AdminProduct, 'images' | 'farms' | 'variants'>
+type CoverRow = { coverId: string | null; coverAlt: string | null; coverWidth: number | null; coverHeight: number | null }
 
 const variantProjection = {
   id: productVariant.id,
@@ -67,8 +78,6 @@ const storeProductProjection = {
   name: product.name,
   englishName: product.englishName,
   category: product.category,
-  imageUrl: product.imageUrl,
-  imageAlt: product.imageAlt,
 }
 
 const storeVariantProjection = {
@@ -85,8 +94,6 @@ const adminProductSummaryProjection = {
   name: product.name,
   englishName: product.englishName,
   category: product.category,
-  imageUrl: product.imageUrl,
-  imageAlt: product.imageAlt,
   status: product.status,
   createdAt: product.createdAt,
   updatedAt: product.updatedAt,
@@ -139,14 +146,43 @@ function normalizedStoreQuery(query: StoreProductQuery) {
   return { q, category, sort, limit: normalizePageSize(query.limit), cursor: query.cursor }
 }
 
+const adminSortColumns = {
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+  name: product.name,
+  category: product.category,
+  status: product.status,
+} as const
+
 function normalizedAdminQuery(query: AdminProductQuery) {
-  assertQueryFields(query, ['q', 'status', 'limit', 'cursor'])
+  assertQueryFields(query, ['q', 'status', 'category', 'sort', 'order', 'limit', 'cursor'])
   const q = normalizeSearch(query.q)
-  const status = query.status
+  const { status, category } = query
   if (status !== undefined && status !== 'draft' && status !== 'published' && status !== 'archived') invalidQuery()
+  if (category !== undefined && category !== 'fresh' && category !== 'processed') invalidQuery()
+  const field = query.sort ?? 'createdAt'
+  if (!Object.hasOwn(adminSortColumns, field)) invalidQuery()
+  const direction = query.order ?? (field === 'createdAt' || field === 'updatedAt' ? 'desc' : 'asc')
+  if (direction !== 'asc' && direction !== 'desc') invalidQuery()
   if (query.cursor === '') invalidCursor()
   if (query.cursor !== undefined && typeof query.cursor !== 'string') return invalidQuery()
-  return { q, status, limit: normalizePageSize(query.limit), cursor: query.cursor }
+  return { q, status, category, sort: { field, direction }, limit: normalizePageSize(query.limit), cursor: query.cursor }
+}
+
+// Cursor values travel as text built by Postgres, so timestamps keep their microseconds.
+function adminSortCursorText(field: AdminProductSortField) {
+  const column = adminSortColumns[field]
+  return field === 'createdAt' || field === 'updatedAt'
+    ? sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
+    : sql<string>`${column}::text`
+}
+
+function adminSortCursorParam(field: AdminProductSortField, value: string) {
+  if (field === 'createdAt' || field === 'updatedAt') return sql`${validateCreatedAt(value)}::timestamptz`
+  if (field === 'category' && value !== 'fresh' && value !== 'processed') invalidCursor()
+  if (field === 'status' && value !== 'draft' && value !== 'published' && value !== 'archived') invalidCursor()
+  if (field === 'name' && value.length > 160) invalidCursor()
+  return sql`${value}`
 }
 
 function fingerprint(value: Record<string, string | null>) {
@@ -206,7 +242,12 @@ export class ProductRepository {
     private readonly db: Database,
     private readonly audit: AuditService,
     private readonly inventory: Pick<InventoryReadRepository, 'getSellableVariantIds'>,
+    private readonly urls: MediaUrls,
   ) {}
+
+  private toCoverImage(row: CoverRow) {
+    return this.urls.image({ id: row.coverId, alt: row.coverAlt, width: row.coverWidth, height: row.coverHeight })
+  }
 
   async listStore(input: StoreProductQuery): Promise<CursorPage<StoreProductSummary>> {
     return this.listStoreScoped(input)
@@ -259,10 +300,13 @@ export class ProductRepository {
         : [desc(activeMinimums.minPriceSatang), asc(product.id)]
     const rows = await this.db.select({
       ...storeProductProjection,
+      ...coverProjection,
       minPriceSatang: activeMinimums.minPriceSatang,
       cursorSortKey: sql<string>`to_char(${product.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as('cursor_sort_key'),
     }).from(product)
       .innerJoin(activeMinimums, eq(activeMinimums.productId, product.id))
+      .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
+      .leftJoin(mediaAsset, eq(mediaAsset.id, productImage.mediaId))
       .where(and(
         eq(product.status, 'published'),
         farmId ? inArray(product.id, this.db.select({ productId: productFarm.productId }).from(productFarm)
@@ -290,8 +334,11 @@ export class ProductRepository {
     const purchasableProductIds = new Set(activeVariants
       .filter(({ id }) => sellableVariantIds.has(id))
       .map(({ productId }) => productId))
-    const items = pageRows.map(({ cursorSortKey: _cursorSortKey, ...summary }) => ({
+    const items = pageRows.map(({
+      cursorSortKey: _cursorSortKey, coverId, coverAlt, coverWidth, coverHeight, ...summary
+    }) => ({
       ...summary,
+      coverImage: this.toCoverImage({ coverId, coverAlt, coverWidth, coverHeight }),
       canPurchase: purchasableProductIds.has(summary.id),
     }))
     return {
@@ -305,13 +352,19 @@ export class ProductRepository {
   }
 
   async getStoreBySlug(slug: string): Promise<StoreProductDetail> {
-    const [row] = await this.db.select({
+    const detailProjection = {
       ...storeProductProjection,
       description: product.description,
       originStory: product.originStory,
       storageInstructions: product.storageInstructions,
-    }).from(product)
+    }
+    const [current] = await this.db.select(detailProjection).from(product)
       .where(and(eq(product.slug, slug), eq(product.status, 'published')))
+      .limit(1)
+    // Fall back to a former slug so old links keep working; the response carries the current slug.
+    const [row] = current ? [current] : await this.db.select(detailProjection).from(productSlugRedirect)
+      .innerJoin(product, eq(product.id, productSlugRedirect.productId))
+      .where(and(eq(productSlugRedirect.slug, slug), eq(product.status, 'published')))
       .limit(1)
     if (!row) throw new DomainError('PRODUCT_NOT_FOUND')
 
@@ -329,8 +382,11 @@ export class ProductRepository {
       canPurchase: sellableVariantIds.has(id),
     }))
     const linkedFarms = await readProductFarms(this.db, row.id, true)
+    const images = (await readProductImages(this.db, [row.id], this.urls)).get(row.id) ?? []
     return {
       ...row,
+      images,
+      coverImage: images[0] ?? null,
       minPriceSatang: Math.min(...variants.map(({ priceSatang }) => priceSatang)),
       canPurchase: variants.some(({ canPurchase }) => canPurchase),
       variants,
@@ -340,33 +396,44 @@ export class ProductRepository {
 
   async listAdmin(input: AdminProductQuery): Promise<CursorPage<AdminProductSummary>> {
     const query = normalizedAdminQuery(input)
+    const { field, direction } = query.sort
+    const isDefaultSort = field === 'createdAt' && direction === 'desc'
+    // Unset filters and the default sort stay out of the fingerprint so existing cursors remain valid.
     const queryFingerprint = fingerprint({
       q: query.q ?? null,
       status: query.status ?? null,
+      ...(query.category ? { category: query.category } : {}),
+      ...(isDefaultSort ? {} : { sort: `${field}.${direction}` }),
     })
+    const column = adminSortColumns[field]
+    const [operator, orderBy] = direction === 'desc' ? [sql.raw('<'), desc] : [sql.raw('>'), asc]
     const cursor = decodeCursor(query.cursor, ['sortKey', 'id', 'fingerprint'])
     let cursorCondition
     if (cursor) {
       validateCursorIdentity(cursor, queryFingerprint)
-      const createdAt = sql`${validateCreatedAt(cursor.sortKey)}::timestamptz`
-      cursorCondition = or(lt(product.createdAt, createdAt), and(
-        eq(product.createdAt, createdAt), lt(product.id, cursor.id),
-      ))
+      // A row comparison lets Postgres start the (column, id) index scan at the cursor.
+      cursorCondition = sql`(${column}, ${product.id}) ${operator} (${adminSortCursorParam(field, cursor.sortKey)}, ${cursor.id}::uuid)`
     }
     const rows = await this.db.select({
       ...adminProductSummaryProjection,
-      cursorSortKey: sql<string>`to_char(${product.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as('cursor_sort_key'),
+      ...coverProjection,
+      cursorSortKey: adminSortCursorText(field).as('cursor_sort_key'),
     }).from(product)
+      .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
+      .leftJoin(mediaAsset, eq(mediaAsset.id, productImage.mediaId))
       .where(and(
         query.status ? eq(product.status, query.status) : undefined,
+        query.category ? eq(product.category, query.category) : undefined,
         searchProducts(query.q),
         cursorCondition,
       ))
-      .orderBy(desc(product.createdAt), desc(product.id))
+      .orderBy(orderBy(column), orderBy(product.id))
       .limit(query.limit + 1)
     const hasMore = rows.length > query.limit
     const pageRows = rows.slice(0, query.limit)
-    const items = pageRows.map(({ cursorSortKey: _cursorSortKey, ...summary }) => summary)
+    const items = pageRows.map(({
+      cursorSortKey: _cursorSortKey, coverId, coverAlt, coverWidth, coverHeight, ...summary
+    }) => ({ ...summary, coverImage: this.toCoverImage({ coverId, coverAlt, coverWidth, coverHeight }) }))
     const last = pageRows.at(-1)
     return {
       items,
@@ -386,7 +453,8 @@ export class ProductRepository {
       .where(eq(productVariant.productId, id))
       .orderBy(asc(productVariant.displayOrder), asc(productVariant.id))
     const farms = await readProductFarms(this.db, id)
-    return { ...row, variants, farms }
+    const images = (await readProductImages(this.db, [id], this.urls)).get(id) ?? []
+    return { ...row, images, variants, farms }
   }
 
   replaceFarms(id: string, farmIds: string[], actor: ProductActor) {
@@ -398,15 +466,27 @@ export class ProductRepository {
     try {
       return await this.db.transaction(callback)
     } catch (error) {
-      throw mapUniqueViolation(error)
+      throw mapProductImageError(mapUniqueViolation(error))
     }
   }
 
-  private async lockProduct(tx: DatabaseTransaction, id: string): Promise<AdminProduct> {
+  private async lockProduct(tx: DatabaseTransaction, id: string): Promise<ProductRow> {
     const [locked] = await tx.select(productProjection).from(product)
       .where(eq(product.id, id)).for('update').limit(1)
     if (!locked) throw new DomainError('PRODUCT_NOT_FOUND')
     return locked
+  }
+
+  // Serialises writers claiming the same slug, so a product slug and a redirect can never collide.
+  private async claimSlug(tx: DatabaseTransaction, slug: string, productId?: string) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`product-slug:${slug}`}, 0))`)
+    const [reserved] = await tx.select({ productId: productSlugRedirect.productId }).from(productSlugRedirect)
+      .where(eq(productSlugRedirect.slug, slug)).limit(1)
+    if (reserved && reserved.productId !== productId) throw new DomainError('PRODUCT_SLUG_CONFLICT')
+  }
+
+  private async withImages(tx: DatabaseTransaction, row: ProductRow): Promise<AdminProduct> {
+    return { ...row, images: (await readProductImages(tx, [row.id], this.urls)).get(row.id) ?? [] }
   }
 
   private async activeVariants(tx: DatabaseTransaction, productId: string): Promise<AdminVariant[]> {
@@ -436,13 +516,16 @@ export class ProductRepository {
 
   createProduct(input: NormalizedProductCreate, actor: ProductActor): Promise<AdminProduct> {
     return this.transaction(async (tx) => {
+      await this.claimSlug(tx, input.slug)
+      const { imageIds, ...fields } = input
       const [created] = await tx.insert(product).values({
         id: crypto.randomUUID(),
-        ...input,
+        ...fields,
         status: 'draft',
       }).returning(productProjection)
       await this.record(tx, actor, 'product.created', 'product', created.id, Object.keys(input))
-      return created
+      if (imageIds !== undefined) await replaceProductImages(tx, created.id, imageIds, actor, this.audit)
+      return this.withImages(tx, created)
     })
   }
 
@@ -450,12 +533,27 @@ export class ProductRepository {
     return this.transaction(async (tx) => {
       const current = await this.lockProduct(tx, id)
       if (current.status === 'archived') throw new DomainError('PRODUCT_STATE_CONFLICT')
-      const next = { ...current, ...input }
+      const { slug, imageIds, ...details } = input
+      const slugChanged = slug !== undefined && slug !== current.slug
+      const changes = slugChanged ? { ...details, slug } : details
+      const imagesChanged = imageIds !== undefined
+        && await replaceProductImages(tx, id, imageIds, actor, this.audit)
+      if (!Object.keys(changes).length && !imagesChanged) return this.withImages(tx, current)
+      const next = await this.withImages(tx, { ...current, ...changes })
       if (current.status === 'published') assertPublishable(next, await this.activeVariants(tx, id))
-      const [updated] = await tx.update(product).set({ ...input, updatedAt: new Date() })
+      if (slugChanged) {
+        await this.claimSlug(tx, slug, id)
+        // Reclaiming one of this product's own former slugs turns it back into the live slug.
+        await tx.delete(productSlugRedirect).where(and(eq(productSlugRedirect.slug, slug), eq(productSlugRedirect.productId, id)))
+        await tx.insert(productSlugRedirect).values({ slug: current.slug, productId: id })
+      }
+      const [updated] = await tx.update(product).set({ ...changes, updatedAt: new Date() })
         .where(eq(product.id, id)).returning(productProjection)
-      await this.record(tx, actor, 'product.updated', 'product', id, Object.keys(input))
-      return updated
+      if (Object.keys(changes).length) {
+        await this.record(tx, actor, 'product.updated', 'product', id, Object.keys(changes),
+          slugChanged ? { previousSlug: current.slug, slug } : {})
+      }
+      return { ...updated, images: next.images }
     })
   }
 
@@ -463,7 +561,7 @@ export class ProductRepository {
     return this.transaction(async (tx) => {
       const current = await this.lockProduct(tx, id)
       if (current.status !== 'draft') throw new DomainError('PRODUCT_STATE_CONFLICT')
-      assertPublishable(current, await this.activeVariants(tx, id))
+      assertPublishable(await this.withImages(tx, current), await this.activeVariants(tx, id))
       await tx.update(product).set({ status: 'published', publishedAt: new Date(), updatedAt: new Date() })
         .where(eq(product.id, id))
       await this.record(tx, actor, 'product.published', 'product', id)
@@ -486,6 +584,7 @@ export class ProductRepository {
       if (current.status === 'archived') throw new DomainError('PRODUCT_STATE_CONFLICT')
       await tx.update(product).set({ status: 'archived', archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(product.id, id))
+      await tx.delete(productImage).where(eq(productImage.productId, id))
       await this.record(tx, actor, 'product.archived', 'product', id)
     })
   }

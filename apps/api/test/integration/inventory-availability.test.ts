@@ -22,6 +22,7 @@ import { InventoryStockRepository } from '../../src/modules/inventory/stock-repo
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const actorId = 'inventory-availability-staff'
@@ -87,7 +88,7 @@ function createProductService(
   availability: Pick<InventoryReadRepository, 'getSellableVariantIds'> = new InventoryReadRepository(database.db),
 ) {
   const audit = new AuditService(new AuditRepository(database.db))
-  return new ProductService(new ProductRepository(database.db, audit, availability))
+  return new ProductService(new ProductRepository(database.db, audit, availability, new MediaUrls(null)))
 }
 
 async function seedCatalog(options: { salesEnabled?: boolean } = {}) {

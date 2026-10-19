@@ -20,6 +20,7 @@ import { InventoryReservationRepository } from '../../src/modules/inventory/rese
 import { InventoryService } from '../../src/modules/inventory/service'
 import { InventoryStockRepository } from '../../src/modules/inventory/stock-repository'
 import type { CommandContext } from '../../src/modules/inventory/types'
+import { MediaUrls } from '../../src/modules/media/urls'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import type { ProductActor } from '../../src/modules/products/types'
@@ -90,6 +91,7 @@ function createProductService() {
     database.db,
     new AuditService(new AuditRepository(database.db)),
     new InventoryReadRepository(database.db),
+    new MediaUrls(null),
   ))
 }
 

@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
+import { randomUUID } from 'node:crypto'
 import { and, eq, isNull, sql } from 'drizzle-orm'
-import { auditLog, product, productVariant, user } from '../../src/database/schema'
+import { auditLog, mediaAsset, product, productImage, productSlugRedirect, productVariant, user } from '../../src/database/schema'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
+import { MediaUrls } from '../../src/modules/media/urls'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import type { ProductActor } from '../../src/modules/products/types'
@@ -42,19 +44,33 @@ beforeEach(async () => {
   await database.db.delete(auditLog)
   await database.db.delete(productVariant)
   await database.db.delete(product)
+  await database.db.delete(mediaAsset)
 })
 
 afterAll(async () => {
   await database.db.delete(auditLog)
   await database.db.delete(productVariant)
   await database.db.delete(product)
+  await database.db.delete(mediaAsset)
   await database.db.delete(user).where(eq(user.id, actor.userId))
   await unlockDatabase?.()
   await database.client.end()
 })
 
-function serviceWith(audit = new AuditService(new AuditRepository(database.db))) {
-  return new ProductService(new ProductRepository(database.db, audit, new InventoryReadRepository(database.db)))
+const publicUrl = 'https://media.example.test'
+
+function serviceWith(audit = new AuditService(new AuditRepository(database.db)), urls = new MediaUrls(publicUrl)) {
+  return new ProductService(new ProductRepository(database.db, audit, new InventoryReadRepository(database.db), urls))
+}
+
+// Inserts a media_asset row directly; storage is not involved in product tests.
+async function uploadMedia(alt: string | null) {
+  const id = randomUUID()
+  await database.db.insert(mediaAsset).values({
+    id, storageKey: `media/${id}`, originalFilename: `${id}.jpg`, contentHash: id.replaceAll('-', '').repeat(2),
+    alt, width: 800, height: 600, byteSize: 1000, thumbByteSize: 100,
+  })
+  return id
 }
 
 async function createProduct(service: ProductService, slug = 'fresh-tomato') {
@@ -63,8 +79,7 @@ async function createProduct(service: ProductService, slug = 'fresh-tomato') {
     name: 'Fresh tomato',
     description: 'A sweet local crop.',
     category: 'fresh',
-    imageUrl: 'https://images.example.test/tomato.jpg',
-    imageAlt: 'Fresh tomatoes in a basket',
+    imageIds: [await uploadMedia('Fresh tomatoes in a basket')],
   }, actor)
 }
 
@@ -78,7 +93,7 @@ async function createVariant(service: ProductService, productId: string, sku = '
 }
 
 describe('product catalog write persistence', () => {
-  it('creates and updates drafts with normalized inputs and immutable slug and SKU', async () => {
+  it('creates and updates drafts with normalized inputs and an immutable SKU', async () => {
     const service = serviceWith()
     const created = await service.createProduct({
       slug: '  Fresh-Tomato  ', name: '  Fresh tomato  ', category: 'fresh',
@@ -89,8 +104,6 @@ describe('product catalog write persistence', () => {
 
     expect(created).toMatchObject({ slug: 'fresh-tomato', name: 'Fresh tomato', status: 'draft' })
     expect(variant).toMatchObject({ sku: 'FRESH-TOMATO-500G', name: '500 g bag', unit: 'bag' })
-    await expect(service.updateProduct(created.id, { slug: 'another-slug' } as never, actor))
-      .rejects.toThrow('INVALID_PRODUCT')
     await expect(service.updateVariant(created.id, variant.id, { sku: 'OTHER-SKU' } as never, actor))
       .rejects.toThrow('INVALID_PRODUCT')
     await service.updateProduct(created.id, { name: '  Ripe tomato  ' }, actor)
@@ -101,6 +114,33 @@ describe('product catalog write persistence', () => {
     expect(storedProduct?.slug).toBe('fresh-tomato')
     expect(storedVariant?.name).toBe('1 kg bag')
     expect(storedVariant?.sku).toBe('FRESH-TOMATO-500G')
+  })
+
+  it('renames slugs while reserving former slugs as redirects for the same product', async () => {
+    const service = serviceWith()
+    const created = await createProduct(service, 'old-tomato')
+    const other = await createProduct(service, 'other-tomato')
+
+    const renamed = await service.updateProduct(created.id, { slug: '  New-Tomato ' }, actor)
+    expect(renamed.slug).toBe('new-tomato')
+    expect(await database.db.select({ slug: productSlugRedirect.slug }).from(productSlugRedirect)
+      .where(eq(productSlugRedirect.productId, created.id))).toEqual([{ slug: 'old-tomato' }])
+
+    await expect(service.createProduct({ slug: 'old-tomato', name: 'Copycat', category: 'fresh' }, actor))
+      .rejects.toThrow('PRODUCT_SLUG_CONFLICT')
+    await expect(service.updateProduct(other.id, { slug: 'old-tomato' }, actor)).rejects.toThrow('PRODUCT_SLUG_CONFLICT')
+    await expect(service.updateProduct(other.id, { slug: 'new-tomato' }, actor)).rejects.toThrow('PRODUCT_SLUG_CONFLICT')
+
+    const reclaimed = await service.updateProduct(created.id, { slug: 'old-tomato' }, actor)
+    expect(reclaimed.slug).toBe('old-tomato')
+    expect((await database.db.select({ slug: productSlugRedirect.slug }).from(productSlugRedirect)
+      .where(eq(productSlugRedirect.productId, created.id))).map(({ slug }) => slug)).toEqual(['new-tomato'])
+
+    const unchanged = await service.updateProduct(created.id, { slug: 'old-tomato' }, actor)
+    expect(unchanged.updatedAt).toEqual(reclaimed.updatedAt)
+    const [audit] = await database.db.select().from(auditLog)
+      .where(and(eq(auditLog.targetId, created.id), eq(auditLog.action, 'product.updated'))).limit(1)
+    expect(audit?.metadata).toMatchObject({ previousSlug: 'old-tomato', slug: 'new-tomato', fields: ['slug'] })
   })
 
   it('migration-backed default: fresh product reads exempt', async () => {
@@ -176,7 +216,7 @@ describe('product catalog write persistence', () => {
     const events = await database.db.select({ action: auditLog.action, targetType: auditLog.targetType, metadata: auditLog.metadata })
       .from(auditLog)
     expect(events.map(({ action }) => action).sort()).toEqual([
-      'product.archived', 'product.created', 'product.published', 'product.unpublished',
+      'product.archived', 'product.created', 'product.images-replaced', 'product.published', 'product.unpublished',
       'product.updated', 'product.variant-archived', 'product.variant-created',
       'product.variant-created', 'product.variant-updated',
     ].sort())
@@ -233,6 +273,161 @@ describe('product catalog write persistence', () => {
   })
 })
 
+describe('product galleries', () => {
+  async function draftWithVariant(service: ProductService, slug: string, imageIds?: string[]) {
+    const created = await service.createProduct({
+      slug, name: 'Gallery product', description: 'Has a gallery.', category: 'fresh', imageIds,
+    }, actor)
+    await createVariant(service, created.id, `${slug.toUpperCase()}-SKU`)
+    return created
+  }
+
+  const storedIds = async (productId: string) => (await database.db.select({ mediaId: productImage.mediaId })
+    .from(productImage).where(eq(productImage.productId, productId)).orderBy(productImage.displayOrder))
+    .map(({ mediaId }) => mediaId)
+
+  it('stores an ordered gallery and returns images in order', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const b = await uploadMedia('B')
+    const created = await draftWithVariant(service, 'gallery-order', [b, a])
+
+    expect(created.images.map(({ id }) => id)).toEqual([b, a])
+    expect(created.images[0]).toMatchObject({
+      url: `${publicUrl}/media/${b}/display.webp`, thumbUrl: `${publicUrl}/media/${b}/thumb.webp`, alt: 'B',
+    })
+    expect((await service.getAdminById(created.id)).images.map(({ id }) => id)).toEqual([b, a])
+    expect(await storedIds(created.id)).toEqual([b, a])
+  })
+
+  it('replaces, clears, and leaves the gallery unchanged', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const b = await uploadMedia('B')
+    const created = await draftWithVariant(service, 'gallery-replace', [b, a])
+
+    expect((await service.updateProduct(created.id, { imageIds: [a] }, actor)).images.map(({ id }) => id)).toEqual([a])
+    expect((await service.updateProduct(created.id, { name: 'Renamed' }, actor)).images.map(({ id }) => id)).toEqual([a])
+    expect(await storedIds(created.id)).toEqual([a])
+    expect((await service.updateProduct(created.id, { imageIds: [a, b] }, actor)).images.map(({ id }) => id)).toEqual([a, b])
+    expect((await service.updateProduct(created.id, { imageIds: [b, a] }, actor)).images.map(({ id }) => id)).toEqual([b, a])
+    expect((await service.updateProduct(created.id, { imageIds: [] }, actor)).images).toEqual([])
+    expect(await storedIds(created.id)).toEqual([])
+
+    const before = (await service.getAdminById(created.id)).updatedAt
+    await service.updateProduct(created.id, { imageIds: [] }, actor)
+    expect((await service.getAdminById(created.id)).updatedAt).toEqual(before)
+  })
+
+  it('records one images-replaced audit event only when the gallery changes', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'gallery-audit', [a])
+    await service.updateProduct(created.id, { imageIds: [a] }, actor)
+    const events = await database.db.select({ metadata: auditLog.metadata }).from(auditLog)
+      .where(eq(auditLog.action, 'product.images-replaced'))
+    expect(events).toHaveLength(1)
+    expect(events[0]?.metadata).toEqual({ mediaIds: [a] })
+  })
+
+  it('rejects unknown media IDs atomically', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'gallery-unknown', [a])
+
+    await expect(service.updateProduct(created.id, { name: 'Changed', imageIds: [a, randomUUID()] }, actor))
+      .rejects.toThrow('INVALID_PRODUCT')
+    await expect(service.createProduct({ slug: 'never-created', name: 'X', category: 'fresh', imageIds: [randomUUID()] }, actor))
+      .rejects.toThrow('INVALID_PRODUCT')
+    expect((await service.getAdminById(created.id)).name).toBe('Gallery product')
+    expect(await storedIds(created.id)).toEqual([a])
+    expect(await database.db.select().from(product).where(eq(product.slug, 'never-created'))).toHaveLength(0)
+  })
+
+  it('rejects duplicate IDs and more than 12', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'gallery-limits')
+    await expect(service.updateProduct(created.id, { imageIds: [a, a] }, actor)).rejects.toThrow('INVALID_PRODUCT')
+    const thirteen = await Promise.all(Array.from({ length: 13 }, () => uploadMedia('Many')))
+    await expect(service.updateProduct(created.id, { imageIds: thirteen }, actor)).rejects.toThrow('INVALID_PRODUCT')
+    expect((await service.updateProduct(created.id, { imageIds: thirteen.slice(0, 12) }, actor)).images).toHaveLength(12)
+  })
+
+  it('requires an image with alt to publish', async () => {
+    const service = serviceWith()
+    const noAlt = await uploadMedia(null)
+    const withAlt = await uploadMedia('Has alt')
+
+    const bare = await draftWithVariant(service, 'publish-bare')
+    await expect(service.publishProduct(bare.id, actor)).rejects.toThrow('INVALID_PRODUCT')
+    const blank = await draftWithVariant(service, 'publish-no-alt', [noAlt])
+    await expect(service.publishProduct(blank.id, actor)).rejects.toThrow('INVALID_PRODUCT')
+    await service.updateProduct(blank.id, { imageIds: [withAlt] }, actor)
+    await service.publishProduct(blank.id, actor)
+    expect((await service.getAdminById(blank.id)).status).toBe('published')
+  })
+
+  it('rejects removing the last image from a published product', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'published-gallery', [a])
+    await service.publishProduct(created.id, actor)
+
+    await expect(service.updateProduct(created.id, { imageIds: [] }, actor)).rejects.toThrow('INVALID_PRODUCT')
+    expect(await storedIds(created.id)).toEqual([a])
+    const noAlt = await uploadMedia(null)
+    await expect(service.updateProduct(created.id, { imageIds: [a, noAlt] }, actor)).rejects.toThrow('INVALID_PRODUCT')
+    expect(await storedIds(created.id)).toEqual([a])
+  })
+
+  it('archive detaches the gallery', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'archive-gallery', [a])
+    await service.archiveProduct(created.id, actor)
+
+    expect(await storedIds(created.id)).toEqual([])
+    expect((await service.getAdminById(created.id)).images).toEqual([])
+    await database.db.delete(mediaAsset).where(eq(mediaAsset.id, a))
+  })
+
+  it('store list returns coverImage, detail returns all images', async () => {
+    const service = serviceWith()
+    const a = await uploadMedia('A')
+    const b = await uploadMedia('B')
+    const created = await draftWithVariant(service, 'store-gallery', [b, a])
+    await draftWithVariant(service, 'store-bare')
+    await service.publishProduct(created.id, actor)
+    const [bare] = await database.db.select().from(product).where(eq(product.slug, 'store-bare'))
+    await database.db.update(product).set({ status: 'published', publishedAt: new Date() }).where(eq(product.id, bare!.id))
+
+    const list = await service.listStore({})
+    expect(list.items.find(({ slug }) => slug === 'store-gallery')?.coverImage?.id).toBe(b)
+    expect(list.items.find(({ slug }) => slug === 'store-bare')?.coverImage).toBeNull()
+    const admin = await service.listAdmin({})
+    expect(admin.items.find(({ slug }) => slug === 'store-gallery')?.coverImage?.thumbUrl)
+      .toBe(`${publicUrl}/media/${b}/thumb.webp`)
+    const detail = await service.getStoreBySlug('store-gallery')
+    expect(detail.images).toHaveLength(2)
+    expect(detail.images.map(({ id }) => id)).toEqual([b, a])
+    expect(detail.coverImage?.id).toBe(b)
+  })
+
+  it('projects empty images when media is disabled', async () => {
+    const service = serviceWith(undefined, new MediaUrls(null))
+    const a = await uploadMedia('A')
+    const created = await draftWithVariant(service, 'media-disabled', [a])
+    await database.db.update(product).set({ status: 'published', publishedAt: new Date() }).where(eq(product.id, created.id))
+
+    expect(created.images).toEqual([])
+    expect((await service.getAdminById(created.id)).images).toEqual([])
+    expect((await service.listStore({})).items[0]?.coverImage).toBeNull()
+    expect((await service.listAdmin({})).items[0]?.coverImage).toBeNull()
+    expect((await service.getStoreBySlug('media-disabled')).images).toEqual([])
+  })
+})
+
 describe('product catalog read queries', () => {
   async function seedProduct(input: {
     id: string
@@ -258,8 +453,6 @@ describe('product catalog read queries', () => {
       vatTreatment: (input.category ?? 'fresh') === 'fresh' ? 'exempt' : 'standard',
       originStory: 'From our farm.',
       storageInstructions: 'Keep chilled.',
-      imageUrl: 'https://images.example.test/catalog.jpg',
-      imageAlt: 'A product in a basket',
       status: input.status,
       createdAt: now,
       updatedAt: now,
@@ -420,6 +613,40 @@ describe('product catalog read queries', () => {
       .rejects.toThrow('INVALID_CURSOR')
   })
 
+  it('sorts and filters the admin list with keyset cursors bound to that sort and filter', async () => {
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000061', slug: 'admin-cherry', name: 'Cherry', status: 'draft', category: 'fresh', createdAt: new Date('2026-01-03T00:00:00.000Z') })
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000062', slug: 'admin-apple', name: 'Apple', status: 'published', category: 'processed', createdAt: new Date('2026-01-01T00:00:00.000Z') })
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000063', slug: 'admin-banana', name: 'Banana', status: 'archived', category: 'fresh', createdAt: new Date('2026-01-02T00:00:00.000Z') })
+    await seedProduct({ id: '10000000-0000-4000-8000-000000000064', slug: 'admin-banana-tie', name: 'Banana', status: 'published', category: 'fresh', createdAt: new Date('2026-01-04T00:00:00.000Z') })
+
+    const service = serviceWith()
+    const slugs = (page: { items: Array<{ slug: string }> }) => page.items.map(({ slug }) => slug)
+    expect(slugs(await service.listAdmin({ sort: 'name' })))
+      .toEqual(['admin-apple', 'admin-banana', 'admin-banana-tie', 'admin-cherry'])
+    expect(slugs(await service.listAdmin({ sort: 'name', order: 'desc' })))
+      .toEqual(['admin-cherry', 'admin-banana-tie', 'admin-banana', 'admin-apple'])
+    expect(slugs(await service.listAdmin({ sort: 'createdAt', order: 'asc' })))
+      .toEqual(['admin-apple', 'admin-banana', 'admin-cherry', 'admin-banana-tie'])
+    expect(slugs(await service.listAdmin({ category: 'fresh', sort: 'status' })))
+      .toEqual(['admin-banana', 'admin-cherry', 'admin-banana-tie'])
+
+    // Walk every page one row at a time across the duplicate name.
+    const walked: string[] = []
+    let cursor: string | undefined
+    do {
+      const page = await service.listAdmin({ sort: 'name', limit: 1, cursor })
+      walked.push(...slugs(page))
+      cursor = page.nextCursor ?? undefined
+    } while (cursor)
+    expect(walked).toEqual(['admin-apple', 'admin-banana', 'admin-banana-tie', 'admin-cherry'])
+
+    const namePage = await service.listAdmin({ sort: 'name', limit: 1 })
+    if (!namePage.nextCursor) throw new Error('Expected another page')
+    await expect(service.listAdmin({ sort: 'name', order: 'desc', limit: 1, cursor: namePage.nextCursor })).rejects.toThrow('INVALID_CURSOR')
+    await expect(service.listAdmin({ sort: 'updatedAt', limit: 1, cursor: namePage.nextCursor })).rejects.toThrow('INVALID_CURSOR')
+    await expect(service.listAdmin({ sort: 'name', category: 'fresh', limit: 1, cursor: namePage.nextCursor })).rejects.toThrow('INVALID_CURSOR')
+  })
+
   it('rejects explicitly empty cursors for store and admin lists', async () => {
     const service = serviceWith()
 
@@ -455,5 +682,16 @@ describe('product catalog read queries', () => {
     await expect(service.getStoreBySlug('known-draft')).rejects.toThrow('PRODUCT_NOT_FOUND')
     await expect(service.getStoreBySlug('known-archived')).rejects.toThrow('PRODUCT_NOT_FOUND')
     await expect(service.getStoreBySlug('missing')).rejects.toThrow('PRODUCT_NOT_FOUND')
+  })
+
+  it('resolves a former slug to the published product with its current slug', async () => {
+    const id = '10000000-0000-4000-8000-000000000041'
+    await seedProduct({ id, slug: 'current-mango', name: 'Mango', status: 'published', minPrices: [900] })
+    await database.db.insert(productSlugRedirect).values({ slug: 'former-mango', productId: id })
+
+    const service = serviceWith()
+    expect((await service.getStoreBySlug('former-mango')).slug).toBe('current-mango')
+    await database.db.update(product).set({ status: 'draft' }).where(eq(product.id, id))
+    await expect(service.getStoreBySlug('former-mango')).rejects.toThrow('PRODUCT_NOT_FOUND')
   })
 })

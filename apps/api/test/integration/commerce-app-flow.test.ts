@@ -48,6 +48,7 @@ import { OrderService } from '../../src/modules/orders/service'
 import { testEnv } from '../fixtures'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 import { createIdentityLockPool } from '../../src/database/client'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
@@ -63,7 +64,7 @@ const identityLockPool = createIdentityLockPool(database.url)
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 const inventoryRead = new InventoryReadRepository(database.db)
-const cart = new CartService(new CartRepository(database.db, inventoryRead))
+const cart = new CartService(new CartRepository(database.db, inventoryRead, new MediaUrls(null)))
 const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const app = await createApp(config, {
   auth,
@@ -86,8 +87,8 @@ const app = await createApp(config, {
   staffMfa: new StaffMfaService({ auth, store: new DatabaseStaffMfaStore(database.db, audit) }),
   staff: new StaffService(new StaffRepository(database.db, audit, async () => false)),
   systemSettings: new SystemSettingsService(new SystemSettingsRepository(database.db, audit)),
-  products: new ProductService(new ProductRepository(database.db, audit, inventoryRead)),
-  farms: new FarmService(new FarmRepository(database.db, audit), new ProductRepository(database.db, audit, inventoryRead)),
+  products: new ProductService(new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
+  farms: new FarmService(new FarmRepository(database.db, audit), new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
   media: {} as never,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit), inventoryRead,

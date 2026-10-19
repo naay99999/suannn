@@ -40,6 +40,7 @@ import type { Auth } from '../../src/plugins/auth/auth'
 import { createErrorHandlingPlugin } from '../../src/plugins/error-handling'
 import { testEnv } from '../fixtures'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const config = loadConfig(testEnv)
@@ -103,7 +104,7 @@ async function clearSeller() {
 
 function services() {
   const audit = new AuditService(new AuditRepository(database.db))
-  const cart = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db)))
+  const cart = new CartService(new CartRepository(database.db, new InventoryReadRepository(database.db), new MediaUrls(null)))
   const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
   return {
     audit,

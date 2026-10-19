@@ -5,12 +5,15 @@ import {
   cart,
   cartItem,
   inventoryLot,
+  mediaAsset,
   product,
+  productImage,
   productVariant,
   user,
 } from '../../src/database/schema'
 import { CartRepository } from '../../src/modules/cart/repository'
 import { CartService } from '../../src/modules/cart/service'
+import { MediaUrls } from '../../src/modules/media/urls'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 
@@ -43,6 +46,7 @@ beforeEach(async () => {
   await database.db.delete(inventoryLot)
   await database.db.delete(productVariant)
   await database.db.delete(product)
+  await database.db.delete(mediaAsset)
 
   const now = new Date()
   catalogProductId = crypto.randomUUID()
@@ -84,13 +88,42 @@ afterAll(async () => {
 
 function createCartService() {
   const inventory = new InventoryReadRepository(database.db)
-  return new CartService(new CartRepository(database.db, inventory))
+  return new CartService(new CartRepository(database.db, inventory, new MediaUrls('https://media.example.test')))
 }
 
 const customer = { kind: 'customer', userId: customerId } as const
 const guest = { kind: 'guest', tokenHash: 'guest-token-hash-1' } as const
 
+async function attachCover(alt: string | null) {
+  const mediaId = crypto.randomUUID()
+  await database.db.insert(mediaAsset).values({
+    id: mediaId, storageKey: `media/${mediaId}`, originalFilename: 'cover.jpg', contentHash: mediaId.replaceAll('-', '').repeat(2),
+    alt, width: 800, height: 600, byteSize: 1000, thumbByteSize: 100,
+  })
+  await database.db.insert(productImage).values({ productId: catalogProductId, mediaId, displayOrder: 0 })
+  return mediaId
+}
+
 describe('persistent cart ownership and edits', () => {
+  it('cart line image comes from the cover thumb', async () => {
+    const service = createCartService()
+    const mediaId = await attachCover('Cart tomatoes')
+    const added = await service.setItem(customer, variantIds[0]!, 1)
+    const fetched = await service.get(customer)
+
+    for (const line of [added.lines[0], fetched.lines[0]]) {
+      expect(line?.productImageUrl).toBe(`https://media.example.test/media/${mediaId}/thumb.webp`)
+      expect(line?.productImageUrl?.endsWith('/thumb.webp')).toBe(true)
+      expect(line?.productImageAlt).toBe('Cart tomatoes')
+    }
+  })
+
+  it('leaves the cart line image empty without a cover', async () => {
+    const service = createCartService()
+    const added = await service.setItem(customer, variantIds[0]!, 1)
+    expect(added.lines[0]).toMatchObject({ productImageUrl: null, productImageAlt: null })
+  })
+
   it('keeps customer and guest carts isolated', async () => {
     const service = createCartService()
     await service.setItem(customer, variantIds[0]!, 2)
@@ -199,7 +232,7 @@ describe('persistent cart ownership and edits', () => {
 
   it('cleans expired guest carts in bounded batches and leaves customer carts intact', async () => {
     const service = createCartService()
-    const cleanup = new CartRepository(database.db, new InventoryReadRepository(database.db))
+    const cleanup = new CartRepository(database.db, new InventoryReadRepository(database.db), new MediaUrls(null))
     await service.setItem(customer, variantIds[0]!, 1)
     await service.setItem(guest, variantIds[1]!, 2)
     await service.setItem({ kind: 'guest', tokenHash: 'guest-token-hash-2' }, variantIds[2]!, 3)

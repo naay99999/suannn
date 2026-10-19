@@ -5,6 +5,7 @@ import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined
@@ -29,7 +30,7 @@ beforeEach(async () => {
 })
 afterAll(async () => { await unlockDatabase?.(); await database.client.end() })
 
-const repository = new ProductRepository(database.db, new AuditService(new AuditRepository(database.db)), { getSellableVariantIds: async () => new Set() })
+const repository = new ProductRepository(database.db, new AuditService(new AuditRepository(database.db)), { getSellableVariantIds: async () => new Set() }, new MediaUrls(null))
 
 describe('product farm associations', () => {
   it('replaces an ordered farm list atomically and exposes only published links publicly', async () => {

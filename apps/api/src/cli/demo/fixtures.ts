@@ -158,7 +158,7 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
     throw new Error('INVALID_DEMO_FIXTURE_CONTEXT')
   }
 
-  const normalizedImageBase = normalizeDemoImageBase(imageBaseUrl)
+  normalizeDemoImageBase(imageBaseUrl) // images are attached by the seed, but a bad base is still rejected
   const createdAt = new Date(now)
   const today = bangkokDate(now)
   const receivedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000)
@@ -172,8 +172,6 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       category: definition.category,
       originStory: `ตัวอย่างสินค้าสาธิตกลุ่ม${definition.category === 'fresh' ? 'ผลไม้สด' : 'สินค้าแปรรูป'}`,
       storageInstructions: definition.category === 'fresh' ? 'เก็บในที่เย็นและรับประทานตามวันที่แนะนำ' : 'เก็บในที่แห้งและปิดภาชนะหลังเปิด',
-      imageUrl: `${normalizedImageBase}/${definition.imagePath}`,
-      imageAlt: definition.alt,
     })
     return {
       id: demoId('product', index + 1),
@@ -214,7 +212,9 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
   for (const productRow of products.filter(({ status }) => status === 'published')) {
     const activeVariants = variants.filter(({ productId, archivedAt }) =>
       productId === productRow.id && archivedAt === null)
-    assertPublishable(productRow as AdminProduct, activeVariants as AdminVariant[])
+    // Gallery images are attached when the seed uploads media; stand in one so the other rules still run.
+    const placeholderImage = { id: productRow.id!, url: '', thumbUrl: '', alt: productRow.name!, width: 1, height: 1 }
+    assertPublishable({ ...productRow, images: [placeholderImage] } as AdminProduct, activeVariants as AdminVariant[])
   }
 
   let auditIndex = 0
@@ -244,7 +244,7 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
 
   const productFields = [
     'slug', 'name', 'category', 'englishName', 'description', 'originStory',
-    'storageInstructions', 'imageUrl', 'imageAlt',
+    'storageInstructions',
   ]
   for (const productRow of products) {
     recordAudit('product.created', 'product', productRow.id!, { fields: productFields })

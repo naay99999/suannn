@@ -10,6 +10,7 @@ import { CommerceSettingsRepository } from '../../src/modules/commerce-settings/
 import { CommerceSettingsService } from '../../src/modules/commerce-settings/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { MediaUrls } from '../../src/modules/media/urls'
 
 const database = createTestDatabase()
 const actorId = 'commerce-settings-owner'
@@ -58,7 +59,7 @@ function createServices() {
   const audit = new AuditService(new AuditRepository(database.db))
   const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
   const inventory = new InventoryReadRepository(database.db)
-  const cartService = new CartService(new CartRepository(database.db, inventory))
+  const cartService = new CartService(new CartRepository(database.db, inventory, new MediaUrls(null)))
   const quote = new QuoteService(cartService, settings, new Uint8Array(32).fill(7))
   return { settings, quote }
 }

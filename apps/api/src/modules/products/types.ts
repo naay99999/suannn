@@ -1,5 +1,6 @@
 import type { AuditContext } from '../audit/model'
 import type { AdminProductFarm, StoreProductFarm } from '../farms/types'
+import type { MediaImage } from '../media/types'
 
 export type ProductCategory = 'fresh' | 'processed'
 export type VatTreatment = 'standard' | 'exempt'
@@ -19,13 +20,12 @@ export interface CreateProductInput {
   description?: string | null
   originStory?: string | null
   storageInstructions?: string | null
-  imageUrl?: string | null
-  imageAlt?: string | null
+  imageIds?: string[]
 }
 
 export type NormalizedProductCreate = CreateProductInput & { vatTreatment: VatTreatment }
 
-export type UpdateProductInput = Partial<Omit<CreateProductInput, 'slug'>>
+export type UpdateProductInput = Partial<CreateProductInput>
 
 export interface CreateVariantInput {
   sku: string
@@ -49,8 +49,7 @@ export interface AdminProduct {
   vatTreatment: VatTreatment
   originStory: string | null
   storageInstructions: string | null
-  imageUrl: string | null
-  imageAlt: string | null
+  images: MediaImage[]
   status: ProductStatus
   createdAt: Date
   updatedAt: Date
@@ -90,9 +89,15 @@ export interface StoreProductQuery {
   cursor?: string
 }
 
+export type AdminProductSortField = 'createdAt' | 'updatedAt' | 'name' | 'category' | 'status'
+export type AdminProductSortDirection = 'asc' | 'desc'
+
 export interface AdminProductQuery {
   q?: string
   status?: ProductStatus
+  category?: ProductCategory
+  sort?: AdminProductSortField
+  order?: AdminProductSortDirection
   limit?: number
   cursor?: string
 }
@@ -103,8 +108,7 @@ export interface StoreProductSummary {
   name: string
   englishName: string | null
   category: ProductCategory
-  imageUrl: string | null
-  imageAlt: string | null
+  coverImage: MediaImage | null
   minPriceSatang: number
   canPurchase: boolean
 }
@@ -122,6 +126,7 @@ export interface StoreProductDetail extends StoreProductSummary {
   description: string | null
   originStory: string | null
   storageInstructions: string | null
+  images: MediaImage[]
   farms: StoreProductFarm[]
   variants: StoreProductVariant[]
 }
@@ -132,8 +137,7 @@ export interface AdminProductSummary {
   name: string
   englishName: string | null
   category: ProductCategory
-  imageUrl: string | null
-  imageAlt: string | null
+  coverImage: MediaImage | null
   status: ProductStatus
   createdAt: Date
   updatedAt: Date
