@@ -6,6 +6,7 @@ import type {
   VariantUpdateInput,
 } from './api'
 import { parseBahtToSatang } from '../format'
+import { mediaImageSchema } from '../media/value'
 
 const productFields = {
   slug: z.string().trim().min(1, 'กรุณาระบุชื่อ URL สินค้า').max(100, 'ชื่อ URL ต้องไม่เกิน 100 ตัวอักษร').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลาง'),
@@ -16,15 +17,7 @@ const productFields = {
   description: z.string().trim().max(5000, 'คำอธิบายต้องไม่เกิน 5,000 ตัวอักษร'),
   originStory: z.string().trim().max(5000, 'เรื่องราวต้องไม่เกิน 5,000 ตัวอักษร'),
   storageInstructions: z.string().trim().max(5000, 'วิธีเก็บรักษาต้องไม่เกิน 5,000 ตัวอักษร'),
-  imageUrl: z.string().trim().max(2048, 'URL รูปภาพยาวเกินไป').refine((value) => {
-    if (!value) return true
-    try {
-      return new URL(value).protocol === 'https:'
-    } catch {
-      return false
-    }
-  }, 'URL รูปภาพต้องขึ้นต้นด้วย HTTPS'),
-  imageAlt: z.string().trim().max(200, 'คำอธิบายรูปภาพต้องไม่เกิน 200 ตัวอักษร'),
+  images: z.array(mediaImageSchema).max(12, 'เลือกรูปได้ไม่เกิน 12 รูป'),
 }
 
 export const productCreateSchema = z.object(productFields)
@@ -76,13 +69,14 @@ export function toProductCreateInput(values: ProductCreateValues): ProductCreate
     description: optionalText(values.description),
     originStory: optionalText(values.originStory),
     storageInstructions: optionalText(values.storageInstructions),
-    imageUrl: optionalText(values.imageUrl),
-    imageAlt: optionalText(values.imageAlt),
+    imageIds: values.images.map((image) => image.id),
   }
 }
 
-export function toProductUpdateInput(values: ProductEditValues): ProductUpdateInput {
+// The slug is only sent when it changes; the API keeps the previous slug as a storefront redirect.
+export function toProductUpdateInput(values: ProductEditValues, currentSlug: string): ProductUpdateInput {
   return {
+    ...(values.slug !== currentSlug ? { slug: values.slug } : {}),
     name: values.name,
     category: values.category,
     vatTreatment: values.vatTreatment,
@@ -90,8 +84,7 @@ export function toProductUpdateInput(values: ProductEditValues): ProductUpdateIn
     description: optionalText(values.description),
     originStory: optionalText(values.originStory),
     storageInstructions: optionalText(values.storageInstructions),
-    imageUrl: optionalText(values.imageUrl),
-    imageAlt: optionalText(values.imageAlt),
+    imageIds: values.images.map((image) => image.id),
   }
 }
 
@@ -126,3 +119,31 @@ export const vatItems = [
   { label: 'ยกเว้น VAT (สินค้าเกษตรสด)', value: 'exempt' },
   { label: 'VAT 7%', value: 'standard' },
 ]
+
+export type ProductStatusValue = 'draft' | 'published' | 'archived'
+
+export const productStatusItems: { label: string; value: ProductStatusValue }[] = [
+  { label: 'ร่าง', value: 'draft' },
+  { label: 'เผยแพร่', value: 'published' },
+  { label: 'เก็บถาวร', value: 'archived' },
+]
+
+export type PublicationCheck = { label: string; complete: boolean; fieldId: string | null }
+
+type PublicationInput = Pick<ProductCreateValues, 'slug' | 'name' | 'category' | 'description' | 'images'> & {
+  variants: { archivedAt: string | Date | null; priceSatang: number }[]
+}
+
+// Mirrors the API's publish prerequisites so staff see what blocks publishing before saving.
+export function publicationChecks(input: PublicationInput): PublicationCheck[] {
+  const hasActiveVariant = input.variants.some((variant) => !variant.archivedAt
+    && Number.isSafeInteger(variant.priceSatang) && variant.priceSatang > 0 && variant.priceSatang <= 1_000_000_000)
+  return [
+    { label: 'ชื่อ URL สินค้า', complete: Boolean(input.slug.trim()), fieldId: 'product-slug' },
+    { label: 'ชื่อสินค้าและหมวดหมู่', complete: Boolean(input.name.trim() && input.category), fieldId: 'product-name' },
+    { label: 'คำอธิบาย', complete: Boolean(input.description.trim()), fieldId: 'product-description' },
+    { label: 'รูปสินค้าอย่างน้อยหนึ่งรูป', complete: input.images.length > 0, fieldId: 'product-images' },
+    { label: 'คำอธิบายรูปภาพครบทุกรูป', complete: input.images.every((image) => Boolean(image.alt?.trim())), fieldId: 'product-images' },
+    { label: 'รูปแบบสินค้าที่ใช้งานได้อย่างน้อยหนึ่งรายการ', complete: hasActiveVariant, fieldId: null },
+  ]
+}

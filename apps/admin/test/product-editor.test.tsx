@@ -20,14 +20,17 @@ const createdAt = new Date('2026-09-01T08:00:00.000Z')
 const updatedAt = new Date('2026-09-12T08:00:00.000Z')
 const permissions = ['catalog:read', 'catalog:create', 'catalog:update', 'catalog:publish', 'catalog:delete']
 
+const imageA = '00000000-0000-4000-8000-0000000000a1'
+const imageB = '00000000-0000-4000-8000-0000000000a2'
+const image = (id: string, alt: string | null) => ({ id, url: `https://example.test/${id}.webp`, thumbUrl: `https://example.test/${id}-t.webp`, alt, width: 800, height: 600 })
+
 const product: ProductSummary = {
   id: productId,
   slug: 'nam-dok-mai-mango',
   name: 'มะม่วงน้ำดอกไม้',
   englishName: 'Nam Dok Mai Mango',
   category: 'fresh',
-  imageUrl: 'https://example.test/mango.jpg',
-  imageAlt: 'ผลมะม่วงน้ำดอกไม้',
+  coverImage: image(imageA, 'ผลมะม่วงน้ำดอกไม้'),
   status: 'draft',
   createdAt,
   updatedAt,
@@ -56,6 +59,7 @@ const detail: ProductDetail = {
   description: 'มะม่วงสุกหวานจากสวน',
   originStory: 'ปลูกในสวนครอบครัว',
   storageInstructions: 'เก็บในที่เย็น',
+  images: [image(imageA, 'ผลมะม่วงน้ำดอกไม้'), image(imageB, 'ผ่าครึ่ง')],
   farms: [],
   variants: [variant],
 }
@@ -164,7 +168,7 @@ test('refreshes the catalog before offering recovery after an ambiguous create f
   expect(createSpy).toHaveBeenCalledTimes(1)
 })
 
-test('edits every mutable product field while keeping slug read-only and out of the payload', async () => {
+test('edits every mutable product field and leaves an unchanged slug out of the payload', async () => {
   const user = userEvent.setup()
   const updateSpy = stub('update', async () => detail)
   stub('get', async () => detail)
@@ -175,15 +179,14 @@ test('edits every mutable product field while keeping slug read-only and out of 
   queryClient.setQueryData(['inventory', 'lots'], { items: [] })
 
   await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
-  expect((screen.getByRole('textbox', { name: 'ชื่อ URL สินค้า' }) as HTMLInputElement).readOnly).toBe(true)
   await user.clear(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }))
   await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'มะม่วงชุดใหม่')
   await user.clear(screen.getByRole('textbox', { name: 'ชื่อภาษาอังกฤษ' }))
   await user.clear(screen.getByRole('textbox', { name: 'คำอธิบาย' }))
   await user.clear(screen.getByRole('textbox', { name: 'เรื่องราวจากสวน' }))
   await user.clear(screen.getByRole('textbox', { name: 'วิธีเก็บรักษา' }))
-  await user.clear(screen.getByRole('textbox', { name: 'URL รูปสินค้า HTTPS' }))
-  await user.clear(screen.getByRole('textbox', { name: 'คำอธิบายรูปภาพ' }))
+  await user.click(screen.getByRole('button', { name: 'ลบรูปที่ 2' }))
+  await user.click(screen.getByRole('button', { name: 'ลบรูปที่ 1' }))
   await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
 
   await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(productId, expect.objectContaining({
@@ -192,14 +195,29 @@ test('edits every mutable product field while keeping slug read-only and out of 
     description: null,
     originStory: null,
     storageInstructions: null,
-    imageUrl: null,
-    imageAlt: null,
+    imageIds: [],
   })))
   expect(updateSpy.mock.calls[0]?.[1]).not.toHaveProperty('slug')
   await waitFor(() => {
     expect(queryClient.getQueryState(catalogKeys.lists())?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(['inventory', 'lots'])?.isInvalidated).toBe(true)
   })
+})
+
+test('sends a changed slug, explains the redirect, and marks a reserved slug on the field', async () => {
+  const user = userEvent.setup()
+  const updateSpy = stub('update', async () => { throw new ApiRequestError(409, 'PRODUCT_SLUG_CONFLICT', 'conflict') })
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  const slug = await screen.findByRole('textbox', { name: 'ชื่อ URL สินค้า' })
+  await user.clear(slug)
+  await user.type(slug, 'mango-box')
+  expect(screen.getByText(`ลิงก์เดิม /products/${detail.slug} จะพาลูกค้ามาที่ลิงก์ใหม่อัตโนมัติ`)).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
+
+  await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(productId, expect.objectContaining({ slug: 'mango-box' })))
+  expect(await screen.findByText('ชื่อ URL นี้ถูกใช้แล้ว หรือเคยเป็นลิงก์ของสินค้าอื่น')).toBeTruthy()
 })
 
 test('disables product inputs while a save is pending', async () => {
@@ -329,7 +347,9 @@ test('shows published product prerequisites and requires confirmation before unp
 
   await screen.findByRole('heading', { name: 'รูปแบบสินค้า' })
   expect(screen.queryByRole('heading', { name: 'เงื่อนไขการเผยแพร่' })).toBeNull()
-  await user.click(screen.getByRole('button', { name: 'นำสินค้าออกจากการเผยแพร่' }))
+  await user.click(screen.getByRole('combobox', { name: 'สถานะสินค้า' }))
+  await user.click(await screen.findByRole('option', { name: 'ร่าง' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
   expect(await screen.findByRole('heading', { name: 'ยืนยันนำสินค้าออกจากการเผยแพร่' })).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'ยืนยันนำออกจากการเผยแพร่' }))
   await waitFor(() => expect(unpublishSpy).toHaveBeenCalledWith(productId))
@@ -344,12 +364,23 @@ test('publishes a complete draft only after staff confirms the action', async ()
   await screen.findByText('MANGO-1KG')
   expect(screen.getByRole('heading', { name: 'เงื่อนไขการเผยแพร่' })).toBeTruthy()
   expect(screen.getByText('6/6 ครบแล้ว')).toBeTruthy()
-  const publishButton = screen.getByRole('button', { name: 'เผยแพร่สินค้า' })
-  expect((publishButton as HTMLButtonElement).disabled).toBe(false)
-  await user.click(publishButton)
+  await user.click(screen.getByRole('combobox', { name: 'สถานะสินค้า' }))
+  await user.click(await screen.findByRole('option', { name: 'เผยแพร่' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
   expect(await screen.findByRole('heading', { name: 'ยืนยันเผยแพร่สินค้า' })).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'ยืนยันเผยแพร่สินค้า', exact: true }))
   await waitFor(() => expect(publishSpy).toHaveBeenCalledWith(productId))
+})
+
+test('keeps publishing unavailable until the live checklist is complete', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await user.clear(await screen.findByRole('textbox', { name: 'คำอธิบาย' }))
+  expect(screen.getByText('5/6 ครบแล้ว')).toBeTruthy()
+  await user.click(screen.getByRole('combobox', { name: 'สถานะสินค้า' }))
+  expect((await screen.findByRole('option', { name: 'เผยแพร่' })).getAttribute('aria-disabled')).toBe('true')
 })
 
 test('archives a product only after confirmation and returns to the catalog', async () => {
@@ -360,8 +391,9 @@ test('archives a product only after confirmation and returns to the catalog', as
   const { router } = renderCatalog(`/products/${productId}`)
 
   await screen.findByText('MANGO-1KG')
-  await user.click(screen.getByRole('button', { name: 'การดำเนินการเพิ่มเติม' }))
-  await user.click(await screen.findByRole('menuitem', { name: 'เก็บสินค้า' }))
+  await user.click(screen.getByRole('combobox', { name: 'สถานะสินค้า' }))
+  await user.click(await screen.findByRole('option', { name: 'เก็บถาวร' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
   expect(await screen.findByRole('heading', { name: 'ยืนยันเก็บสินค้า' })).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'ยืนยันเก็บสินค้า', exact: true }))
   await waitFor(() => expect(archiveSpy).toHaveBeenCalledWith(productId))
@@ -555,13 +587,42 @@ test('distinguishes archived variants and does not offer their edit action', asy
   expect(screen.queryByRole('button', { name: 'แก้ไขรูปแบบ MANGO-1KG' })).toBeNull()
 })
 
-test('shows a fallback image when a product image cannot load', async () => {
+test('submits imageIds in gallery order', async () => {
+  const user = userEvent.setup()
+  const updateSpy = stub('update', async () => detail)
   stub('get', async () => detail)
   renderCatalog(`/products/${productId}`)
 
-  const image = await screen.findByRole('img', { name: 'ผลมะม่วงน้ำดอกไม้' })
-  fireEvent.error(image)
-  expect(await screen.findByRole('img', { name: 'โหลดรูปภาพไม่ได้' })).toBeTruthy()
+  await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
+  expect(screen.getByText('ภาพปก')).toBeTruthy()
+  await user.click(screen.getAllByRole('button', { name: 'เลื่อนลง' })[0]!)
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
+
+  await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(productId, expect.objectContaining({ imageIds: [imageB, imageA] })))
+})
+
+test('moves an image earlier with the keyboard button', async () => {
+  const user = userEvent.setup()
+  stub('get', async () => detail)
+  renderCatalog(`/products/${productId}`)
+
+  await screen.findByRole('textbox', { name: 'ชื่อสินค้า' })
+  const before = screen.getAllByRole('img').map((node) => node.getAttribute('src')).filter((src) => src?.includes('-t.webp'))
+  expect(before).toEqual([`https://example.test/${imageA}-t.webp`, `https://example.test/${imageB}-t.webp`])
+
+  const earlier = screen.getAllByRole('button', { name: 'เลื่อนขึ้น' })
+  expect((earlier[0] as HTMLButtonElement).disabled).toBe(true)
+  await user.click(earlier[1]!)
+
+  const after = screen.getAllByRole('img').map((node) => node.getAttribute('src')).filter((src) => src?.includes('-t.webp'))
+  expect(after).toEqual([`https://example.test/${imageB}-t.webp`, `https://example.test/${imageA}-t.webp`])
+})
+
+test('shows the missing-alt warning', async () => {
+  stub('get', async () => ({ ...detail, images: [image(imageA, null)] }))
+  renderCatalog(`/products/${productId}`)
+
+  expect(await screen.findByText('ภาพที่ไม่มีคำอธิบายจะทำให้เผยแพร่สินค้าไม่ได้')).toBeTruthy()
 })
 
 test('keeps fulfillment catalog access read-only, including product and variant actions', async () => {

@@ -21,8 +21,8 @@ function farmId(index: number) {
 function farm(index: number, status: Farm['status'] = 'published'): Farm {
   return {
     id: farmId(index), slug: `farm-${index}`, name: `ฟาร์ม ${index}`, farmerName: null, province: 'ระยอง', district: null,
-    summary: null, story: null, growingPractices: null, coverImageUrl: null, coverImageAlt: null,
-    portraitImageUrl: null, portraitImageAlt: null, isDemo: false, status,
+    summary: null, story: null, growingPractices: null, coverImage: null,
+    portraitImage: null, isDemo: false, status,
     createdAt: at, updatedAt: at, publishedAt: null, archivedAt: null,
   }
 }
@@ -30,14 +30,14 @@ function farm(index: number, status: Farm['status'] = 'published'): Farm {
 function linked(source: Farm, displayOrder: number): ProductFarm {
   return {
     id: source.id, slug: source.slug, name: source.name, farmerName: source.farmerName, province: source.province,
-    district: source.district, summary: source.summary, coverImageUrl: source.coverImageUrl, coverImageAlt: source.coverImageAlt,
+    district: source.district, summary: source.summary, coverImage: source.coverImage,
     isDemo: source.isDemo, displayOrder, status: source.status,
   }
 }
 
 function product(farms: ProductFarm[], status: ProductDetail['status'] = 'published'): ProductDetail {
   return {
-    id: productId, slug: 'mango', name: 'มะม่วง', englishName: null, category: 'fresh', imageUrl: null, imageAlt: null,
+    id: productId, slug: 'mango', name: 'มะม่วง', englishName: null, category: 'fresh', images: [],
     status, createdAt: at, updatedAt: at, publishedAt: at, archivedAt: null,
     description: null, originStory: null, storageInstructions: null, farms, variants: [],
   }

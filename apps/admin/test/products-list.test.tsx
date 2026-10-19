@@ -19,8 +19,7 @@ const mango: ProductSummary = {
   name: 'มะม่วงน้ำดอกไม้',
   englishName: 'Nam Dok Mai Mango',
   category: 'fresh',
-  imageUrl: null,
-  imageAlt: null,
+  coverImage: null,
   status: 'published',
   createdAt,
   updatedAt,
@@ -30,6 +29,7 @@ const mango: ProductSummary = {
 
 const detail: ProductDetail = {
   ...mango,
+  images: [],
   description: 'มะม่วงสุกหวานจากสวน',
   originStory: 'ปลูกในสวนครอบครัว',
   storageInstructions: 'เก็บในที่เย็น',
@@ -141,8 +141,8 @@ test('uses the returned next cursor and clears it after a filter change', async 
   fireEvent.change(search, { target: { value: 'มะม่วง' } })
   await waitForSearchDebounce()
 
-  await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'มะม่วง', limit: 25 })) )
-  expect(listSpy.mock.calls.at(-1)?.[0]?.cursor).toBeUndefined()
+  // The filtered first page is requested without the old cursor; its own next page is then prefetched.
+  await waitFor(() => expect(listSpy.mock.calls.some(([query]) => query?.q === 'มะม่วง' && query.cursor === undefined)).toBe(true))
 })
 
 test('offers first-page recovery for a direct cursor link without a fabricated previous cursor', async () => {
@@ -230,5 +230,39 @@ test('renders Thai empty and error states with a usable retry action', async () 
   expect(await screen.findByText('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองอีกครั้ง')).toBeTruthy()
   await userEvent.setup().click(screen.getByRole('button', { name: 'ลองอีกครั้ง' }))
   expect(await screen.findByText('ยังไม่มีสินค้า')).toBeTruthy()
-  expect(screen.getByText('ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ')).toBeTruthy()
+  expect(screen.getByText('สินค้าที่เพิ่มจะแสดงที่นี่')).toBeTruthy()
+})
+
+test('sorts on the server from column headers and keeps the sort in the URL', async () => {
+  const listSpy = spyList(async () => ({ items: [mango], nextCursor: null }))
+  const user = userEvent.setup()
+  const { router } = renderProducts()
+
+  await screen.findByRole('link', { name: mango.name })
+  await user.click(screen.getByRole('button', { name: 'สินค้า' }))
+  await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'name', order: 'asc', limit: 25 })))
+  expect(router.state.location.search).toContain('sort=name')
+  expect(screen.getByRole('columnheader', { name: 'สินค้า' }).getAttribute('aria-sort')).toBe('ascending')
+
+  await user.click(screen.getByRole('button', { name: 'สินค้า' }))
+  await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'name', order: 'desc' })))
+})
+
+test('filters by category and clears every filter at once', async () => {
+  const listSpy = spyList(async () => ({ items: [], nextCursor: null }))
+  const user = userEvent.setup()
+  renderProducts('/products?status=draft')
+
+  await user.click(await screen.findByRole('combobox', { name: 'กรองตามหมวดหมู่' }))
+  await user.click(await screen.findByRole('option', { name: 'สินค้าแปรรูป' }))
+  await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'draft', category: 'processed' })))
+  expect(await screen.findByText('ไม่พบสินค้าที่ตรงกับตัวกรอง')).toBeTruthy()
+
+  await user.click(screen.getByRole('button', { name: 'ล้างตัวกรอง' }))
+  await waitFor(() => {
+    const query = listSpy.mock.calls.at(-1)?.[0]
+    expect(query?.status).toBeUndefined()
+    expect(query?.category).toBeUndefined()
+  })
+  expect(screen.queryByRole('button', { name: 'ล้างตัวกรอง' })).toBeNull()
 })

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { Button, buttonVariants } from '@workspace/ui/components/button'
 import { FieldGroup } from '@workspace/ui/components/field'
 import { toast } from '@workspace/ui/components/toast'
+import { MediaSingleField } from '@/components/media/media-single-field'
 import { ApiRequestError, apiErrorMessage } from '@/lib/api-result'
 import { farmsApi, type Farm } from '@/lib/farms/api'
 import { emptyFarmValues, farmSchema, fromFarm, toFarmCreateInput, toFarmUpdateInput, type FarmFormValues } from '@/lib/farms/forms'
@@ -32,11 +33,8 @@ export function FarmForm(props: FarmFormProps) {
   const [createdFarmId, setCreatedFarmId] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [createRecoveryStatus, setCreateRecoveryStatus] = useState<'idle' | 'checking' | 'ready' | 'failed'>('idle')
-  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const onCreated = props.mode === 'create' ? props.onCreated : null
   const onDirtyChange = props.onDirtyChange
-  const coverImageUrl = useWatch({ control: form.control, name: 'coverImageUrl' })
-  const coverImageAlt = useWatch({ control: form.control, name: 'coverImageAlt' })
 
   useEffect(() => {
     if (createdFarmId) onCreated?.(createdFarmId)
@@ -92,7 +90,6 @@ export function FarmForm(props: FarmFormProps) {
 
   const errors = form.formState.errors
   const pending = form.formState.isSubmitting
-  const imageFailed = Boolean(coverImageUrl && failedImageUrl === coverImageUrl)
 
   return (
     <section className="flex flex-col gap-5 rounded-lg border p-4 sm:p-6">
@@ -124,19 +121,18 @@ export function FarmForm(props: FarmFormProps) {
           <FormTextarea disabled={pending} id="farm-story" label="เรื่องราวของฟาร์ม" error={errors.story?.message} {...form.register('story')} />
           <FormTextarea disabled={pending} id="farm-growing-practices" label="วิธีการปลูก" error={errors.growingPractices?.message} {...form.register('growingPractices')} />
           <div className="grid gap-5 md:grid-cols-2">
-            <FormInput disabled={pending} id="farm-cover-image-url" label="URL รูปปก HTTPS" description="วาง URL รูปภาพ HTTPS ที่เปิดดูได้ ไม่มีระบบอัปโหลดรูป" error={errors.coverImageUrl?.message} {...form.register('coverImageUrl')} />
-            <FormInput disabled={pending} id="farm-cover-image-alt" label="คำอธิบายรูปปก" error={errors.coverImageAlt?.message} {...form.register('coverImageAlt')} />
-            <FormInput disabled={pending} id="farm-portrait-image-url" label="URL รูปเกษตรกร HTTPS" error={errors.portraitImageUrl?.message} {...form.register('portraitImageUrl')} />
-            <FormInput disabled={pending} id="farm-portrait-image-alt" label="คำอธิบายรูปเกษตรกร" description="จำเป็นเมื่อมีรูปเกษตรกร" error={errors.portraitImageAlt?.message} {...form.register('portraitImageAlt')} />
+            <Controller
+              control={form.control}
+              name="coverImage"
+              render={({ field }) => <MediaSingleField description="จำเป็นก่อนเผยแพร่ฟาร์ม ต้องมีคำอธิบายภาพ" disabled={pending} label="รูปปก" onChange={field.onChange} value={field.value} />}
+            />
+            <Controller
+              control={form.control}
+              name="portraitImage"
+              render={({ field }) => <MediaSingleField description="ไม่บังคับ แต่ถ้าเลือกต้องมีคำอธิบายภาพก่อนเผยแพร่" disabled={pending} label="รูปเกษตรกร" onChange={field.onChange} value={field.value} />}
+            />
           </div>
         </FieldGroup>
-
-        <div className="flex flex-col gap-3 rounded-md border p-4">
-          <h3 className="font-medium">ตัวอย่างรูปปก</h3>
-          {coverImageUrl && !imageFailed
-            ? <img alt={coverImageAlt || ''} className="max-h-64 w-full rounded-md border object-contain" onError={() => setFailedImageUrl(coverImageUrl)} src={coverImageUrl} />
-            : <div aria-label="ไม่มีรูปภาพ" className="grid min-h-32 place-items-center rounded-md bg-muted text-sm text-muted-foreground" role="img">{imageFailed ? 'โหลดรูปภาพไม่ได้' : 'ยังไม่มีรูปปก'}</div>}
-        </div>
 
         {serverError && <div aria-live="assertive" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{serverError}</div>}
         {createRecoveryStatus === 'checking' && <p className="text-sm text-muted-foreground" role="status">กำลังตรวจสอบรายการฟาร์มล่าสุด...</p>}

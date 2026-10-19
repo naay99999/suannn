@@ -22,14 +22,12 @@ function detailState(error: unknown) {
   return { kind: 'error' as const, message: apiErrorMessage(error) }
 }
 
-function FarmImage({ url, alt, emptyLabel }: { url: string | null; alt: string | null; emptyLabel: string }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null)
-
-  if (!url || failedUrl === url) {
-    return <div aria-label={failedUrl ? 'โหลดรูปภาพไม่ได้' : 'ไม่มีรูปภาพ'} className="grid min-h-40 place-items-center rounded-md bg-muted text-sm text-muted-foreground" role="img">{failedUrl ? 'โหลดรูปภาพไม่ได้' : emptyLabel}</div>
+function FarmImage({ image, emptyLabel }: { image: Farm['coverImage']; emptyLabel: string }) {
+  if (!image) {
+    return <div aria-label="ไม่มีรูปภาพ" className="grid min-h-40 place-items-center rounded-md bg-muted text-sm text-muted-foreground" role="img">{emptyLabel}</div>
   }
 
-  return <img alt={alt ?? ''} className="max-h-72 w-full rounded-md border object-contain" onError={() => setFailedUrl(url)} src={url} />
+  return <img alt={image.alt ?? ''} className="max-h-72 w-full rounded-md border object-contain" src={image.url} />
 }
 
 function DetailField({ label, value }: { label: string; value: string | null }) {
@@ -80,8 +78,8 @@ function FarmDetail({ farm }: { farm: Farm }) {
           </section>
           <section className="flex flex-col gap-3 rounded-lg border p-4">
             <h2 className="text-lg font-semibold">รูปภาพ</h2>
-            <FarmImage alt={farm.coverImageAlt} emptyLabel="ยังไม่มีรูปปก" url={farm.coverImageUrl} />
-            <FarmImage alt={farm.portraitImageAlt} emptyLabel="ยังไม่มีรูปเกษตรกร" url={farm.portraitImageUrl} />
+            <FarmImage emptyLabel="ยังไม่มีรูปปก" image={farm.coverImage} />
+            <FarmImage emptyLabel="ยังไม่มีรูปเกษตรกร" image={farm.portraitImage} />
           </section>
         </div>}
 

@@ -63,8 +63,7 @@ function productDetail(status: ProductDetail['status'] = 'draft'): ProductDetail
     name: 'มะม่วงทดสอบ',
     englishName: 'Test mango',
     category: 'fresh',
-    imageUrl: 'https://assets.example.test/mango.jpg',
-    imageAlt: 'มะม่วงน้ำดอกไม้',
+    images: [{ id: '00000000-0000-4000-8000-0000000000a1', url: 'https://assets.example.test/mango.webp', thumbUrl: 'https://assets.example.test/mango-t.webp', alt: 'มะม่วงน้ำดอกไม้', width: 800, height: 600 }],
     status,
     createdAt: recordedDate,
     updatedAt: recordedDate,
@@ -436,8 +435,6 @@ test('owner completes catalog, stock, release, and confirmation workflows throug
   await user.type(await screen.findByRole('textbox', { name: 'ชื่อ URL สินค้า' }), 'mango-demo')
   await user.type(screen.getByRole('textbox', { name: 'ชื่อสินค้า' }), 'มะม่วงทดสอบ')
   await user.type(screen.getByRole('textbox', { name: 'คำอธิบาย' }), 'มะม่วงน้ำดอกไม้สำหรับตรวจสอบขั้นตอนจัดการสินค้า')
-  await user.type(screen.getByRole('textbox', { name: 'URL รูปสินค้า HTTPS' }), 'https://assets.example.test/mango.jpg')
-  await user.type(screen.getByRole('textbox', { name: 'คำอธิบายรูปภาพ' }), 'มะม่วงน้ำดอกไม้')
   await user.click(screen.getByRole('button', { name: 'สร้างสินค้า' }))
   await screen.findByRole('heading', { name: 'มะม่วงทดสอบ' })
   expect(boundary.count('POST', '/products')).toBe(1)
@@ -478,7 +475,9 @@ test('owner completes catalog, stock, release, and confirmation workflows throug
   expect(boundary.requests.find((request) => request.method === 'PATCH' && request.path.endsWith(`/variants/${variantId}`))?.body).toMatchObject({ priceSatang: 20_525 })
 
   detailReads = boundary.count('GET', `/products/${productId}`)
-  await user.click(screen.getByRole('button', { name: 'เผยแพร่สินค้า' }))
+  await user.click(screen.getByRole('combobox', { name: 'สถานะสินค้า' }))
+  await user.click(await screen.findByRole('option', { name: 'เผยแพร่' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกสินค้า' }))
   await user.click(await screen.findByRole('button', { name: 'ยืนยันเผยแพร่สินค้า', exact: true }))
   await waitFor(() => {
     expect(boundary.product?.status).toBe('published')
@@ -550,7 +549,7 @@ test('fulfillment reads catalog and adjusts stock without sending any product wr
   expect(screen.getAllByRole('textbox').every((field) => field.matches(':disabled') || (field as HTMLInputElement).readOnly)).toBe(true)
   expect(screen.queryByRole('button', { name: 'บันทึกสินค้า' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'เพิ่มรูปแบบสินค้า' })).toBeNull()
-  expect(screen.queryByRole('button', { name: 'นำสินค้าออกจากการเผยแพร่' })).toBeNull()
+  expect((screen.getByRole('combobox', { name: 'สถานะสินค้า' }) as HTMLButtonElement).disabled).toBe(true)
   await user.click(screen.getByRole('link', { name: 'ดูสต็อก MANGO-1KG' }))
   await screen.findByRole('heading', { name: 'สต็อกรูปแบบสินค้า' })
   await user.click(screen.getByRole('link', { name: 'รายการล็อต' }))

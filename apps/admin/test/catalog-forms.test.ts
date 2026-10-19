@@ -48,8 +48,7 @@ test('normalizes blank product create fields to null and keeps slug create-only'
     description: '',
     originStory: '  ',
     storageInstructions: '',
-    imageUrl: '',
-    imageAlt: '',
+    images: [],
   })
 
   expect(toProductCreateInput(values)).toEqual({
@@ -61,12 +60,11 @@ test('normalizes blank product create fields to null and keeps slug create-only'
     description: null,
     originStory: null,
     storageInstructions: null,
-    imageUrl: null,
-    imageAlt: null,
+    imageIds: [],
   })
 })
 
-test('clears optional product fields with null and never sends an edit slug', () => {
+test('clears optional product fields with null and sends the slug only when it changes', () => {
   const values = productEditSchema.parse({
     slug: 'unchangeable-slug',
     name: 'สินค้าใหม่',
@@ -76,11 +74,10 @@ test('clears optional product fields with null and never sends an edit slug', ()
     description: '',
     originStory: 'เรื่องราว',
     storageInstructions: '',
-    imageUrl: 'https://example.test/image.jpg',
-    imageAlt: '',
+    images: [{ id: 'media-1', thumbUrl: 'https://example.test/t1.webp', alt: null }, { id: 'media-2', thumbUrl: 'https://example.test/t2.webp', alt: 'ผล' }],
   })
 
-  expect(toProductUpdateInput(values)).toEqual({
+  expect(toProductUpdateInput(values, 'unchangeable-slug')).toEqual({
     name: 'สินค้าใหม่',
     category: 'processed',
     vatTreatment: 'standard',
@@ -88,25 +85,25 @@ test('clears optional product fields with null and never sends an edit slug', ()
     description: null,
     originStory: 'เรื่องราว',
     storageInstructions: null,
-    imageUrl: 'https://example.test/image.jpg',
-    imageAlt: null,
+    imageIds: ['media-1', 'media-2'],
   })
-  expect(toProductUpdateInput(values)).not.toHaveProperty('slug')
+  expect(toProductUpdateInput(values, 'unchangeable-slug')).not.toHaveProperty('slug')
+  expect(toProductUpdateInput(values, 'previous-slug')).toMatchObject({ slug: 'unchangeable-slug' })
 })
 
 test('maps vatTreatment into create and update inputs', () => {
-  const base = { slug: 'jam', name: 'แยม', category: 'fresh', englishName: '', description: '', originStory: '', storageInstructions: '', imageUrl: '', imageAlt: '' }
+  const base = { slug: 'jam', name: 'แยม', category: 'fresh', englishName: '', description: '', originStory: '', storageInstructions: '', images: [] }
   const created = productCreateSchema.parse({ ...base, vatTreatment: 'standard' })
   expect(toProductCreateInput(created).vatTreatment).toBe('standard')
   const edited = productEditSchema.parse({ ...base, vatTreatment: 'exempt' })
-  expect(toProductUpdateInput(edited).vatTreatment).toBe('exempt')
+  expect(toProductUpdateInput(edited, 'jam').vatTreatment).toBe('exempt')
   expect(defaultVatTreatment('fresh')).toBe('exempt')
   expect(defaultVatTreatment('processed')).toBe('standard')
   expect(() => productCreateSchema.parse({ ...base, vatTreatment: 'zero' })).toThrow()
 })
 
-test('validates HTTPS images and product field limits', () => {
-  expect(() => productCreateSchema.parse({ slug: 'sample', name: 'สินค้า', category: 'fresh', vatTreatment: 'exempt', imageUrl: 'http://example.test/image.jpg' })).toThrow()
+test('validates the gallery limit and product field limits', () => {
+  expect(() => productCreateSchema.parse({ slug: 'sample', name: 'สินค้า', category: 'fresh', vatTreatment: 'exempt', images: Array.from({ length: 13 }, (_, index) => ({ id: `media-${index}`, thumbUrl: 'https://example.test/t.webp', alt: null })) })).toThrow()
   expect(() => productCreateSchema.parse({ slug: 'bad slug', name: 'สินค้า', category: 'fresh', vatTreatment: 'exempt' })).toThrow()
   expect(() => productCreateSchema.parse({ slug: 'sample', name: '', category: 'fresh', vatTreatment: 'exempt' })).toThrow()
 })

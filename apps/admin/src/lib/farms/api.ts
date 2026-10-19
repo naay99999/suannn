@@ -51,7 +51,7 @@ export function farmPublicationChecks(farm: Farm) {
     { label: 'สรุปสั้น', passed: Boolean(farm.summary?.trim()) },
     { label: 'เรื่องราวของฟาร์ม', passed: Boolean(farm.story?.trim()) },
     { label: 'วิธีการปลูก', passed: Boolean(farm.growingPractices?.trim()) },
-    { label: 'รูปปก HTTPS พร้อมคำอธิบายรูป', passed: Boolean(farm.coverImageUrl?.startsWith('https://') && farm.coverImageAlt?.trim()) },
-    { label: 'คำอธิบายรูปเกษตรกร (เมื่อมีรูป)', passed: !farm.portraitImageUrl || Boolean(farm.portraitImageAlt?.trim()) },
+    { label: 'รูปปกพร้อมคำอธิบายรูป', passed: Boolean(farm.coverImage?.alt?.trim()) },
+    { label: 'คำอธิบายรูปเกษตรกร (เมื่อมีรูป)', passed: !farm.portraitImage || Boolean(farm.portraitImage.alt?.trim()) },
   ]
 }

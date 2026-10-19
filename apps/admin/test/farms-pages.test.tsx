@@ -7,11 +7,13 @@ import { Toaster } from '@workspace/ui/components/toast'
 import { PermissionGate } from '../src/components/auth/permission-gate'
 import { authSessionQuery, type AuthSession } from '../src/lib/auth-session'
 import { farmsApi, type Farm } from '../src/lib/farms/api'
+import { mediaApi, type MediaItem } from '../src/lib/media/api'
 import { Component as FarmsPage } from '../src/pages/farms/farms-page'
 import { Component as FarmCreatePage } from '../src/pages/farms/farm-create-page'
 import { Component as FarmDetailPage } from '../src/pages/farms/farm-detail-page'
 
 const farmId = '00000000-0000-4000-8000-000000000011'
+const coverId = '00000000-0000-4000-8000-0000000000a1'
 const updatedAt = new Date('2026-10-01T08:00:00.000Z')
 const allCatalog = ['catalog:read', 'catalog:create', 'catalog:update', 'catalog:publish', 'catalog:delete']
 
@@ -25,10 +27,8 @@ const completeDraft: Farm = {
   summary: 'สวนผลไม้ผสม',
   story: 'เริ่มปลูกเมื่อปี 2540',
   growingPractices: 'ใช้ปุ๋ยหมัก',
-  coverImageUrl: 'https://example.com/cover.jpg',
-  coverImageAlt: 'สวนทุเรียน',
-  portraitImageUrl: null,
-  portraitImageAlt: null,
+  coverImage: { id: coverId, url: 'https://example.com/cover.webp', thumbUrl: 'https://example.com/cover-t.webp', alt: 'สวนทุเรียน', width: 800, height: 600 },
+  portraitImage: null,
   isDemo: false,
   status: 'draft',
   createdAt: updatedAt,
@@ -153,4 +153,25 @@ test('does not offer edits or actions for archived farms', async () => {
   await screen.findByRole('heading', { name: 'บ้านสวน' })
   expect(screen.queryByRole('button', { name: 'แก้ไขฟาร์ม' })).toBeNull()
   expect(screen.queryByRole('heading', { name: 'การเผยแพร่' })).toBeNull()
+})
+
+test('submits coverMediaId from the picker', async () => {
+  const pickedId = '00000000-0000-4000-8000-0000000000b2'
+  const picked: MediaItem = {
+    id: pickedId, url: 'https://example.com/new.webp', thumbUrl: 'https://example.com/new-t.webp', alt: 'สวนใหม่',
+    width: 800, height: 600, byteSize: 2048, createdAt: updatedAt, originalFilename: 'new.jpg', usage: { products: 0, farms: 0 },
+  }
+  track(spyOn(farmsApi, 'get').mockImplementation(async () => completeDraft))
+  track(spyOn(mediaApi, 'list').mockImplementation(async () => ({ items: [picked], nextCursor: null })))
+  const updateSpy = track(spyOn(farmsApi, 'update').mockImplementation(async () => completeDraft))
+  const user = userEvent.setup()
+  renderFarms(`/farms/${farmId}`)
+
+  await user.click(await screen.findByRole('button', { name: 'แก้ไขฟาร์ม' }))
+  await user.click(await screen.findByRole('button', { name: 'เปลี่ยนรูปปก' }))
+  await user.click(await screen.findByRole('button', { name: 'new.jpg' }))
+  await user.click(screen.getByRole('button', { name: 'ยืนยันการเลือก' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกฟาร์ม' }))
+
+  await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(farmId, expect.objectContaining({ coverMediaId: pickedId, portraitMediaId: null })))
 })
