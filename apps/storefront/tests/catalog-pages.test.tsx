@@ -285,6 +285,16 @@ test('unavailable variant prevents cart writes and cached slug navigation uses t
   await waitFor(() => expect(requests.some(request => request.method === 'PUT' && request.url.pathname.endsWith(jam.variants[0]!.id) && (request.body as { quantity: number }).quantity === 1)).toBe(true))
 })
 
+test('detail moves a former slug to the product\'s current slug and keeps the query string', async () => {
+  productResponse = url => url.pathname.endsWith('/old-mango') ? Response.json(mango) : Response.json({ items: [], nextCursor: null })
+  const router = mount(<CatalogPage />, '/products/old-mango?ref=line')
+  await screen.findByRole('heading', { level: 1, name: mango.name })
+  expect(router.state.location.pathname).toBe('/products/mango')
+  expect(router.state.location.search).toBe('?ref=line')
+  expect(requests.filter(({ url }) => url.pathname.endsWith('/store/products/mango'))).toHaveLength(0)
+  expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(`${window.location.origin}/products/mango`)
+})
+
 test('detail distinguishes missing product from transient failure and retries', async () => {
   productResponse = async () => Response.json({ code: 'PRODUCT_NOT_FOUND' }, { status: 404 })
   const router = mount(<CatalogPage />, '/products/missing')

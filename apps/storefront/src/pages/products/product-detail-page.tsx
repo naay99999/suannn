@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router'
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { Badge } from '@workspace/ui/components/badge'
 import { buttonVariants } from '@workspace/ui/components/button'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@workspace/ui/components/breadcrumb'
@@ -24,6 +24,17 @@ export function Component() {
     queryFn: () => getStoreProduct(slug!),
     enabled: Boolean(slug),
   })
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
+  // A former slug resolves to the product with its current slug; move the URL there so links and caches converge.
+  const currentSlug = product.data?.slug
+  const redirecting = Boolean(currentSlug && slug && currentSlug !== slug)
+  useEffect(() => {
+    if (!redirecting || !product.data || !currentSlug) return
+    queryClient.setQueryData(storeProductDetailQueryKey(currentSlug), product.data)
+    navigate({ pathname: `/products/${currentSlug}`, search: location.search, hash: location.hash }, { replace: true })
+  }, [redirecting, currentSlug, product.data, queryClient, navigate, location.search, location.hash])
   const [selectedVariantId, setSelectedVariantId] = useState('')
   const related = useQuery({
     queryKey: storeProductQueryKey({ category: product.data?.category, limit: relatedProductLimit + 1 }),
@@ -31,7 +42,7 @@ export function Component() {
     enabled: Boolean(product.data),
   })
 
-  if (product.isPending) return <ProductDetailSkeleton />
+  if (product.isPending || redirecting) return <ProductDetailSkeleton />
   if (product.isError && (product.error instanceof StoreProductRequestError && product.error.status === 404)) {
     return (
       <Empty className="min-h-[50svh]">
@@ -51,6 +62,7 @@ export function Component() {
   return (
     <div ref={scope}>
       <title>{`${item.name} | suannn`}</title>
+      <link rel="canonical" href={`${window.location.origin}/products/${item.slug}`} />
       <Breadcrumb aria-label="เส้นทางหน้าสินค้า">
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink render={<Link to="/" />}>หน้าแรก</BreadcrumbLink></BreadcrumbItem>
