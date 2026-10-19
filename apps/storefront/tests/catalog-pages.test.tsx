@@ -16,7 +16,7 @@ import { Component as HomePage } from '../src/pages/home/home-page'
 
 const mango: StoreProductDetail = {
   id: '00000000-0000-4000-8000-000000000001', slug: 'mango', name: 'Test mango', englishName: null,
-  category: 'fresh', imageUrl: null, imageAlt: null, minPriceSatang: 1000, canPurchase: true,
+  category: 'fresh', coverImage: null, images: [], minPriceSatang: 1000, canPurchase: true,
   description: null, originStory: null, storageInstructions: null,
   farms: [],
   variants: [
