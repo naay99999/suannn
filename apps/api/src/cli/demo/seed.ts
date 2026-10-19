@@ -74,6 +74,38 @@ async function seedFarmExtension(
   return { status: 'created' as const, farms: fixture.farms.length, farmLinks: fixture.links.length }
 }
 
+async function assertDemoDatabase(db: Database | DatabaseTransaction, databaseName: string) {
+  const databaseResult = await db.execute<{ currentDatabase: string }>(
+    sql`select current_database() as "currentDatabase"`,
+  )
+  if (databaseResult[0]?.currentDatabase !== databaseName) throw new Error('DEMO_SEED_DATABASE_MISMATCH')
+}
+
+// The seed actor must be a verified, unbanned owner, activated when staff MFA is required.
+async function findActiveDemoOwner(db: Database | DatabaseTransaction, actorEmail: string, lock: boolean) {
+  const settingQuery = db.select({ value: applicationSetting.booleanValue })
+    .from(applicationSetting).where(eq(applicationSetting.key, 'staff_mfa_required')).limit(1)
+  const [staffMfaSetting] = lock ? await settingQuery.for('share') : await settingQuery
+  const staffMfaRequired = staffMfaSetting?.value ?? true
+  const actorQuery = db.select({ id: user.id }).from(user).where(and(
+    eq(user.accountType, 'staff'),
+    eq(user.role, 'owner'),
+    eq(user.email, actorEmail),
+    eq(user.emailVerified, true),
+    eq(user.banned, false),
+    staffMfaRequired ? isNotNull(user.staffActivatedAt) : undefined,
+  )).limit(1)
+  const [actor] = lock ? await actorQuery.for('share') : await actorQuery
+  if (!actor) throw new Error('DEMO_SEED_ACTIVE_OWNER_REQUIRED')
+  return actor
+}
+
+/** Checks the target database and owner before any media is uploaded; returns the owner's user ID. */
+export async function verifyDemoSeedTarget(db: Database, options: DemoSeedOptions): Promise<string> {
+  await assertDemoDatabase(db, options.databaseName)
+  return (await findActiveDemoOwner(db, options.actorEmail, false)).id
+}
+
 export async function seedDemo(
   db: Database,
   options: DemoSeedOptions,
@@ -81,6 +113,9 @@ export async function seedDemo(
   now = new Date(),
 ): Promise<DemoSeedResult> {
   if (!Number.isFinite(now.getTime())) throw new Error('INVALID_DEMO_SEED_TIME')
+
+  // Storage writes cannot be rolled back, so the target is verified before any upload.
+  await verifyDemoSeedTarget(db, options)
 
   // Uploads dedupe by content hash, so reruns reuse the same media assets. They run before the
   // transaction because storage writes cannot be rolled back with it.
@@ -91,24 +126,9 @@ export async function seedDemo(
 
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(20261002, 1)`)
-    const databaseResult = await tx.execute<{ currentDatabase: string }>(
-      sql`select current_database() as "currentDatabase"`,
-    )
-    const actualDatabase = databaseResult[0]?.currentDatabase
-    if (actualDatabase !== options.databaseName) throw new Error('DEMO_SEED_DATABASE_MISMATCH')
-
-    const [staffMfaSetting] = await tx.select({ value: applicationSetting.booleanValue })
-      .from(applicationSetting).where(eq(applicationSetting.key, 'staff_mfa_required')).for('share').limit(1)
-    const staffMfaRequired = staffMfaSetting?.value ?? true
-    const [actor] = await tx.select({ id: user.id }).from(user).where(and(
-      eq(user.accountType, 'staff'),
-      eq(user.role, 'owner'),
-      eq(user.email, options.actorEmail),
-      eq(user.emailVerified, true),
-      eq(user.banned, false),
-      staffMfaRequired ? isNotNull(user.staffActivatedAt) : undefined,
-    )).for('share').limit(1)
-    if (!actor) throw new Error('DEMO_SEED_ACTIVE_OWNER_REQUIRED')
+    // Re-checked under the seed lock in case the owner or target changed during the uploads.
+    await assertDemoDatabase(tx, options.databaseName)
+    const actor = await findActiveDemoOwner(tx, options.actorEmail, true)
 
     const [mainWarehouse] = await tx.select({ id: warehouse.id }).from(warehouse).where(and(
       eq(warehouse.code, 'MAIN'),

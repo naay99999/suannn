@@ -21,7 +21,7 @@ import {
 } from '../../src/database/schema'
 import { buildDemoFixtures, productImageSources } from '../../src/cli/demo/fixtures'
 import { buildFarmDemoFixtures, farmImageSources } from '../../src/cli/demo/farm-fixtures'
-import { createDemoMediaUploader, seedDemo } from '../../src/cli/demo/seed'
+import { createDemoMediaUploader, seedDemo, verifyDemoSeedTarget } from '../../src/cli/demo/seed'
 import { MediaRepository, MediaService } from '../../src/modules/media'
 import { MediaUrls } from '../../src/modules/media/urls'
 import { AuditRepository } from '../../src/modules/audit/repository'
@@ -314,6 +314,28 @@ describe('catalog and stock demo seed', () => {
 
     await database.db.update(user).set({ banned: true }).where(eq(user.id, ownerId))
     await expect(seedDemo(database.db, seedOpts, uploadMedia, now)).rejects.toThrow()
+  })
+
+  it('verifies the database name and owner before uploading any media', async () => {
+    await createOwner()
+    const seedOpts = await seedOptions()
+    const objectsBefore = mediaStorage.objects.size
+    let uploads = 0
+    const countingUpload: typeof uploadMedia = async (path, alt) => {
+      uploads += 1
+      return uploadMedia(path, alt)
+    }
+
+    await expect(seedDemo(database.db, { ...seedOpts, databaseName: 'wrong_database' }, countingUpload, now))
+      .rejects.toThrow('DEMO_SEED_DATABASE_MISMATCH')
+    await database.db.update(user).set({ banned: true }).where(eq(user.id, ownerId))
+    await expect(verifyDemoSeedTarget(database.db, seedOpts)).rejects.toThrow('DEMO_SEED_ACTIVE_OWNER_REQUIRED')
+    await expect(seedDemo(database.db, seedOpts, countingUpload, now)).rejects.toThrow('DEMO_SEED_ACTIVE_OWNER_REQUIRED')
+
+    expect(uploads).toBe(0)
+    expect(await database.db.select().from(mediaAsset)).toHaveLength(0)
+    expect(await database.db.select().from(auditLog)).toHaveLength(0)
+    expect(mediaStorage.objects.size).toBe(objectsBefore)
   })
 
   it('rolls back all fixture tables when a movement insert fails', async () => {

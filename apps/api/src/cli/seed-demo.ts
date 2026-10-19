@@ -1,13 +1,11 @@
-import { and, eq } from 'drizzle-orm'
 import { createDatabase } from '../database/client'
-import { user } from '../database/schema'
 import { loadConfig } from '../config/env'
 import { AuditRepository } from '../modules/audit/repository'
 import { AuditService } from '../modules/audit/service'
 import { MediaRepository, MediaService } from '../modules/media'
 import { R2MediaStorage } from '../modules/media/storage'
 import { MediaUrls } from '../modules/media/urls'
-import { createDemoMediaUploader, seedDemo } from './demo/seed'
+import { createDemoMediaUploader, seedDemo, verifyDemoSeedTarget } from './demo/seed'
 export { demoId } from './demo/fixtures'
 
 export interface DemoSeedOptions {
@@ -50,17 +48,15 @@ async function run() {
 
   try {
     if (!config.media) throw new Error('DEMO_SEED_REQUIRES_MEDIA_STORAGE')
-    // Uploads run before the seed transaction, so the actor is resolved here; seedDemo re-validates it.
-    const [actor] = await database.db.select({ id: user.id }).from(user)
-      .where(and(eq(user.email, options.actorEmail), eq(user.accountType, 'staff'), eq(user.role, 'owner')))
-      .limit(1)
-    if (!actor) throw new Error('DEMO_SEED_ACTIVE_OWNER_REQUIRED')
+    // Uploads run before the seed transaction, so the target and actor are verified first;
+    // seedDemo re-validates both.
+    const actorId = await verifyDemoSeedTarget(database.db, options)
     const media = new MediaService(
       new MediaRepository(database.db, new AuditService(new AuditRepository(database.db)), new MediaUrls(config.media.publicUrl)),
       new R2MediaStorage(config.media),
     )
     const uploader = createDemoMediaUploader(media, {
-      userId: actor.id,
+      userId: actorId,
       auditContext: { requestId: 'demo-seed-media', ipAddress: null, userAgent: null },
     })
     const result = await seedDemo(database.db, options, uploader)
