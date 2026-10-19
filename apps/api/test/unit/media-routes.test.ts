@@ -21,17 +21,8 @@ const item: StaffMediaItem = {
   usage: { products: 0, farms: 0 },
 }
 
-function createApp(limiterAllowed = true) {
-  const calls: string[] = []
-  let uploads = 0
-  const service = {
-    list: async () => { calls.push('list'); return { items: [item], nextCursor: null } },
-    get: async () => { calls.push('get'); return { ...item, usedBy: { products: [], farms: [] } } },
-    upload: async () => { calls.push('upload'); return { item, created: uploads++ === 0 } },
-    updateAlt: async () => { calls.push('updateAlt'); return item },
-    delete: async () => { calls.push('delete') },
-  } as unknown as MediaService
-  const auth = {
+function createAuth() {
+  return {
     api: {
       getSession: async ({ headers }: { headers: Headers }) => {
         const identity = headers.get('cookie')?.replace('session=', '')
@@ -43,10 +34,25 @@ function createApp(limiterAllowed = true) {
     },
     handler: async () => new Response(),
   } as unknown as Auth
-  const limiter = {
-    consume: async () => ({ allowed: limiterAllowed, remaining: 0, retryAfterSeconds: 30, resetAt: new Date() }),
+}
+
+function createLimiter(allowed: boolean) {
+  return {
+    consume: async () => ({ allowed, remaining: 0, retryAfterSeconds: 30, resetAt: new Date() }),
   } as unknown as RateLimiter
-  const app = new Elysia().use(createErrorHandlingPlugin()).use(createAdminMediaModule(config, auth, service, limiter))
+}
+
+function createApp(limiterAllowed = true) {
+  const calls: string[] = []
+  let uploads = 0
+  const service = {
+    list: async () => { calls.push('list'); return { items: [item], nextCursor: null } },
+    get: async () => { calls.push('get'); return { ...item, usedBy: { products: [], farms: [] } } },
+    upload: async () => { calls.push('upload'); return { item, created: uploads++ === 0 } },
+    updateAlt: async () => { calls.push('updateAlt'); return item },
+    delete: async () => { calls.push('delete') },
+  } as unknown as MediaService
+  const app = new Elysia().use(createErrorHandlingPlugin()).use(createAdminMediaModule(config, createAuth(), service, createLimiter(limiterAllowed)))
   return { app, calls }
 }
 
@@ -126,6 +132,23 @@ describe('admin media HTTP contracts', () => {
     const removed = await app.handle(json(`/api/v1/admin/media/${mediaId}`, 'DELETE', 'catalog_manager'))
     expect(removed.status).toBe(204)
     expect(calls).toEqual(['updateAlt', 'delete'])
+  })
+
+  it('documents and returns 503 on every route when media storage is disabled', async () => {
+    const { app } = createApp()
+    for (const route of app.routes) {
+      expect(Object.keys((route.hooks as { response?: object }).response ?? {})).toContain('503')
+    }
+
+    const disabled = new Elysia().use(createErrorHandlingPlugin()).use(createAdminMediaModule(config, createAuth(), {
+      get: async () => { throw new DomainError('MEDIA_STORAGE_UNAVAILABLE') },
+      updateAlt: async () => { throw new DomainError('MEDIA_STORAGE_UNAVAILABLE') },
+    } as unknown as MediaService, createLimiter(true)))
+    for (const method of ['GET', 'PATCH']) {
+      const response = await disabled.handle(json(`/api/v1/admin/media/${mediaId}`, method, 'catalog_manager', method === 'PATCH' ? { alt: 'a' } : undefined))
+      expect(response.status).toBe(503)
+      expect(await response.json()).toMatchObject({ code: 'MEDIA_STORAGE_UNAVAILABLE' })
+    }
   })
 })
 

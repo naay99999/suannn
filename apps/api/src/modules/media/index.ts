@@ -38,7 +38,7 @@ function strictBody(fields: readonly string[]) {
 }
 
 export function createAdminMediaModule(config: AppConfig, auth: Auth, service: MediaService, limiter: RateLimiter) {
-  const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error' } as const
+  const errors = { 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error', 503: 'http.error' } as const
   const security = [{ sessionCookie: [] }]
   return new Elysia({ name: 'admin-media', prefix: '/api/v1/admin/media' })
     .use(createBrowserMutationPlugin(config)).use(createRequestContextPlugin(config)).use(createAuthMacros(auth))
@@ -72,7 +72,7 @@ export function createAdminMediaModule(config: AppConfig, auth: Auth, service: M
       return item
     }, {
       browserUpload: 'admin', permission: { catalog: ['create'] }, body: 'media.uploadBody',
-      response: { 200: 'media.item', 201: 'media.item', ...errors, 429: 'http.error', 503: 'http.error' },
+      response: { 200: 'media.item', 201: 'media.item', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Upload an image to the media library',
         description: 'Multipart upload. Returns 201 for a new image and 200 when identical bytes already exist. Requires catalog:create permission.',
@@ -90,7 +90,7 @@ export function createAdminMediaModule(config: AppConfig, auth: Auth, service: M
       set.status = 204
     }, {
       browserMutation: 'admin', permission: { catalog: ['delete'] }, params: 'media.idParams',
-      response: { 204: 'http.empty', ...errors, 503: 'http.error' },
+      response: { 204: 'http.empty', ...errors },
       detail: { summary: 'Delete an unused media item', description: 'Fails with 409 while any product or farm uses the image. Requires catalog:delete permission.', tags: ['Admin Media'], security },
     })
 }
