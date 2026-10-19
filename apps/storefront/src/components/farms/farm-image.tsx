@@ -8,9 +8,11 @@ interface FarmImageProps {
   alt: string | null
   className?: string
   loading?: 'eager' | 'lazy'
+  width?: number | null
+  height?: number | null
 }
 
-export function FarmImage({ src, alt, className, loading = 'lazy' }: FarmImageProps) {
+export function FarmImage({ src, alt, className, loading = 'lazy', width, height }: FarmImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const hasImage = Boolean(src && failedSrc !== src)
 
@@ -20,6 +22,8 @@ export function FarmImage({ src, alt, className, loading = 'lazy' }: FarmImagePr
         <img
           src={src!}
           alt={alt ?? ''}
+          width={width ?? undefined}
+          height={height ?? undefined}
           loading={loading}
           className="size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none"
           onError={() => setFailedSrc(src)}

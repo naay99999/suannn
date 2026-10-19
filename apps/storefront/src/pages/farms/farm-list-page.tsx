@@ -40,7 +40,7 @@ export function Component() {
           </div>
         </div>
         <div className="relative md:-mr-12">
-          <FarmImage src={lead?.coverImageUrl ?? '/images/hero.jpg'} alt={lead?.coverImageAlt ?? 'ภาพประกอบบรรยากาศสวน'} loading="eager" className="aspect-[5/4] rounded-4xl shadow-xl shadow-primary/10" />
+          <FarmImage src={lead?.coverImage?.url ?? '/images/hero.jpg'} alt={lead?.coverImage?.alt ?? 'ภาพประกอบบรรยากาศสวน'} width={lead?.coverImage?.width} height={lead?.coverImage?.height} loading="eager" className="aspect-[5/4] rounded-4xl shadow-xl shadow-primary/10" />
         </div>
       </section>
 

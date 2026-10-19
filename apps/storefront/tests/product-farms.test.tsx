@@ -9,8 +9,8 @@ import type { StoreProductDetail } from '../src/lib/store-products'
 import type { StoreFarmSummary } from '../src/lib/store-farms'
 
 const farms: StoreFarmSummary[] = [
-  { id: 'farm-1', slug: 'mae-rim', name: 'สวนแม่ริม', farmerName: 'คุณใจดี', province: 'เชียงใหม่', district: 'แม่ริม', summary: 'สวนผลไม้', coverImageUrl: null, coverImageAlt: null, isDemo: false },
-  { id: 'farm-2', slug: 'lamphun', name: 'สวนลำพูน', farmerName: null, province: 'ลำพูน', district: null, summary: null, coverImageUrl: null, coverImageAlt: null, isDemo: true },
+  { id: 'farm-1', slug: 'mae-rim', name: 'สวนแม่ริม', farmerName: 'คุณใจดี', province: 'เชียงใหม่', district: 'แม่ริม', summary: 'สวนผลไม้', coverImage: null, isDemo: false },
+  { id: 'farm-2', slug: 'lamphun', name: 'สวนลำพูน', farmerName: null, province: 'ลำพูน', district: null, summary: null, coverImage: null, isDemo: true },
 ]
 
 afterEach(cleanup)

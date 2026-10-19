@@ -7,7 +7,7 @@ import type { StoreProductSummary } from '../src/lib/store-products'
 
 const products: StoreProductSummary[] = Array.from({ length: 8 }, (_, index) => ({
   id: `related-${index}`, slug: `related-${index}`, name: `Related ${index}`,
-  englishName: null, category: 'fresh', imageUrl: null, imageAlt: null,
+  englishName: null, category: 'fresh', coverImage: null,
   minPriceSatang: 1000, canPurchase: true,
 }))
 

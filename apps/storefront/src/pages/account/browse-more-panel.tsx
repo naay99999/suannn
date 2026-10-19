@@ -93,7 +93,7 @@ function PicksCarousel({ products }: { products: StoreProductSummary[] }) {
           {products.map(product => <SwiperSlide key={product.id} className={slideClassName}>
             <Link to={`/products/${product.slug}`} className="group flex flex-col gap-2 rounded-field focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
               <div className="aspect-square overflow-hidden rounded-field bg-background">
-                <StoreProductImage src={product.imageUrl} alt={product.imageAlt ?? product.name} className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 motion-reduce:transform-none" />
+                <StoreProductImage src={product.coverImage?.thumbUrl ?? null} alt={product.coverImage?.alt ?? product.name} width={product.coverImage?.width} height={product.coverImage?.height} className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 motion-reduce:transform-none" />
               </div>
               <span className="truncate text-sm font-medium">{product.name}</span>
               <span className="-mt-1.5 text-sm font-semibold tabular-nums text-primary-ink">{formatStorePrice(product.minPriceSatang)}</span>

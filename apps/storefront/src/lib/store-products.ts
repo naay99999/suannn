@@ -8,6 +8,8 @@ export interface StoreProductGalleryImage {
   alt: string
   caption: string
   thumbnailSrc?: string
+  width?: number
+  height?: number
 }
 export interface StoreProductGallery {
   id: string

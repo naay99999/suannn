@@ -16,7 +16,7 @@ export function FarmGrowerCarousel({ farms }: { farms: StoreFarmSummary[] }) {
   return (
     <div className="grid items-center gap-6 md:grid-cols-[1fr_1fr] md:gap-12" role="region" aria-roledescription="carousel" aria-label="สวนและเกษตรกร">
       <Link to={`/farms/${active.slug}`} className="group block rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-        <FarmImage src={active.coverImageUrl} alt={active.coverImageAlt} className="aspect-[5/4] rounded-3xl" />
+        <FarmImage src={active.coverImage?.url ?? null} alt={active.coverImage?.alt ?? null} width={active.coverImage?.width} height={active.coverImage?.height} className="aspect-[5/4] rounded-3xl" />
       </Link>
       <div aria-live="polite" aria-atomic="true">
         <p className="text-sm font-medium text-primary-ink">สวนและคนปลูก</p>

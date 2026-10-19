@@ -11,12 +11,12 @@ import type { StoreProductPage } from '../src/lib/store-products'
 const farm: StoreFarmDetail = {
   id: '00000000-0000-4000-8000-000000000101', slug: 'mae-rim', name: 'สวนแม่ริม', farmerName: 'คุณใจดี',
   province: 'เชียงใหม่', district: 'แม่ริม', summary: 'สวนผลไม้ที่ดูแลด้วยความตั้งใจ',
-  coverImageUrl: null, coverImageAlt: null, isDemo: true,
-  story: 'เรื่องราวของสวน', growingPractices: 'ดูแลตามฤดูกาล', portraitImageUrl: null, portraitImageAlt: null,
+  coverImage: null, isDemo: true,
+  story: 'เรื่องราวของสวน', growingPractices: 'ดูแลตามฤดูกาล', portraitImage: null,
 }
 const product = {
   id: '00000000-0000-4000-8000-000000000201', slug: 'mango', name: 'มะม่วง', englishName: null,
-  category: 'fresh' as const, imageUrl: null, imageAlt: null, minPriceSatang: 9900, canPurchase: true,
+  category: 'fresh' as const, coverImage: null, minPriceSatang: 9900, canPurchase: true,
 }
 const originalFetch = globalThis.fetch
 let clients: QueryClient[] = []

@@ -7,7 +7,7 @@ import type { StoreProductSummary } from '../src/lib/store-products'
 const originalMatchMedia = window.matchMedia
 const products: StoreProductSummary[] = Array.from({ length: 10 }, (_, index) => ({
   id: `product-${index}`, slug: `product-${index}`, name: `Product ${index}`,
-  englishName: null, category: 'fresh', imageUrl: null, imageAlt: null,
+  englishName: null, category: 'fresh', coverImage: null,
   minPriceSatang: 1000, canPurchase: true,
 }))
 

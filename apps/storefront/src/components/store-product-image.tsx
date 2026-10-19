@@ -6,9 +6,11 @@ interface StoreProductImageProps {
   className?: string
   loading?: 'eager' | 'lazy'
   fetchPriority?: 'high' | 'low' | 'auto'
+  width?: number | null
+  height?: number | null
 }
 
-export function StoreProductImage({ src, alt, className, loading = 'lazy', fetchPriority }: StoreProductImageProps) {
+export function StoreProductImage({ src, alt, className, loading = 'lazy', fetchPriority, width, height }: StoreProductImageProps) {
   const [failed, setFailed] = useState(false)
   if (!src || failed) {
     return (
@@ -18,5 +20,5 @@ export function StoreProductImage({ src, alt, className, loading = 'lazy', fetch
     )
   }
 
-  return <img src={src} alt={alt} loading={loading} fetchPriority={fetchPriority} onError={() => setFailed(true)} className={className} />
+  return <img src={src} alt={alt} width={width ?? undefined} height={height ?? undefined} loading={loading} fetchPriority={fetchPriority} onError={() => setFailed(true)} className={className} />
 }

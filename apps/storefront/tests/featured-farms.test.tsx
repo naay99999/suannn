@@ -20,7 +20,7 @@ function mount() {
 test('homepage farm feature loads API-backed profiles and links to the directory', async () => {
   globalThis.fetch = (async () => Response.json({ items: [{
     id: '00000000-0000-4000-8000-000000000101', slug: 'mae-rim', name: 'สวนแม่ริม', farmerName: 'คุณใจดี',
-    province: 'เชียงใหม่', district: 'แม่ริม', summary: 'สวนผลไม้', coverImageUrl: null, coverImageAlt: null, isDemo: true,
+    province: 'เชียงใหม่', district: 'แม่ริม', summary: 'สวนผลไม้', coverImage: null, isDemo: true,
   }], nextCursor: null })) as typeof fetch
   mount()
   expect(await screen.findByRole('heading', { name: 'สวนแม่ริม' })).toBeTruthy()

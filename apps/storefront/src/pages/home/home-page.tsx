@@ -67,7 +67,7 @@ function productListJsonLd(products: StoreProductSummary[]) {
         '@type': 'Product',
         name: product.name,
         url: `${origin}/products/${product.slug}`,
-        image: product.imageUrl ? new URL(product.imageUrl, origin).href : undefined,
+        image: product.coverImage?.url,
         offers: {
           '@type': 'Offer',
           priceCurrency: 'THB',

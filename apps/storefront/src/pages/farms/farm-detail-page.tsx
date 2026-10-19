@@ -47,7 +47,7 @@ export function Component() {
         </Breadcrumb>
         <section className="grid items-center gap-8 py-8 md:grid-cols-[0.9fr_1.1fr] md:gap-14 md:py-14" aria-labelledby="farm-title">
           <div className="md:order-2">
-            <FarmImage src={profile.coverImageUrl} alt={profile.coverImageAlt} loading="eager" className="aspect-[5/4] rounded-4xl" />
+            <FarmImage src={profile.coverImage?.url ?? null} alt={profile.coverImage?.alt ?? null} width={profile.coverImage?.width} height={profile.coverImage?.height} loading="eager" className="aspect-[5/4] rounded-4xl" />
           </div>
           <div className="farm-reveal md:order-1">
             <p className="mb-4 text-sm font-medium text-primary-ink">{location || 'แหล่งผลิตของ suannn'}</p>

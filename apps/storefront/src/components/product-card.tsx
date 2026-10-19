@@ -13,7 +13,7 @@ export function ProductCard({ product, appearance = 'default' }: { product: Stor
     <article className={cn('product-card group min-w-0 text-left', catalog && 'flex flex-col rounded-2xl border bg-card p-2.5 transition-colors duration-200 hover:border-primary/40 focus-within:border-primary/40 sm:p-3')}>
       <Link to={`/products/${product.slug}`} className={cn('focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring', catalog ? 'flex w-full min-w-0 flex-1 flex-col rounded-xl' : 'block rounded-3xl')}>
         <div className={cn('relative overflow-hidden bg-muted', catalog ? 'aspect-square rounded-xl' : 'aspect-[1/1.08] rounded-3xl')}>
-          <StoreProductImage src={product.imageUrl} alt={product.imageAlt ?? product.name} className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 group-focus-within:scale-105 motion-reduce:transform-none" />
+          <StoreProductImage src={product.coverImage?.thumbUrl ?? null} alt={product.coverImage?.alt ?? product.name} width={product.coverImage?.width} height={product.coverImage?.height} className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 group-focus-within:scale-105 motion-reduce:transform-none" />
           {!catalog && <Badge variant="secondary" className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] whitespace-normal">{storeCategoryLabels[product.category]}</Badge>}
           {!catalog && <span className="glass-icon absolute bottom-3 right-3" aria-hidden="true">
             <HugeiconsIcon icon={ArrowUpRight01Icon} size={20} />

@@ -16,7 +16,14 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
   const gallery: StoreProductGallery = {
     id: product.id,
     name: product.name,
-    images: product.imageUrl ? [{ src: product.imageUrl, alt: product.imageAlt ?? product.name, caption: '' }] : [],
+    images: product.images.map(image => ({
+      src: image.url,
+      thumbnailSrc: image.thumbUrl,
+      alt: image.alt ?? product.name,
+      caption: '',
+      width: image.width,
+      height: image.height,
+    })),
   }
   const mainSwiper = useRef<SwiperInstance | null>(null)
   const imageTriggerRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -96,8 +103,8 @@ export function ProductGallery({ product }: { product: StoreProductDetail }) {
                     fetchPriority={index === 0 ? 'high' : undefined}
                     loading={index === 0 ? 'eager' : 'lazy'}
                     decoding="async"
-                    width={1254}
-                    height={1254}
+                    width={image.width}
+                    height={image.height}
                     className="size-full object-cover"
                   />
                   <span className="glass-icon absolute bottom-4 right-4 size-11" aria-hidden="true">

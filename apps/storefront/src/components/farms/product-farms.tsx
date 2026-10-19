@@ -15,7 +15,7 @@ export function ProductFarms({ farms }: { farms: StoreProductDetail['farms'] }) 
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         {farms.map(farm => <Link key={farm.id} to={`/farms/${farm.slug}`} className="group flex min-w-0 items-center gap-4 rounded-2xl border p-3 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-          <FarmImage src={farm.coverImageUrl} alt={farm.coverImageAlt} className="size-20 shrink-0 rounded-xl sm:size-24" />
+          <FarmImage src={farm.coverImage?.thumbUrl ?? null} alt={farm.coverImage?.alt ?? null} width={farm.coverImage?.width} height={farm.coverImage?.height} className="size-20 shrink-0 rounded-xl sm:size-24" />
           <div className="min-w-0">
             <p className="line-clamp-2 font-semibold leading-relaxed group-hover:text-primary">{farm.name}</p>
             {farm.farmerName && <p className="mt-1 text-sm text-muted-foreground">{farm.farmerName}</p>}
