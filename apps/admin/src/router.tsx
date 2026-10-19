@@ -66,6 +66,11 @@ export const router = createBrowserRouter([
             ],
           },
           {
+            path: 'media',
+            element: <PermissionGate permission="catalog:read" />,
+            children: [{ index: true, lazy: () => import('./pages/media/media-page') }],
+          },
+          {
             path: 'inventory',
             element: <PermissionGate permission="inventory:read" />,
             children: [
