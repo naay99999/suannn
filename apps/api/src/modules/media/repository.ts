@@ -14,6 +14,9 @@ import type {
 
 const defaultLimit = 40
 const maxLimit = 60
+const cursorTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/
+// Cursor timestamps travel as text built by Postgres, so they keep created_at's microseconds.
+const cursorCreatedAt = sql<string>`to_char(${mediaAsset.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
 
 export function mediaImageColumns(table: typeof mediaAsset) {
   return { id: table.id, alt: table.alt, width: table.width, height: table.height }
@@ -125,10 +128,11 @@ export class MediaRepository {
     if (q && q.length > 200) throw new DomainError('INVALID_MEDIA')
     const scope = fingerprint({ type: 'admin-media', q })
     const cursor = decodeCursor(query.cursor, ['createdAt', 'id', 'fingerprint'])
-    if (cursor && (cursor.fingerprint !== scope || !/^[0-9a-f-]{36}$/i.test(cursor.id))) throw new Error('INVALID_CURSOR')
-    const cursorAt = cursor ? new Date(cursor.createdAt) : null
+    if (cursor && (cursor.fingerprint !== scope || !/^[0-9a-f-]{36}$/i.test(cursor.id)
+      || !cursorTimePattern.test(cursor.createdAt))) throw new Error('INVALID_CURSOR')
+    const cursorAt = cursor ? sql`${cursor.createdAt}::timestamptz` : null
     const pattern = q ? `%${escapeLike(q)}%` : null
-    const rows = await this.db.select(itemColumns).from(mediaAsset).where(and(
+    const rows = await this.db.select({ ...itemColumns, cursorCreatedAt }).from(mediaAsset).where(and(
       pattern ? or(ilike(mediaAsset.originalFilename, pattern), ilike(mediaAsset.alt, pattern)) : undefined,
       cursor && cursorAt ? or(
         lt(mediaAsset.createdAt, cursorAt),
@@ -138,9 +142,9 @@ export class MediaRepository {
     const pageRows = rows.slice(0, limit)
     const last = pageRows.at(-1)
     return {
-      items: pageRows.map(row => this.toItem(row)),
+      items: pageRows.map(({ cursorCreatedAt: _cursorCreatedAt, ...row }) => this.toItem(row)),
       nextCursor: rows.length > limit && last
-        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id, fingerprint: scope })
+        ? encodeCursor({ createdAt: last.cursorCreatedAt, id: last.id, fingerprint: scope })
         : null,
     }
   }

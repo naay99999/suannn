@@ -158,6 +158,26 @@ describe('media library persistence', () => {
     expect((await service.list({ q: '%' })).items).toHaveLength(0)
   })
 
+  it('pages through rows created within the same millisecond', async () => {
+    const { service } = setup()
+    const ids: string[] = []
+    for (const [index, micros] of ['123100', '123200', '123300'].entries()) {
+      const { item } = await service.upload(await image(160 + index * 30), `same-ms-${index}.jpg`, null, actor)
+      await database.client`update media_asset set created_at = ${`2026-10-19T10:00:00.${micros}Z`}::timestamptz where id = ${item.id}`
+      ids.push(item.id)
+    }
+
+    const seen: string[] = []
+    let cursor: string | undefined
+    do {
+      const page = await service.list({ limit: 1, cursor })
+      seen.push(...page.items.map(item => item.id))
+      cursor = page.nextCursor ?? undefined
+    } while (cursor)
+
+    expect(seen).toEqual([...ids].reverse())
+  })
+
   it('reports usage counts and usedBy', async () => {
     const { service } = setup()
     const { item } = await service.upload(await image(70), 'a.jpg', 'Alt', actor)
