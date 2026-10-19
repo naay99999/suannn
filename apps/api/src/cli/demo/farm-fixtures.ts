@@ -6,7 +6,18 @@ type FarmRow = typeof farm.$inferInsert
 type ProductFarmRow = typeof productFarm.$inferInsert
 type AuditRow = typeof auditLog.$inferInsert
 
-export function buildFarmDemoFixtures(actorId: string, now: Date): {
+const farmImagePaths = [
+  'products/mango/serving.webp',
+  'products/orange/serving.webp',
+  'products/avocado/serving.webp',
+] as const
+
+const farmNames = ['สวนสาธิตแม่ริม', 'สวนสาธิตลำพูน', 'สวนสาธิตปากช่อง']
+
+export const farmImageSources = (): { path: string; alt: string }[] =>
+  farmNames.map((name, index) => ({ path: farmImagePaths[index % farmImagePaths.length]!, alt: `ภาพผลผลิตจาก${name}` }))
+
+export function buildFarmDemoFixtures(actorId: string, now: Date, media: ReadonlyMap<string, string>): {
   farms: FarmRow[]
   links: ProductFarmRow[]
   audits: AuditRow[]
@@ -19,11 +30,17 @@ export function buildFarmDemoFixtures(actorId: string, now: Date): {
     { name: 'สวนสาธิตลำพูน', farmerName: 'เกษตรกรสาธิต แสงทอง', province: 'ลำพูน', district: 'เมืองลำพูน', summary: 'ตัวอย่างสวนส้มและมะม่วง', story: 'ข้อมูลสมมติสำหรับสาธิตโปรไฟล์สวน ไม่ใช่เกษตรกรคู่ค้าจริง', growingPractices: 'ข้อมูลสมมติเพื่อแสดงตัวอย่างการดูแลดินและต้นไม้', slug: 'demo-lamphun-orchard' },
     { name: 'สวนสาธิตปากช่อง', farmerName: 'เกษตรกรสาธิต สีเขียว', province: 'นครราชสีมา', district: 'ปากช่อง', summary: 'ตัวอย่างสวนผลไม้และอะโวคาโด', story: 'ข้อมูลสมมติสำหรับสาธิตโปรไฟล์สวน ไม่ใช่เกษตรกรคู่ค้าจริง', growingPractices: 'ข้อมูลสมมติเพื่อแสดงตัวอย่างการปลูกอย่างใส่ใจ', slug: 'demo-pak-chong-orchard' },
   ]
+  const coverMediaIds = farmImageSources().map(({ path }) => {
+    const mediaId = media.get(path)
+    if (!mediaId) throw new Error('INVALID_DEMO_FIXTURE_CONTEXT')
+    return mediaId
+  })
   const farmIds = definitions.map((_, index) => demoId('farm', index + 1))
   const farms: FarmRow[] = definitions.map((definition, index) => ({
     id: farmIds[index]!, slug: definition.slug, name: definition.name, farmerName: definition.farmerName,
     province: definition.province, district: definition.district, summary: definition.summary,
     story: definition.story, growingPractices: definition.growingPractices,
+    coverMediaId: coverMediaIds[index]!,
     status: 'published', isDemo: true,
     createdAt: now, updatedAt: now, publishedAt: now,
   }))

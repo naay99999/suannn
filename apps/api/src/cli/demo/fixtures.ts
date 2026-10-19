@@ -4,6 +4,7 @@ import type {
   inventoryLot,
   inventoryOperation,
   product,
+  productImage,
   productVariant,
   stockMovement,
 } from '../../database/schema'
@@ -18,6 +19,7 @@ type LotRow = typeof inventoryLot.$inferInsert
 type OperationRow = typeof inventoryOperation.$inferInsert
 type MovementRow = typeof stockMovement.$inferInsert
 type AuditRow = typeof auditLog.$inferInsert
+type ProductImageRow = typeof productImage.$inferInsert
 
 export interface DemoFixtureManifest {
   productIds: string[]
@@ -38,6 +40,7 @@ export interface DemoFixtures {
   operations: OperationRow[]
   movements: MovementRow[]
   audits: AuditRow[]
+  productImages: ProductImageRow[]
   manifest: DemoFixtureManifest
 }
 
@@ -45,23 +48,8 @@ export interface BuildDemoFixturesOptions {
   now: Date
   warehouseId: string
   actorId: string
-  imageBaseUrl: string
-}
-
-export function normalizeDemoImageBase(value: string): string {
-  let imageBase: URL
-  try {
-    imageBase = new URL(value)
-  } catch {
-    throw new Error('DEMO_SEED_INVALID_IMAGE_BASE_URL')
-  }
-  const authority = value.match(/^https:\/\/([^/?#]*)/i)?.[1]
-  if (imageBase.protocol !== 'https:' || !authority || authority.includes('@')
-    || imageBase.username || imageBase.password || imageBase.search || imageBase.hash
-    || value.includes('?') || value.includes('#')) {
-    throw new Error('DEMO_SEED_INVALID_IMAGE_BASE_URL')
-  }
-  return `${imageBase.origin}${imageBase.pathname.replace(/\/+$/, '')}`
+  /** Media IDs keyed by the image path of each product definition. */
+  media: ReadonlyMap<string, string>
 }
 
 const demoIdOffsets = {
@@ -91,6 +79,9 @@ interface ProductDefinition {
   alt: string
   variantIndexes: number[]
 }
+
+export const productImageSources = (): { path: string; alt: string }[] =>
+  productDefinitions.map(({ imagePath, alt }) => ({ path: imagePath, alt }))
 
 const productDefinitions: ProductDefinition[] = [
   {
@@ -153,12 +144,11 @@ function requestHash(payload: unknown): string {
   return createHash('sha256').update(stableJson(payload)).digest('hex')
 }
 
-export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: BuildDemoFixturesOptions): DemoFixtures {
+export function buildDemoFixtures({ now, warehouseId, actorId, media }: BuildDemoFixturesOptions): DemoFixtures {
   if (!Number.isFinite(now.getTime()) || !warehouseId.trim() || !actorId.trim()) {
     throw new Error('INVALID_DEMO_FIXTURE_CONTEXT')
   }
 
-  normalizeDemoImageBase(imageBaseUrl) // images are attached by the seed, but a bad base is still rejected
   const createdAt = new Date(now)
   const today = bangkokDate(now)
   const receivedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000)
@@ -183,6 +173,10 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
       archivedAt: status === 'archived' ? createdAt : null,
     }
   })
+
+  if (productDefinitions.some(({ imagePath }) => !media.get(imagePath))) {
+    throw new Error('INVALID_DEMO_FIXTURE_CONTEXT')
+  }
 
   const variants: VariantRow[] = []
   for (const [productIndex, definition] of productDefinitions.entries()) {
@@ -212,9 +206,11 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
   for (const productRow of products.filter(({ status }) => status === 'published')) {
     const activeVariants = variants.filter(({ productId, archivedAt }) =>
       productId === productRow.id && archivedAt === null)
-    // Gallery images are attached when the seed uploads media; stand in one so the other rules still run.
-    const placeholderImage = { id: productRow.id!, url: '', thumbUrl: '', alt: productRow.name!, width: 1, height: 1 }
-    assertPublishable({ ...productRow, images: [placeholderImage] } as AdminProduct, activeVariants as AdminVariant[])
+    const definition = productDefinitions[products.indexOf(productRow)]!
+    const mediaId = media.get(definition.imagePath)!
+    // The gallery is checked on its alt text and count; URLs are derived from storage when read.
+    const image = { id: mediaId, url: definition.imagePath, thumbUrl: definition.imagePath, alt: definition.alt, width: 1, height: 1 }
+    assertPublishable({ ...productRow, images: [image] } as AdminProduct, activeVariants as AdminVariant[])
   }
 
   let auditIndex = 0
@@ -429,6 +425,11 @@ export function buildDemoFixtures({ now, warehouseId, actorId, imageBaseUrl }: B
     operations,
     movements,
     audits,
+    productImages: products.map((row, index) => ({
+      productId: row.id!,
+      mediaId: media.get(productDefinitions[index]!.imagePath)!,
+      displayOrder: 0,
+    })),
     manifest: {
       productIds: products.map(({ id }) => id!),
       variantIds: variants.map(({ id }) => id!),

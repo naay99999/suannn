@@ -3,28 +3,26 @@ import { assertAuditMetadata, type AuditEvent } from '../../src/modules/audit/mo
 import { bangkokDate } from '../../src/modules/inventory/policy'
 import { assertPublishable } from '../../src/modules/products/policy'
 import type { AdminProduct, AdminVariant } from '../../src/modules/products/types'
-import { buildDemoFixtures } from '../../src/cli/demo/fixtures'
+import { buildDemoFixtures, productImageSources } from '../../src/cli/demo/fixtures'
 import { demoId, parseDemoSeedOptions } from '../../src/cli/seed-demo'
 
 const options = {
   now: new Date('2026-10-02T10:00:00.000Z'),
   warehouseId: '00000000-0000-4000-8000-000000000001',
   actorId: 'demo-owner',
-  imageBaseUrl: 'https://assets.example.test/suannn',
+  media: new Map(productImageSources().map(({ path }, index) => [path, `media-${index}`])),
 }
 
 describe('demo seed options', () => {
   const args = [
     '--database-name', 'suannn_dev',
     '--actor-email', 'owner@example.test',
-    '--image-base-url', 'https://assets.example.test/images/',
   ]
 
-  it('parses the exact named arguments and normalizes the base path', () => {
+  it('parses the exact named arguments', () => {
     expect(parseDemoSeedOptions(['--', ...args], 'development')).toEqual({
       databaseName: 'suannn_dev',
       actorEmail: 'owner@example.test',
-      imageBaseUrl: 'https://assets.example.test/images',
     })
   })
 
@@ -40,21 +38,15 @@ describe('demo seed options', () => {
     expect(() => parseDemoSeedOptions([...args, 'extra'], 'development')).toThrow()
   })
 
-  it('requires an HTTPS image base without credentials, query, or fragment', () => {
-    for (const imageBaseUrl of [
-      'http://assets.example.test/images',
-      'https://user:pass@assets.example.test/images',
-      'https://assets.example.test/images?token=secret',
-      'https://assets.example.test/images#fragment',
-      'https://assets.example.test/images?',
-      'https://assets.example.test/images#',
-      'https://@assets.example.test/images',
-      'not a URL',
-    ]) {
-      const invalidArgs = [...args]
-      invalidArgs[invalidArgs.indexOf(args[5]!)] = imageBaseUrl
-      expect(() => parseDemoSeedOptions(invalidArgs, 'development')).toThrow()
-    }
+  it('rejects the removed image base option', () => {
+    expect(() => parseDemoSeedOptions(
+      [...args, '--image-base-url', 'https://assets.example.test/images'],
+      'development',
+    )).toThrow('DEMO_SEED_REQUIRES_EXACTLY_TWO_OPTIONS')
+    expect(() => parseDemoSeedOptions(
+      [args[0]!, args[1]!, '--image-base-url', 'https://assets.example.test/images'],
+      'development',
+    )).toThrow('DEMO_SEED_INVALID_ARGUMENTS')
   })
 })
 
@@ -63,6 +55,8 @@ describe('demo seed fixtures', () => {
     const fixtures = buildDemoFixtures(options)
     const { products, variants, lots, operations, movements, audits } = fixtures
 
+    expect(fixtures.productImages).toHaveLength(8)
+    expect(fixtures.productImages.every(({ displayOrder }) => displayOrder === 0)).toBe(true)
     expect(products).toHaveLength(8)
     expect(variants).toHaveLength(12)
     expect(lots).toHaveLength(16)

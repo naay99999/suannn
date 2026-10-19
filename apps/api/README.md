@@ -12,7 +12,7 @@ bun --filter api lint
 bun --filter api auth:generate
 bun --filter api db:generate
 bun --filter api db:migrate
-bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL" --image-base-url "$DEMO_IMAGE_BASE_URL"
+bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL"
 ```
 
 ## Configuration
@@ -47,25 +47,15 @@ Apply the commerce migrations before deploying cart, checkout, order, or commerc
 
 The repeatable phase-one seed populates eight Thai sample products, twelve variants, sixteen stock lots, inventory operations and movements, and audit records for the admin catalog and inventory screens. Apply all migrations first; the seed does not migrate or reset the database. Set `NODE_ENV=development` in `.env.local` (or in the invoking environment) for a local development seed; the CLI also permits `test`. Use the exact PostgreSQL database name reported by `select current_database()`. The actor must be an existing active, non-banned owner created through normal staff onboarding.
 
-Set `DEMO_DATABASE_NAME`, `DEMO_OWNER_EMAIL`, and `DEMO_IMAGE_BASE_URL` to your local values, then run:
+Set `DEMO_DATABASE_NAME` and `DEMO_OWNER_EMAIL` to your local values and configure the R2 environment variables described under Media library below (the seed exits with `DEMO_SEED_REQUIRES_MEDIA_STORAGE` when they are unset), then run:
 
 ```bash
-bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL" --image-base-url "$DEMO_IMAGE_BASE_URL"
+bun --filter api db:seed:demo -- --database-name "$DEMO_DATABASE_NAME" --actor-email "$DEMO_OWNER_EMAIL"
 ```
 
-The HTTPS image base is your own hosted copy of these existing storefront assets. It may include a path prefix, but must not contain credentials, a query, or a fragment. The seed appends these relative paths:
+The seed uploads the existing storefront images under `apps/storefront/public/images/` (the product photos and three farm cover photos) into the media library as the actor, then attaches them as product galleries and farm covers. Uploads deduplicate by content hash, so reruns reuse the same media assets.
 
-| Seed asset path | Existing source under `apps/storefront/public/images/` |
-| --- | --- |
-| `mango.jpg` | `mango.jpg` |
-| `orange.jpg` | `orange.jpg` |
-| `avocado.jpg` | `avocado.jpg` |
-| `products/dried-mango/detail.webp` | `products/dried-mango/detail.webp` |
-| `products/orange-jam/ingredient.webp` | `products/orange-jam/ingredient.webp` |
-| `products/avocado-spread/ingredient.webp` | `products/avocado-spread/ingredient.webp` |
-| `fruit-hero.jpg` | `fruit-hero.jpg` |
-
-The seed validates HTTPS syntax without downloading images. It creates six published products, one draft, one archived product, and inventory with eligible, expired, quarantined, and depleted examples. All fixture IDs are deterministic. A complete rerun reports `already-seeded` and preserves edits and timestamps; partial fixtures or collisions in the reserved `DEMO-V1` slug, SKU, or lot-code namespace fail without repair. The transaction lock serializes simultaneous invocations.
+It creates six published products, one draft, one archived product, and inventory with eligible, expired, quarantined, and depleted examples. All fixture IDs are deterministic. A complete rerun reports `already-seeded` and preserves edits and timestamps; partial fixtures or collisions in the reserved `DEMO-V1` slug, SKU, or lot-code namespace fail without repair. The transaction lock serializes simultaneous invocations.
 
 The seed does not create orders or reservations, enqueue outbox work, change settings, send email, call Stripe, or reset data. Use a fresh development database when you need a fresh relative-date dataset. A later order seed will extend this same demo dataset.
 
@@ -78,6 +68,8 @@ Product and farm images are optimised with sharp (WebP, EXIF stripped) and store
 - `R2_PUBLIC_URL`: the public base URL of the bucket. It must be `https://` with no query or hash; a trailing slash is stripped. Image URLs are derived as `${R2_PUBLIC_URL}/media/{id}/display.webp` and `/thumb.webp` and are never stored.
 
 The `r2.dev` public URL is rate limited and intended for development only. Use a custom domain connected to the bucket in production. Objects are uploaded with `Cache-Control: public, max-age=31536000, immutable` and are never overwritten.
+
+**Release note:** the media library replaces the legacy image URL columns. Every environment must be reset, migrated (`db:migrate`), and reseeded (`db:seed:demo`), and each environment needs its own R2 bucket and R2 environment variables.
 
 ### Stripe one-time payments
 
@@ -253,7 +245,7 @@ provenance extension are recognized without resetting edited farm profiles.
 
 ```sh
 NODE_ENV=development bun --filter api db:migrate
-NODE_ENV=development bun --filter api db:seed:demo --database-name <verified-database-name> --actor-email <active-owner-email> --image-base-url https://assets.example.test/suannn
+NODE_ENV=development bun --filter api db:seed:demo --database-name <verified-database-name> --actor-email <active-owner-email>
 ```
 
 The command reports product, inventory, farm, and farm-link counts. Farm profiles

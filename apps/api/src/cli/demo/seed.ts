@@ -8,14 +8,32 @@ import {
   farm,
   product,
   productFarm,
+  productImage,
   productVariant,
   stockMovement,
   user,
   warehouse,
 } from '../../database/schema'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { MediaService } from '../../modules/media'
+import type { MediaActor } from '../../modules/media/types'
 import type { DemoSeedOptions } from '../seed-demo'
-import { buildDemoFixtures } from './fixtures'
-import { buildFarmDemoFixtures } from './farm-fixtures'
+import { buildDemoFixtures, productImageSources } from './fixtures'
+import { buildFarmDemoFixtures, farmImageSources } from './farm-fixtures'
+
+/** Uploads one storefront image into the media library and returns its media ID. */
+export type DemoMediaUploader = (path: string, alt: string) => Promise<string>
+
+const storefrontImages = join(import.meta.dir, '../../../../storefront/public/images')
+
+export function createDemoMediaUploader(service: MediaService, actor: MediaActor): DemoMediaUploader {
+  return async (path, alt) => {
+    const file = new Uint8Array(await readFile(join(storefrontImages, path)))
+    const { item } = await service.upload(file, path.split('/').join('-'), alt, actor)
+    return item.id
+  }
+}
 
 export type DemoSeedResult = {
   status: 'created' | 'already-seeded'
@@ -27,8 +45,13 @@ export type DemoSeedResult = {
   farmLinks: number
 }
 
-async function seedFarmExtension(tx: DatabaseTransaction, actorId: string, now: Date) {
-  const fixture = buildFarmDemoFixtures(actorId, now)
+async function seedFarmExtension(
+  tx: DatabaseTransaction,
+  actorId: string,
+  now: Date,
+  media: ReadonlyMap<string, string>,
+) {
+  const fixture = buildFarmDemoFixtures(actorId, now, media)
   const [marker] = await tx.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, fixture.markerId)).limit(1)
   const farmRows = await tx.select({ id: farm.id }).from(farm).where(inArray(farm.id, fixture.farmIds))
   if (marker) {
@@ -54,9 +77,17 @@ async function seedFarmExtension(tx: DatabaseTransaction, actorId: string, now: 
 export async function seedDemo(
   db: Database,
   options: DemoSeedOptions,
+  uploadMedia: DemoMediaUploader,
   now = new Date(),
 ): Promise<DemoSeedResult> {
   if (!Number.isFinite(now.getTime())) throw new Error('INVALID_DEMO_SEED_TIME')
+
+  // Uploads dedupe by content hash, so reruns reuse the same media assets. They run before the
+  // transaction because storage writes cannot be rolled back with it.
+  const media = new Map<string, string>()
+  for (const { path, alt } of [...productImageSources(), ...farmImageSources()]) {
+    if (!media.has(path)) media.set(path, await uploadMedia(path, alt))
+  }
 
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(20261002, 1)`)
@@ -89,7 +120,7 @@ export async function seedDemo(
       now,
       warehouseId: mainWarehouse.id,
       actorId: actor.id,
-      imageBaseUrl: options.imageBaseUrl,
+      media,
     })
     const { manifest } = fixtures
     const existingProductIds = await tx.select({ id: product.id }).from(product)
@@ -111,7 +142,7 @@ export async function seedDemo(
 
     const baseAlreadySeeded = found === expected
     if (baseAlreadySeeded) {
-      const extension = await seedFarmExtension(tx, actor.id, now)
+      const extension = await seedFarmExtension(tx, actor.id, now, media)
       return { status: extension.status === 'created' ? 'created' : 'already-seeded', products: 8, variants: 12, lots: 16, movements: 18, farms: extension.farms, farmLinks: extension.farmLinks }
     }
     if (found > 0) throw new Error('DEMO_SEED_PARTIAL_FIXTURE')
@@ -127,12 +158,13 @@ export async function seedDemo(
     if (lotCollision.length) throw new Error('DEMO_SEED_RESERVED_LOT_COLLISION')
 
     await tx.insert(product).values(fixtures.products)
+    await tx.insert(productImage).values(fixtures.productImages)
     await tx.insert(productVariant).values(fixtures.variants)
     await tx.insert(inventoryLot).values(fixtures.lots)
     await tx.insert(inventoryOperation).values(fixtures.operations)
     await tx.insert(stockMovement).values(fixtures.movements)
     await tx.insert(auditLog).values(fixtures.audits)
-    const extension = await seedFarmExtension(tx, actor.id, now)
+    const extension = await seedFarmExtension(tx, actor.id, now, media)
     return { status: 'created', products: 8, variants: 12, lots: 16, movements: 18, farms: extension.farms, farmLinks: extension.farmLinks }
   })
 }
