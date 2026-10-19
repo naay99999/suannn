@@ -180,7 +180,9 @@ const app = await createApp(config, {
   readiness,
 })
 
-app.listen({ hostname: config.host, port: config.port })
+// Bun rejects larger bodies before buffering them; the largest legitimate body is a 10 MB media
+// upload plus multipart framing.
+app.listen({ hostname: config.host, port: config.port, maxRequestBodySize: 11 * 1024 * 1024 })
 
 const maintenanceTimer = setInterval(() => {
   runInBackground(Promise.allSettled([
