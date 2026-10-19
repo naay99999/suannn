@@ -6,7 +6,7 @@ import type { InventoryReadRepository } from '../inventory/read-repository'
 import type { AuditService } from '../audit/service'
 import { readProductFarms, replaceProductFarms } from './farm-associations'
 import { mapProductImageError, readProductImages, replaceProductImages } from './product-images'
-import { mediaImageColumns } from '../media/repository'
+import { mediaImageColumns, type MediaReadOptions } from '../media/repository'
 import type { MediaUrls } from '../media/urls'
 import { normalizeFarmIds } from '../farms/policy'
 import { DomainError } from '../../shared/domain-error'
@@ -485,8 +485,8 @@ export class ProductRepository {
     if (reserved && reserved.productId !== productId) throw new DomainError('PRODUCT_SLUG_CONFLICT')
   }
 
-  private async withImages(tx: DatabaseTransaction, row: ProductRow): Promise<AdminProduct> {
-    return { ...row, images: (await readProductImages(tx, [row.id], this.urls)).get(row.id) ?? [] }
+  private async withImages(tx: DatabaseTransaction, row: ProductRow, options: MediaReadOptions = {}): Promise<AdminProduct> {
+    return { ...row, images: (await readProductImages(tx, [row.id], this.urls, options)).get(row.id) ?? [] }
   }
 
   private async activeVariants(tx: DatabaseTransaction, productId: string): Promise<AdminVariant[]> {
@@ -539,7 +539,9 @@ export class ProductRepository {
       const imagesChanged = imageIds !== undefined
         && await replaceProductImages(tx, id, imageIds, actor, this.audit)
       if (!Object.keys(changes).length && !imagesChanged) return this.withImages(tx, current)
-      const next = await this.withImages(tx, { ...current, ...changes })
+      // A published gallery's alt text is checked under a share lock so an alt clear cannot slip past it.
+      const next = await this.withImages(tx, { ...current, ...changes },
+        current.status === 'published' ? { lock: 'share' } : {})
       if (current.status === 'published') assertPublishable(next, await this.activeVariants(tx, id))
       if (slugChanged) {
         await this.claimSlug(tx, slug, id)
@@ -561,7 +563,7 @@ export class ProductRepository {
     return this.transaction(async (tx) => {
       const current = await this.lockProduct(tx, id)
       if (current.status !== 'draft') throw new DomainError('PRODUCT_STATE_CONFLICT')
-      assertPublishable(await this.withImages(tx, current), await this.activeVariants(tx, id))
+      assertPublishable(await this.withImages(tx, current, { lock: 'share' }), await this.activeVariants(tx, id))
       await tx.update(product).set({ status: 'published', publishedAt: new Date(), updatedAt: new Date() })
         .where(eq(product.id, id))
       await this.record(tx, actor, 'product.published', 'product', id)

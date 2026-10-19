@@ -92,7 +92,8 @@ export class FarmRepository {
   // Rejects unknown media IDs; returns each requested ID's alt text.
   private async checkMedia(tx: DatabaseTransaction, input: CreateFarmInput | UpdateFarmInput) {
     const ids = [...new Set([input.coverMediaId, input.portraitMediaId].filter((id): id is string => !!id))]
-    const found = await findMediaRows(tx, ids)
+    // Share-locked so a concurrent alt clear cannot pass its published-usage check meanwhile.
+    const found = await findMediaRows(tx, ids, { lock: 'share' })
     if (found.size !== ids.length) throw new DomainError('INVALID_FARM')
     return found
   }
@@ -186,10 +187,13 @@ export class FarmRepository {
       if (current.status === to) return toAdminFarm(current, this.urls)
       assertFarmCanTransition(current.status, to)
       if (to === 'published') {
+        // Re-read alt under a share lock: the joined alt above is not locked against a concurrent clear.
+        const media = await findMediaRows(tx, [current.coverId, current.portraitId].filter((mediaId): mediaId is string => !!mediaId), { lock: 'share' })
+        const slot = (mediaId: string | null) => mediaId ? { alt: media.get(mediaId)?.alt ?? null } : null
         assertFarmPublishable({
           ...current,
-          coverImage: current.coverId ? { alt: current.coverAlt } : null,
-          portraitImage: current.portraitId ? { alt: current.portraitAlt } : null,
+          coverImage: slot(current.coverId),
+          portraitImage: slot(current.portraitId),
         })
       }
       const now = new Date()

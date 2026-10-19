@@ -3,7 +3,7 @@ import { mediaAsset, productImage } from '../../database/schema'
 import type { Database, DatabaseTransaction } from '../../database/types'
 import { DomainError } from '../../shared/domain-error'
 import type { AuditService } from '../audit/service'
-import { findMediaRows, mediaImageColumns } from '../media/repository'
+import { findMediaRows, mediaImageColumns, type MediaReadOptions } from '../media/repository'
 import type { MediaImage } from '../media/types'
 import type { MediaUrls } from '../media/urls'
 import type { ProductActor } from './types'
@@ -15,13 +15,15 @@ export async function readProductImages(
   db: Database | DatabaseTransaction,
   productIds: string[],
   urls: MediaUrls,
+  options: MediaReadOptions = {},
 ): Promise<Map<string, MediaImage[]>> {
   const result = new Map<string, MediaImage[]>(productIds.map(id => [id, []]))
   if (productIds.length === 0) return result
-  const rows = await db.select({ productId: productImage.productId, ...mediaImageColumns(mediaAsset) })
+  const query = db.select({ productId: productImage.productId, ...mediaImageColumns(mediaAsset) })
     .from(productImage).innerJoin(mediaAsset, eq(mediaAsset.id, productImage.mediaId))
     .where(inArray(productImage.productId, productIds))
     .orderBy(asc(productImage.productId), asc(productImage.displayOrder))
+  const rows = options.lock ? await query.for(options.lock, { of: mediaAsset }) : await query
   for (const { productId, ...media } of rows) {
     const image = urls.image(media)
     if (image) result.get(productId)?.push(image)
@@ -54,7 +56,7 @@ export async function replaceProductImages(
   if (mediaIds.length > maximumProductImages || new Set(mediaIds).size !== mediaIds.length) {
     throw new DomainError('INVALID_PRODUCT')
   }
-  const found = await findMediaRows(tx, mediaIds)
+  const found = await findMediaRows(tx, mediaIds, { lock: 'share' })
   if (found.size !== mediaIds.length) throw new DomainError('INVALID_PRODUCT')
   const existing = await tx.select({ mediaId: productImage.mediaId }).from(productImage)
     .where(eq(productImage.productId, productId)).orderBy(asc(productImage.displayOrder))

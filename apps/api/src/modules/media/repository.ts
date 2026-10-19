@@ -19,14 +19,21 @@ export function mediaImageColumns(table: typeof mediaAsset) {
   return { id: table.id, alt: table.alt, width: table.width, height: table.height }
 }
 
+export interface MediaReadOptions {
+  // `share` holds the rows until commit, so a concurrent alt clear waits for (and then sees) this write.
+  lock?: 'share'
+}
+
 // Existing media rows among `ids`, keyed by id. Callers compare sizes to detect unknown IDs.
 export async function findMediaRows(
   db: Database | DatabaseTransaction,
   ids: string[],
+  options: MediaReadOptions = {},
 ): Promise<Map<string, { id: string; alt: string | null }>> {
   if (ids.length === 0) return new Map()
-  const rows = await db.select({ id: mediaAsset.id, alt: mediaAsset.alt })
+  const query = db.select({ id: mediaAsset.id, alt: mediaAsset.alt })
     .from(mediaAsset).where(inArray(mediaAsset.id, ids))
+  const rows = options.lock ? await query.for(options.lock) : await query
   return new Map(rows.map(row => [row.id, row]))
 }
 

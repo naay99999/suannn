@@ -11,6 +11,7 @@ import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import type { ProductActor } from '../../src/modules/products/types'
 import {
+  clearMediaAltInOpenTransaction,
   createTestDatabase,
   lockTestDatabase,
   migrateTestDatabase,
@@ -263,6 +264,23 @@ describe('product catalog write persistence', () => {
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(storedProduct?.status === 'published' && activeVariant === undefined).toBe(false)
+  })
+  it('waits for a concurrent alt clear and then refuses to publish the image without alt', async () => {
+    const service = serviceWith()
+    const created = await createProduct(service, 'alt-race')
+    await createVariant(service, created.id, 'ALT-RACE-SKU')
+    const [image] = await database.db.select({ mediaId: productImage.mediaId }).from(productImage)
+      .where(eq(productImage.productId, created.id))
+    const clearing = await clearMediaAltInOpenTransaction(database, image!.mediaId)
+
+    const publishing = service.publishProduct(created.id, actor).then(() => 'published', (error: Error) => error.message)
+    const blocked = await clearing.waitForBlockedWriter()
+    await clearing.commit()
+
+    expect(blocked).toBe(true)
+    expect(await publishing).toBe('INVALID_PRODUCT')
+    const [stored] = await database.db.select({ status: product.status }).from(product).where(eq(product.id, created.id))
+    expect(stored?.status).toBe('draft')
   })
 })
 

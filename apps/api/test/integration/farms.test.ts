@@ -7,7 +7,7 @@ import { FarmRepository } from '../../src/modules/farms/repository'
 import { FarmService } from '../../src/modules/farms/service'
 import { MediaUrls } from '../../src/modules/media/urls'
 import { insertMediaAsset } from '../fixtures'
-import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
+import { clearMediaAltInOpenTransaction, createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined
@@ -97,6 +97,36 @@ describe('farm lifecycle and public visibility', () => {
     await expect(service.updateFarm(created.id, { coverMediaId: await coverOf(null) }, actor)).rejects.toThrow('INVALID_FARM')
     await expect(service.updateFarm(created.id, { portraitMediaId: await coverOf(null) }, actor)).rejects.toThrow('INVALID_FARM')
     expect((await service.getAdminById(created.id)).coverImage?.alt).toBe('มีคำอธิบาย')
+  })
+
+  it('waits for a concurrent alt clear and then refuses to publish the cover without alt', async () => {
+    const coverMediaId = await coverOf('ปกที่กำลังถูกล้าง')
+    const created = await service.createFarm({ ...validFarm, slug: 'alt-race-farm', coverMediaId }, actor)
+    const clearing = await clearMediaAltInOpenTransaction(database, coverMediaId)
+
+    const publishing = service.publishFarm(created.id, actor).then(() => 'published', (error: Error) => error.message)
+    const blocked = await clearing.waitForBlockedWriter()
+    await clearing.commit()
+
+    expect(blocked).toBe(true)
+    expect(await publishing).toBe('INVALID_FARM')
+    expect((await service.getAdminById(created.id)).status).toBe('draft')
+  })
+
+  it('waits for a concurrent alt clear before giving a published farm a new cover', async () => {
+    const created = await service.createFarm({ ...validFarm, slug: 'alt-race-update', coverMediaId: await coverOf() }, actor)
+    await service.publishFarm(created.id, actor)
+    const replacement = await coverOf('ปกใหม่')
+    const clearing = await clearMediaAltInOpenTransaction(database, replacement)
+
+    const updating = service.updateFarm(created.id, { coverMediaId: replacement }, actor)
+      .then(() => 'updated', (error: Error) => error.message)
+    const blocked = await clearing.waitForBlockedWriter()
+    await clearing.commit()
+
+    expect(blocked).toBe(true)
+    expect(await updating).toBe('INVALID_FARM')
+    expect((await service.getAdminById(created.id)).coverImage?.id).not.toBe(replacement)
   })
 
   it('archive clears both media slots', async () => {
