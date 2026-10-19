@@ -30,6 +30,7 @@ import type {
   OrderDetail,
   OrderPage,
   OrderPrincipal,
+  OrderSort,
   OrderStaffActor,
   OrderStatus,
   ShipmentInput,
@@ -393,12 +394,12 @@ export class OrderService {
     return this.list({ customerId: userId, cursor, limit })
   }
 
-  listStaff(staffActor: OrderStaffActor, cursor: string | undefined, limit: number): Promise<OrderPage> {
+  listStaff(staffActor: OrderStaffActor, cursor: string | undefined, limit: number, sort?: OrderSort): Promise<OrderPage> {
     assertStaffActor(staffActor)
-    return this.list({ cursor, limit })
+    return this.list({ cursor, limit, sort })
   }
 
-  private list(query: { customerId?: string; cursor?: string; limit: number }): Promise<OrderPage> {
+  private list(query: { customerId?: string; cursor?: string; limit: number; sort?: OrderSort }): Promise<OrderPage> {
     if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100
       || (query.cursor !== undefined && typeof query.cursor !== 'string')) {
       throw new DomainError('INVALID_ORDER_QUERY')

@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, gt, inArray, isNotNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm'
 import type { DatabaseTransaction } from '../../database/types'
 import { commerceOrder, orderItem, payment, receipt, stripeCheckoutAttempt, stripeRefund } from '../../database/schema'
 import { DomainError } from '../../shared/domain-error'
 import { encodeCursor, decodeCursor } from '../../shared/cursor'
-import type { OrderDetail, OrderPage, OrderReceiptSummary, OrderShipment, OrderSnapshot } from './types'
+import type { OrderDetail, OrderPage, OrderReceiptSummary, OrderShipment, OrderSnapshot, OrderSort, OrderSortField } from './types'
 
 export async function readOrderSnapshot(tx: DatabaseTransaction, orderId: string): Promise<OrderSnapshot> {
   return (await loadOrder(tx, orderId)).snapshot
@@ -190,26 +190,81 @@ export async function readOpenStripeCheckout(tx: DatabaseTransaction, orderId: s
   return { url: attempt.url, expiresAt: attempt.expiresAt.toISOString() }
 }
 
+const orderSortColumns = {
+  createdAt: commerceOrder.createdAt,
+  orderNumber: commerceOrder.orderNumber,
+  recipientName: commerceOrder.recipientName,
+  status: commerceOrder.status,
+  totalSatang: commerceOrder.totalSatang,
+} as const
+const defaultOrderSort: OrderSort = { field: 'createdAt', direction: 'desc' }
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isDefaultOrderSort(sort: OrderSort) {
+  return sort.field === defaultOrderSort.field && sort.direction === defaultOrderSort.direction
+}
+
+// Cursor values travel as text built by Postgres, so timestamps keep their microseconds.
+function orderSortCursorText(field: OrderSortField) {
+  const column = orderSortColumns[field]
+  return field === 'createdAt'
+    ? sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
+    : sql<string>`${column}::text`
+}
+
+function orderSortCursorParam(field: OrderSortField, value: string) {
+  if (field === 'createdAt') return sql`${value}::timestamptz`
+  if (field === 'totalSatang') return sql`${value}::bigint`
+  return sql`${value}`
+}
+
+function assertOrderSortValue(field: OrderSortField, value: string) {
+  if (field === 'createdAt' && !Number.isFinite(Date.parse(value))) throw new Error('INVALID_CURSOR')
+  if (field === 'totalSatang' && !/^\d{1,16}$/.test(value)) throw new Error('INVALID_CURSOR')
+  return value
+}
+
+// The default sort keeps the original { createdAt, id } cursor; other sorts bind the cursor to their sort.
+function decodeOrderCursor(cursor: string | undefined, sort: OrderSort) {
+  const decoded = isDefaultOrderSort(sort)
+    ? decodeCursor(cursor, ['createdAt', 'id'])
+    : decodeCursor(cursor, ['sort', 'value', 'id'])
+  if (!decoded) return null
+  if (!uuidPattern.test(decoded.id)) throw new Error('INVALID_CURSOR')
+  if (isDefaultOrderSort(sort)) return { value: assertOrderSortValue('createdAt', decoded.createdAt), id: decoded.id }
+  if (decoded.sort !== `${sort.field}.${sort.direction}`) throw new Error('INVALID_CURSOR')
+  return { value: assertOrderSortValue(sort.field, decoded.value), id: decoded.id }
+}
+
+function encodeOrderCursor(sort: OrderSort, value: string, id: string) {
+  return isDefaultOrderSort(sort)
+    ? encodeCursor({ createdAt: value, id })
+    : encodeCursor({ sort: `${sort.field}.${sort.direction}`, value, id })
+}
+
 export async function listOrderDetails(
   tx: DatabaseTransaction,
-  query: { customerId?: string; cursor?: string; limit: number },
+  query: { customerId?: string; cursor?: string; limit: number; sort?: OrderSort },
 ): Promise<OrderPage> {
-  const cursor = decodeCursor(query.cursor, ['createdAt', 'id'])
-  const rows = await tx.select({ id: commerceOrder.id, createdAt: commerceOrder.createdAt })
+  const sort = query.sort ?? defaultOrderSort
+  const column = orderSortColumns[sort.field]
+  const [operator, direction] = sort.direction === 'desc' ? [sql.raw('<'), desc] : [sql.raw('>'), asc]
+  const cursor = decodeOrderCursor(query.cursor, sort)
+  const rows = await tx.select({ id: commerceOrder.id, cursorValue: orderSortCursorText(sort.field) })
     .from(commerceOrder).where(and(
       query.customerId ? eq(commerceOrder.customerId, query.customerId) : undefined,
-      cursor ? or(
-        lt(commerceOrder.createdAt, new Date(cursor.createdAt)),
-        and(eq(commerceOrder.createdAt, new Date(cursor.createdAt)), lt(commerceOrder.id, cursor.id)),
-      ) : undefined,
-    )).orderBy(desc(commerceOrder.createdAt), desc(commerceOrder.id)).limit(query.limit + 1)
+      // A row comparison lets Postgres start the (column, id) index scan at the cursor.
+      cursor
+        ? sql`(${column}, ${commerceOrder.id}) ${operator} (${orderSortCursorParam(sort.field, cursor.value)}, ${cursor.id}::uuid)`
+        : undefined,
+    )).orderBy(direction(column), direction(commerceOrder.id)).limit(query.limit + 1)
   const hasMore = rows.length > query.limit
   const pageRows = rows.slice(0, query.limit)
   const items = await readOrderDetails(tx, pageRows.map((row) => row.id))
   const last = pageRows.at(-1)
   return {
     items,
-    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null,
+    nextCursor: hasMore && last ? encodeOrderCursor(sort, last.cursorValue, last.id) : null,
   }
 }
 

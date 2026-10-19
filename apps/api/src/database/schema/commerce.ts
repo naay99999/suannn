@@ -133,6 +133,11 @@ export const commerceOrder = pgTable('commerce_order', {
   unique('commerce_order_id_payment_method_total_unique').on(table.id, table.paymentMethod, table.totalSatang),
   index('commerce_order_customer_created_idx').on(table.customerId, table.createdAt, table.id),
   index('commerce_order_status_created_idx').on(table.status, table.createdAt, table.id),
+  // Keyset indexes for the staff order list sorts; order_number is already unique.
+  index('commerce_order_created_id_idx').on(table.createdAt, table.id),
+  index('commerce_order_total_id_idx').on(table.totalSatang, table.id),
+  index('commerce_order_recipient_id_idx').on(table.recipientName, table.id),
+  index('commerce_order_status_id_idx').on(table.status, table.id),
   check('commerce_order_number_nonblank_check', sql`length(btrim(${table.orderNumber})) between 1 and 80`),
   check('commerce_order_owner_shape_check', sql`
     (${table.customerId} is not null

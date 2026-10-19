@@ -54,6 +54,8 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { DashboardRepository, DashboardService } from './modules/dashboard'
+import { AdminCustomerRepository, AdminCustomerService } from './modules/customers'
 import { createDatabaseReadinessProbe } from './modules/system/readiness'
 import { drainShutdown } from './shared/shutdown'
 
@@ -174,6 +176,8 @@ const app = await createApp(config, {
   commerceSettings,
   receiptSettings,
   storeAnnouncement,
+  dashboard: new DashboardService(new DashboardRepository(database.db)),
+  customers: new AdminCustomerService(new AdminCustomerRepository(database.db)),
   staffMfaRequired,
   identityReservations: claims,
   limiter,

@@ -113,6 +113,8 @@ const app = await createApp(config, {
   commerceSettings,
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   storeAnnouncement,
+  dashboard: {} as never,
+  customers: {} as never,
   staffMfaRequired: async () => true,
   identityReservations: claims,
   limiter,
@@ -230,6 +232,8 @@ describe('API routes', () => {
       'Store Checkout',
       'Payments',
       'Store Orders',
+      'Admin Dashboard',
+      'Admin Customers',
       'Admin Orders',
       'Admin Commerce Settings',
       'Admin Receipt Settings',
@@ -384,7 +388,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(122)
+    expect(operations).toHaveLength(124)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

@@ -24,6 +24,8 @@ export const apiTags = [
   { name: 'Store Checkout', description: 'Quote the current cart and place cash-on-delivery or Stripe orders.' },
   { name: 'Payments', description: 'Receive verified Stripe payment events.' },
   { name: 'Store Orders', description: 'Read and cancel orders owned by the current customer or guest token.' },
+  { name: 'Admin Dashboard', description: 'Staff sales overview and fulfillment backlog.' },
+  { name: 'Admin Customers', description: 'Staff view of customer accounts, saved addresses, and order history.' },
   { name: 'Admin Orders', description: 'Staff order processing, COD collection, and guest order access recovery.' },
   { name: 'Admin Commerce Settings', description: 'Staff controls for the shipping fee and checkout switch.' },
   { name: 'Admin Receipt Settings', description: 'Staff controls for the seller details and VAT rate printed on receipts.' },

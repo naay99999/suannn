@@ -24,6 +24,8 @@ import { createAdminReceiptSettingsModule } from './modules/receipts'
 import { createAdminStoreAnnouncementModule, createStoreAnnouncementModule } from './modules/store-announcement'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
 import { createAdminMediaModule } from './modules/media'
+import { createAdminDashboardModule } from './modules/dashboard'
+import { createAdminCustomersModule } from './modules/customers'
 import type { AuditService } from './modules/audit/service'
 import type { CustomerSignupService } from './modules/auth/customer/service'
 import type { CustomerProfileService } from './modules/customer/profile/service'
@@ -48,6 +50,8 @@ import type { ReceiptSettingsService } from './modules/receipts/settings'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import type { FarmService } from './modules/farms/service'
 import type { MediaService } from './modules/media/service'
+import type { DashboardService } from './modules/dashboard/service'
+import type { AdminCustomerService } from './modules/customers/service'
 import type { RateLimiter } from './modules/rate-limit/service'
 import type { Auth } from './plugins/auth/auth'
 import { createAuthPlugin } from './plugins/auth'
@@ -84,6 +88,8 @@ export interface AppDependencies {
   commerceSettings: CommerceSettingsService
   receiptSettings: ReceiptSettingsService
   storeAnnouncement: StoreAnnouncementService
+  dashboard: DashboardService
+  customers: AdminCustomerService
   staffMfaRequired(): Promise<boolean>
   identityReservations: IdentityReservationLookup
   limiter: RateLimiter
@@ -147,7 +153,10 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
-    .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))
+    .use(new Elysia({ name: 'admin-orders-and-dashboard' })
+      .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))
+      .use(createAdminDashboardModule(dependencies.auth, dependencies.dashboard))
+      .use(createAdminCustomersModule(dependencies.auth, dependencies.customers)))
     .use(new Elysia({ name: 'admin-checkout-and-receipt-settings' })
       .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
       .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))

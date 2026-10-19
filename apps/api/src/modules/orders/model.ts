@@ -134,6 +134,20 @@ const listQuery = t.Object({
   cursor: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
   limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100, multipleOf: 1 })),
 }, { additionalProperties: false })
+const staffListQuery = t.Object({
+  cursor: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
+  limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100, multipleOf: 1 })),
+  sort: t.Optional(t.Union([
+    t.Literal('createdAt'),
+    t.Literal('orderNumber'),
+    t.Literal('recipientName'),
+    t.Literal('status'),
+    t.Literal('totalSatang'),
+  ], { description: 'Sort field. Defaults to createdAt.' })),
+  order: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')], {
+    description: 'Sort direction. Defaults to desc for createdAt and totalSatang, asc otherwise.',
+  })),
+}, { additionalProperties: false })
 const idempotencyHeaders = t.Object({ 'idempotency-key': t.String({ pattern: '^[!-~]{1,128}$' }) })
 const emptyBody = t.Object({}, { additionalProperties: false })
 const fulfillmentBody = t.Object({
@@ -166,6 +180,7 @@ export const ordersModels = {
   'orders.createResponse': createResponse,
   'orders.idParams': idParams,
   'orders.listQuery': listQuery,
+  'orders.staffListQuery': staffListQuery,
   'orders.idempotencyHeaders': idempotencyHeaders,
   'orders.emptyBody': emptyBody,
   'orders.fulfillmentBody': fulfillmentBody,

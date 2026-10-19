@@ -29,9 +29,26 @@ export const product = pgTable('product', {
 }, (table) => [
   uniqueIndex('product_slug_unique').on(table.slug),
   index('product_status_created_id_idx').on(table.status, table.createdAt, table.id),
+  // Keyset indexes for the staff product list sorts.
+  index('product_created_id_idx').on(table.createdAt, table.id),
+  index('product_updated_id_idx').on(table.updatedAt, table.id),
+  index('product_name_id_idx').on(table.name, table.id),
+  index('product_category_id_idx').on(table.category, table.id),
+  index('product_status_id_idx').on(table.status, table.id),
   check('product_category_check', sql`${table.category} in ('fresh', 'processed')`),
   check('product_vat_treatment_check', sql`${table.vatTreatment} in ('standard', 'exempt')`),
   check('product_status_check', sql`${table.status} in ('draft', 'published', 'archived')`),
+])
+
+// Former slugs of a product. Storefront links using one resolve to the product's current slug,
+// and no other product may claim a slug while it is reserved here.
+export const productSlugRedirect = pgTable('product_slug_redirect', {
+  slug: text('slug').primaryKey(),
+  productId: uuid('product_id').notNull().references(() => product.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('product_slug_redirect_product_idx').on(table.productId),
+  check('product_slug_redirect_format_check', sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`),
 ])
 
 export const productVariant = pgTable('product_variant', {

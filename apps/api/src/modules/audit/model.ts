@@ -31,7 +31,7 @@ export const auditMetadataKeys = {
   'order.receipt-issued': ['actorId', 'receiptId', 'operationId'],
   'order.receipt-cancelled': ['actorId', 'receiptId', 'operationId', 'reasonCode'],
   'product.created': ['fields'],
-  'product.updated': ['fields'],
+  'product.updated': ['fields', 'previousSlug', 'slug'],
   'product.published': [],
   'product.unpublished': [],
   'product.archived': [],

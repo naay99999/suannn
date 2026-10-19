@@ -208,7 +208,7 @@ describe('admin order and commerce settings HTTP contracts', () => {
     expect(listCall?.args).toEqual([{
       kind: 'staff', userId: 'staff-1',
       auditContext: { requestId: expect.any(String), ipAddress: expect.any(String), userAgent: null },
-    }, undefined, 50])
+    }, undefined, 50, undefined])
     expect(fulfillmentCall?.args[1]).toBe('processing')
     expect(fulfillmentCall?.args[2]).toMatchObject({ userId: 'staff-1', auditContext: { requestId: expect.any(String) } })
     expect(fulfillmentCall?.args[3]).toBe('command-1')
@@ -282,6 +282,26 @@ describe('admin order and commerce settings HTTP contracts', () => {
         expect(response.status).toBe(allowedPermissions.has(permission) ? 200 : 403)
       }
     }
+  })
+
+  it('passes the requested sort and its default direction to the staff listing', async () => {
+    const { app, calls } = await createHarness()
+    for (const path of [
+      '/api/v1/admin/orders?sort=totalSatang',
+      '/api/v1/admin/orders?sort=recipientName',
+      '/api/v1/admin/orders?sort=orderNumber&order=desc',
+      '/api/v1/admin/orders?order=asc',
+    ]) {
+      expect((await app.handle(request(path))).status).toBe(200)
+    }
+    expect(calls.filter(({ method }) => method === 'orders.listStaff').map(({ args }) => args[3])).toEqual([
+      { field: 'totalSatang', direction: 'desc' },
+      { field: 'recipientName', direction: 'asc' },
+      { field: 'orderNumber', direction: 'desc' },
+      { field: 'createdAt', direction: 'asc' },
+    ])
+    expect((await app.handle(request('/api/v1/admin/orders?sort=contactEmail'))).status).toBe(422)
+    expect((await app.handle(request('/api/v1/admin/orders?order=sideways'))).status).toBe(422)
   })
 
   it('rejects invalid pagination, unknown body fields, missing idempotency keys, and wrong origins', async () => {

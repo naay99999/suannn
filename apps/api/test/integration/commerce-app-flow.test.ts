@@ -101,6 +101,8 @@ const app = await createApp(config, {
   commerceSettings: settings,
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   storeAnnouncement: new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit)),
+  dashboard: {} as never,
+  customers: {} as never,
   staffMfaRequired: async () => false,
   identityReservations: claims,
   limiter,

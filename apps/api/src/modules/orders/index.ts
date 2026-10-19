@@ -9,7 +9,7 @@ import { httpModels } from '../../shared/http-model'
 import { DomainError } from '../../shared/domain-error'
 import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
-import type { OrderPrincipal, OrderDetail, OrderStaffActor, OrderStatus, ShipmentInput } from './types'
+import type { OrderPrincipal, OrderDetail, OrderSort, OrderStaffActor, OrderStatus, ShipmentInput } from './types'
 import type { OrderService } from './service'
 import type { StripeRefundService } from '../payments/stripe/refunds'
 import { ordersModels } from './model'
@@ -80,6 +80,12 @@ function staffActor(
       userAgent: requestContext.userAgent,
     },
   }
+}
+
+function staffOrderSort(field: OrderSort['field'] | undefined, order: OrderSort['direction'] | undefined): OrderSort | undefined {
+  if (!field && !order) return undefined
+  const sortField = field ?? 'createdAt'
+  return { field: sortField, direction: order ?? (sortField === 'createdAt' || sortField === 'totalSatang' ? 'desc' : 'asc') }
 }
 
 function staffOrderProjection(order: OrderDetail): OrderDetail {
@@ -287,15 +293,15 @@ export function createAdminOrdersModule(
     .model(httpModels)
     .model(ordersModels)
     .get('', ({ query, user, requestContext }) => service.listStaff(
-      actorFrom(user.id, requestContext), query.cursor, query.limit ?? 50,
+      actorFrom(user.id, requestContext), query.cursor, query.limit ?? 50, staffOrderSort(query.sort, query.order),
     ), {
-      beforeHandle: rejectUnknownQueryFields(['cursor', 'limit']),
+      beforeHandle: rejectUnknownQueryFields(['cursor', 'limit', 'sort', 'order']),
       permission: { order: ['read'] },
-      query: 'orders.listQuery',
+      query: 'orders.staffListQuery',
       response: { 200: 'orders.page', ...errors },
       detail: {
         summary: 'List staff orders',
-        description: 'Returns a cursor-paginated staff view of orders. Requires order:read permission.',
+        description: 'Returns a cursor-paginated staff view of orders, newest first unless sort and order are given. A cursor is only valid for the sort and order that produced it. Requires order:read permission.',
         tags: ['Admin Orders'], security: staffSecurity,
       },
     })

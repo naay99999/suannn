@@ -6,6 +6,12 @@ export type OrderPrincipal =
   | OrderStaffActor
 
 export type OrderStatus = 'pending_payment' | 'placed' | 'processing' | 'packed' | 'shipped' | 'delivered' | 'cancelled'
+export type OrderSortField = 'createdAt' | 'orderNumber' | 'recipientName' | 'status' | 'totalSatang'
+export type OrderSortDirection = 'asc' | 'desc'
+export interface OrderSort {
+  field: OrderSortField
+  direction: OrderSortDirection
+}
 export type OrderPaymentStatus = 'awaiting_collection' | 'collected' | 'void'
 export type OrderRefundStatus = 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'canceled'
 
