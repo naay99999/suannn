@@ -17,6 +17,7 @@
     "db:seed:demo": "bun --env-file=.env.local src/cli/seed-demo.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "@better-auth/drizzle-adapter": "^1.7.5",
     "@elysia/openapi": "^1.4.16",
     "@elysiajs/cors": "^1.4.0",
@@ -27,6 +28,7 @@
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",
     "resend": "^6.28.1",
+    "sharp": "^0.35.5",
     "stripe": "^22.6.2"
   },
   "devDependencies": {

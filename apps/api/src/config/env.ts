@@ -30,6 +30,15 @@ export interface AppConfig {
   trustedProxyHeaders: string[]
   requireTrustedClientIp: boolean
   stripe: StripeConfig | null
+  media: MediaConfig | null
+}
+
+export interface MediaConfig {
+  accountId: string
+  accessKeyId: string
+  secretAccessKey: string
+  bucket: string
+  publicUrl: string
 }
 
 export interface StripeConfig {
@@ -205,6 +214,42 @@ function parseStripeConfig(env: Environment, storefrontUrl: string, isProduction
   return { apiKey, webhookSecret, successUrl, cancelUrl }
 }
 
+function parseMediaConfig(env: Environment): MediaConfig | null {
+  const names = [
+    'R2_ACCOUNT_ID',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'R2_BUCKET',
+    'R2_PUBLIC_URL',
+  ] as const
+  const values = names.map((name) => env[name]?.trim() || undefined)
+  const present = values.filter(Boolean).length
+
+  if (present === 0) {
+    return null
+  }
+
+  if (present !== names.length) {
+    throw new Error('R2 media configuration must be provided together')
+  }
+
+  const [accountId, accessKeyId, secretAccessKey, bucket, publicUrl] =
+    values as [string, string, string, string, string]
+  const url = new URL(parseUrl('R2_PUBLIC_URL', publicUrl, ['https:']))
+
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error('R2_PUBLIC_URL must not contain credentials, a query, or a hash')
+  }
+
+  return {
+    accountId,
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+    publicUrl: url.href.replace(/\/+$/, ''),
+  }
+}
+
 export function loadConfig(env: Environment = process.env): AppConfig {
   const corsOrigins = parseOrigins(env.CORS_ORIGINS)
   const isProduction = env.NODE_ENV === 'production'
@@ -273,5 +318,6 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     trustedProxyHeaders,
     requireTrustedClientIp: isProduction,
     stripe,
+    media: parseMediaConfig(env),
   }
 }

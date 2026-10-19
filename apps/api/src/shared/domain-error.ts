@@ -53,6 +53,7 @@ export type DomainErrorCode =
   | 'INVALID_ORDER_INPUT'
   | 'ORDER_OPERATION_CONFLICT'
   | 'ORDER_ADDRESS_NOT_FOUND'
+  | 'CUSTOMER_NOT_FOUND'
   | 'ORDER_NOT_FOUND'
   | 'ORDER_ACCESS_DENIED'
   | 'INVALID_ORDER_TRANSITION'
@@ -62,6 +63,11 @@ export type DomainErrorCode =
   | 'INVALID_ORDER_QUERY'
   | 'SHIPMENT_REQUIRED'
   | 'INVALID_SHIPMENT'
+  | 'INVALID_MEDIA'
+  | 'MEDIA_NOT_FOUND'
+  | 'MEDIA_IN_USE'
+  | 'MEDIA_STATE_CONFLICT'
+  | 'MEDIA_STORAGE_UNAVAILABLE'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -118,6 +124,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_ORDER_INPUT: { status: 422, message: 'Order request is invalid' },
   ORDER_OPERATION_CONFLICT: { status: 409, message: 'Idempotency key was already used with different input' },
   ORDER_ADDRESS_NOT_FOUND: { status: 404, message: 'Saved address not found' },
+  CUSTOMER_NOT_FOUND: { status: 404, message: 'Customer not found' },
   ORDER_NOT_FOUND: { status: 404, message: 'Order not found' },
   ORDER_ACCESS_DENIED: { status: 403, message: 'Order access denied' },
   INVALID_ORDER_TRANSITION: { status: 409, message: 'Order state does not allow this action' },
@@ -127,6 +134,11 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_ORDER_QUERY: { status: 422, message: 'Order query is invalid' },
   SHIPMENT_REQUIRED: { status: 422, message: 'Carrier and tracking number are required to ship an order' },
   INVALID_SHIPMENT: { status: 422, message: 'Shipment details are invalid' },
+  INVALID_MEDIA: { status: 422, message: 'Media file is invalid' },
+  MEDIA_NOT_FOUND: { status: 404, message: 'Media not found' },
+  MEDIA_IN_USE: { status: 409, message: 'Media is in use' },
+  MEDIA_STATE_CONFLICT: { status: 409, message: 'Media state does not allow this action' },
+  MEDIA_STORAGE_UNAVAILABLE: { status: 503, message: 'Media storage is unavailable' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {

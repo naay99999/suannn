@@ -2,6 +2,17 @@ import { describe, expect, it } from 'bun:test'
 import { developmentCorsOrigins, loadConfig } from '../../src/config/env'
 import { testEnv } from '../fixtures'
 
+function r2Env(overrides: Record<string, string> = {}) {
+  return {
+    R2_ACCOUNT_ID: 'acc',
+    R2_ACCESS_KEY_ID: 'key',
+    R2_SECRET_ACCESS_KEY: 'secret',
+    R2_BUCKET: 'suannn-dev',
+    R2_PUBLIC_URL: 'https://pub-abc.r2.dev',
+    ...overrides,
+  }
+}
+
 describe('API configuration', () => {
   it('validates the total shutdown budget', () => {
     expect(loadConfig(testEnv).shutdownTimeoutMs).toBe(30_000)
@@ -28,6 +39,7 @@ describe('API configuration', () => {
       trustedProxyHeaders: [],
       requireTrustedClientIp: false,
       stripe: null,
+      media: null,
     })
   })
 
@@ -170,6 +182,7 @@ describe('API configuration', () => {
       trustedProxyHeaders: ['x-forwarded-for', 'x-real-ip'],
       requireTrustedClientIp: true,
       stripe: null,
+      media: null,
     })
   })
 
@@ -233,5 +246,32 @@ describe('API configuration', () => {
     expect(loadConfig(testEnv).secureCookies).toBe(false)
     expect(loadConfig({ ...testEnv, BETTER_AUTH_URL: 'https://api.example.com' }).secureCookies)
       .toBe(true)
+  })
+
+  it('leaves media disabled when no R2 variables are set', () => {
+    expect(loadConfig(testEnv).media).toBeNull()
+  })
+
+  it('parses complete R2 configuration and strips a trailing slash', () => {
+    const config = loadConfig({ ...testEnv, ...r2Env({ R2_PUBLIC_URL: 'https://pub-abc.r2.dev/' }) })
+
+    expect(config.media).toEqual({
+      accountId: 'acc',
+      accessKeyId: 'key',
+      secretAccessKey: 'secret',
+      bucket: 'suannn-dev',
+      publicUrl: 'https://pub-abc.r2.dev',
+    })
+  })
+
+  it('rejects partial R2 configuration', () => {
+    expect(() => loadConfig({ ...testEnv, R2_BUCKET: 'x' }))
+      .toThrow('R2 media configuration must be provided together')
+  })
+
+  it('rejects a non-https or query-bearing R2_PUBLIC_URL', () => {
+    for (const publicUrl of ['http://pub.r2.dev', 'https://pub.r2.dev?x=1', 'https://pub.r2.dev/#x', 'not-a-url']) {
+      expect(() => loadConfig({ ...testEnv, ...r2Env({ R2_PUBLIC_URL: publicUrl }) })).toThrow('R2_PUBLIC_URL')
+    }
   })
 })

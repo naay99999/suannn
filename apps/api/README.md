@@ -69,6 +69,16 @@ The seed validates HTTPS syntax without downloading images. It creates six publi
 
 The seed does not create orders or reservations, enqueue outbox work, change settings, send email, call Stripe, or reset data. Use a fresh development database when you need a fresh relative-date dataset. A later order seed will extend this same demo dataset.
 
+### Media library (Cloudflare R2)
+
+Product and farm images are optimised with sharp (WebP, EXIF stripped) and stored in Cloudflare R2. Set all five values together to enable uploads; with none set, media is disabled (uploads and deletes return 503 `MEDIA_STORAGE_UNAVAILABLE` and image fields are empty). A partial set is a startup error.
+
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: an R2 API token scoped to the bucket with object read/write.
+- `R2_BUCKET`: use one bucket per environment (development, CI, production); never share a bucket between them.
+- `R2_PUBLIC_URL`: the public base URL of the bucket. It must be `https://` with no query or hash; a trailing slash is stripped. Image URLs are derived as `${R2_PUBLIC_URL}/media/{id}/display.webp` and `/thumb.webp` and are never stored.
+
+The `r2.dev` public URL is rate limited and intended for development only. Use a custom domain connected to the bucket in production. Objects are uploaded with `Cache-Control: public, max-age=31536000, immutable` and are never overwritten.
+
 ### Stripe one-time payments
 
 The native storefront uses Stripe Hosted Checkout for customer and guest orders. There is no admin refund UI; staff use the admin order API for refunds. Apply all Stripe migrations (`0014_bright_human_fly.sql` through `0020_premium_lenny_balinger.sql`) before deploying an API version that accepts Stripe orders, then verify `bun --filter api db:migrate` completed successfully. Do not start the Stripe-enabled API before those tables and constraints exist.
