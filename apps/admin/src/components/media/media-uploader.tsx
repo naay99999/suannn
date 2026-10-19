@@ -4,7 +4,7 @@ import { Upload01Icon } from '@hugeicons/core-free-icons'
 import { Badge } from '@workspace/ui/components/badge'
 import { cn } from '@workspace/ui/lib/utils'
 import type { MediaItem } from '@/lib/media/api'
-import { uploadFiles, type UploadState } from '@/lib/media/upload'
+import { imageInputAccept, uploadFiles, type UploadState } from '@/lib/media/upload'
 
 type UploadRow = { id: number; file: File; state: UploadState; error?: string }
 
@@ -80,7 +80,7 @@ export function MediaUploader({ onUploaded, multiple = true }: {
         <span className="text-sm text-muted-foreground">JPEG, PNG, WebP, AVIF ไม่เกิน 10MB ต่อไฟล์</span>
       </div>
       <input
-        accept="image/jpeg,image/png,image/webp,image/avif"
+        accept={imageInputAccept}
         aria-label="เลือกไฟล์ภาพ"
         className="sr-only"
         multiple={multiple}

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { createApiClient } from '../src/lib/api'
 import { createMediaApi } from '../src/lib/media/api'
+import { precheckFile, unsupportedTypeMessage } from '../src/lib/media/upload'
 
 const mediaId = '00000000-0000-4000-8000-0000000000a1'
 const item = {
@@ -63,4 +64,14 @@ test('maps media domain errors to Thai messages', async () => {
 
   await expect(createMediaApi(client).remove(mediaId))
     .rejects.toMatchObject({ status: 409, code: 'MEDIA_IN_USE', message: 'ภาพนี้ถูกใช้งานอยู่ ลบไม่ได้' })
+})
+
+test('accepts files with an empty type when the extension is a supported image', () => {
+  const untyped = (name: string) => new File([new Uint8Array(8)], name, { type: '' })
+
+  expect(precheckFile(untyped('durian.AVIF'))).toBeNull()
+  expect(precheckFile(untyped('durian.jpeg'))).toBeNull()
+  expect(precheckFile(untyped('notes.pdf'))).toBe(unsupportedTypeMessage)
+  expect(precheckFile(untyped('durian'))).toBe(unsupportedTypeMessage)
+  expect(precheckFile(new File([new Uint8Array(8)], 'durian.avif', { type: 'application/pdf' }))).toBe(unsupportedTypeMessage)
 })

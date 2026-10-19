@@ -8,8 +8,19 @@ export const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'ima
 export const tooLargeMessage = 'ไฟล์ใหญ่เกิน 10MB'
 export const unsupportedTypeMessage = 'รองรับเฉพาะ JPEG, PNG, WebP, AVIF'
 
+export const acceptedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif']
+// Value for a file input's `accept`; extensions cover platforms that report no MIME type.
+export const imageInputAccept = [...acceptedImageTypes, ...acceptedImageExtensions].join(',')
+
+function hasAcceptedExtension(name: string) {
+  const lower = name.toLowerCase()
+  return acceptedImageExtensions.some(extension => lower.endsWith(extension))
+}
+
 export function precheckFile(file: File): string | null {
-  if (!acceptedImageTypes.includes(file.type)) return unsupportedTypeMessage
+  // Some platforms report AVIF (and others) with an empty type; the server sniffs the bytes anyway.
+  const typeAccepted = file.type === '' ? hasAcceptedExtension(file.name) : acceptedImageTypes.includes(file.type)
+  if (!typeAccepted) return unsupportedTypeMessage
   if (file.size > maxUploadBytes) return tooLargeMessage
   return null
 }
