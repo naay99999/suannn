@@ -88,7 +88,7 @@ const app = await createApp(config, {
   staff: new StaffService(new StaffRepository(database.db, audit, async () => false)),
   systemSettings: new SystemSettingsService(new SystemSettingsRepository(database.db, audit)),
   products: new ProductService(new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
-  farms: new FarmService(new FarmRepository(database.db, audit), new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
+  farms: new FarmService(new FarmRepository(database.db, audit, new MediaUrls(null)), new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
   media: {} as never,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit), inventoryRead,

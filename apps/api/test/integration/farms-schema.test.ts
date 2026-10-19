@@ -35,4 +35,18 @@ describe('farm schema constraints', () => {
     await expect(database.db.insert(productFarm).values({ productId, farmId: '00000000-0000-4000-8000-000000000013', displayOrder: 0 })).rejects.toThrow()
     await expect(database.db.insert(productFarm).values({ productId, farmId: farmIds[0]!, displayOrder: 20 })).rejects.toThrow()
   })
+
+  it('drops the legacy farm image URL columns and restricts media deletion', async () => {
+    const columns = await database.client.unsafe<{ column_name: string }[]>(
+      `select column_name from information_schema.columns where table_name = 'farm'`)
+    const names = columns.map(row => row.column_name)
+    for (const legacy of ['cover_image_url', 'cover_image_alt', 'portrait_image_url', 'portrait_image_alt']) {
+      expect(names).not.toContain(legacy)
+    }
+    expect(names).toEqual(expect.arrayContaining(['cover_media_id', 'portrait_media_id']))
+    const rules = await database.client.unsafe<{ constraint_name: string; delete_rule: string }[]>(
+      `select constraint_name, delete_rule from information_schema.referential_constraints
+       where constraint_name in ('farm_cover_media_id_media_asset_id_fk', 'farm_portrait_media_id_media_asset_id_fk')`)
+    expect(rules.map(row => row.delete_rule)).toEqual(['RESTRICT', 'RESTRICT'])
+  })
 })

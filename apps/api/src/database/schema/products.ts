@@ -21,8 +21,6 @@ export const product = pgTable('product', {
   vatTreatment: text('vat_treatment', { enum: ['standard', 'exempt'] }).notNull(),
   originStory: text('origin_story'),
   storageInstructions: text('storage_instructions'),
-  imageUrl: text('image_url'),
-  imageAlt: text('image_alt'),
   status: text('status', { enum: ['draft', 'published', 'archived'] }).default('draft').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

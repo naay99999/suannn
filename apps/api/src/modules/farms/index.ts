@@ -74,12 +74,12 @@ export function createAdminFarmsModule(config: AppConfig, auth: Auth, service: F
       set.status = 201
       return service.createFarm(body as CreateFarmInput, actor(user.id, requestContext))
     }, {
-      parse: [strictBody(['slug', 'name', 'farmerName', 'province', 'district', 'summary', 'story', 'growingPractices', 'coverImageUrl', 'coverImageAlt', 'portraitImageUrl', 'portraitImageAlt']), 'json'],
+      parse: [strictBody(['slug', 'name', 'farmerName', 'province', 'district', 'summary', 'story', 'growingPractices', 'coverMediaId', 'portraitMediaId']), 'json'],
       browserMutation: 'admin', permission: { catalog: ['create'] }, body: 'farm.createBody', response: { 201: 'farm.admin', ...errors },
       detail: { summary: 'Create a draft farm', description: 'Creates a draft farm. isDemo is controlled by demo seed data.', tags: ['Admin Farms'], security },
     })
     .patch('/:id', ({ params, body, user, requestContext }) => service.updateFarm(params.id, body as UpdateFarmInput, actor(user.id, requestContext)), {
-      parse: [strictBody(['name', 'farmerName', 'province', 'district', 'summary', 'story', 'growingPractices', 'coverImageUrl', 'coverImageAlt', 'portraitImageUrl', 'portraitImageAlt']), 'json'],
+      parse: [strictBody(['name', 'farmerName', 'province', 'district', 'summary', 'story', 'growingPractices', 'coverMediaId', 'portraitMediaId']), 'json'],
       browserMutation: 'admin', permission: { catalog: ['update'] }, params: 'farm.idParams', body: 'farm.updateBody', response: { 200: 'farm.admin', ...errors },
       detail: { summary: 'Update a farm profile', description: 'Updates a draft or publishable farm profile.', tags: ['Admin Farms'], security },
     })

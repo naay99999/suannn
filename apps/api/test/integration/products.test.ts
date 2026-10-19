@@ -6,6 +6,7 @@ import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { InventoryReadRepository } from '../../src/modules/inventory/read-repository'
 import { MediaUrls } from '../../src/modules/media/urls'
+import { insertMediaAsset } from '../fixtures'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { ProductService } from '../../src/modules/products/service'
 import type { ProductActor } from '../../src/modules/products/types'
@@ -63,15 +64,7 @@ function serviceWith(audit = new AuditService(new AuditRepository(database.db)),
   return new ProductService(new ProductRepository(database.db, audit, new InventoryReadRepository(database.db), urls))
 }
 
-// Inserts a media_asset row directly; storage is not involved in product tests.
-async function uploadMedia(alt: string | null) {
-  const id = randomUUID()
-  await database.db.insert(mediaAsset).values({
-    id, storageKey: `media/${id}`, originalFilename: `${id}.jpg`, contentHash: id.replaceAll('-', '').repeat(2),
-    alt, width: 800, height: 600, byteSize: 1000, thumbByteSize: 100,
-  })
-  return id
-}
+const uploadMedia = (alt: string | null) => insertMediaAsset(database.db, { alt })
 
 async function createProduct(service: ProductService, slug = 'fresh-tomato') {
   return service.createProduct({

@@ -10,14 +10,16 @@ import { testEnv } from '../fixtures'
 
 const farmDetail = {
   id: '00000000-0000-4000-8000-000000000001', slug: 'suan-som', name: 'สวนส้ม', farmerName: 'คุณสม',
-  province: 'เชียงใหม่', district: null, summary: 'สวนผลไม้', coverImageUrl: 'https://example.test/farm.jpg',
-  coverImageAlt: 'สวนผลไม้', isDemo: true, story: 'เรื่องราวสวน', growingPractices: 'วิธีปลูก',
-  portraitImageUrl: null, portraitImageAlt: null,
+  province: 'เชียงใหม่', district: null, summary: 'สวนผลไม้', coverImage: {
+    id: '00000000-0000-4000-8000-0000000000aa', url: 'https://media.example.test/media/a/display.webp',
+    thumbUrl: 'https://media.example.test/media/a/thumb.webp', alt: 'สวนผลไม้', width: 800, height: 600,
+  }, isDemo: true, story: 'เรื่องราวสวน', growingPractices: 'วิธีปลูก',
+  portraitImage: null,
 }
 const page = { items: [{
   id: farmDetail.id, slug: farmDetail.slug, name: farmDetail.name, farmerName: farmDetail.farmerName,
   province: farmDetail.province, district: null, summary: farmDetail.summary,
-  coverImageUrl: farmDetail.coverImageUrl, coverImageAlt: farmDetail.coverImageAlt, isDemo: true,
+  coverImage: farmDetail.coverImage, isDemo: true,
 }], nextCursor: null }
 const config = loadConfig(testEnv)
 

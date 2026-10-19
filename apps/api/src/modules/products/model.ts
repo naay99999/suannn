@@ -15,10 +15,6 @@ const productSlug = t.String({ minLength: 1, maxLength: 100, pattern: '^[a-z0-9]
 const sku = t.String({ minLength: 1, maxLength: 64, pattern: '^[A-Z0-9._-]+$' })
 const inputSlug = t.String({ minLength: 1, maxLength: 100 })
 const inputSku = t.String({ minLength: 1, maxLength: 64 })
-const imageUrl = t.Union([
-  t.String({ minLength: 1, maxLength: 2048, format: 'uri', pattern: '^https://' }),
-  t.Null(),
-])
 
 const productIdentity = {
   id: uuid,
@@ -48,7 +44,7 @@ const productFarmRecord = t.Object({
   id: uuid, slug: t.String({ maxLength: 100 }), name: t.String({ maxLength: 160 }),
   farmerName: nullableString, province: nullableString, district: nullableString,
   summary: t.Union([t.String({ maxLength: 300 }), t.Null()]),
-  coverImageUrl: imageUrl, coverImageAlt: t.Union([t.String({ maxLength: 200 }), t.Null()]),
+  coverImage,
   isDemo: t.Boolean(), displayOrder: t.Integer({ minimum: 0, maximum: 19 }),
 }, { additionalProperties: false })
 

@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { auditLog, farm, product, productFarm } from '../../src/database/schema'
+import { auditLog, farm, product, productFarm, user } from '../../src/database/schema'
 import { AuditRepository } from '../../src/modules/audit/repository'
 import { AuditService } from '../../src/modules/audit/service'
 import { ProductRepository } from '../../src/modules/products/repository'
 import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDatabase } from '../helpers/database'
 import { MediaUrls } from '../../src/modules/media/urls'
+import { insertMediaAsset } from '../fixtures'
 
 const database = createTestDatabase()
 let unlockDatabase: (() => Promise<void>) | undefined
@@ -17,6 +18,11 @@ beforeAll(async () => {
   unlockDatabase = await lockTestDatabase(database)
   await resetTestDatabase(database)
   await migrateTestDatabase(database)
+  const now = new Date()
+  await database.db.insert(user).values({
+    id: actor.userId, name: 'Catalog Staff', email: 'product-farm-staff@example.test', emailVerified: true,
+    createdAt: now, updatedAt: now, accountType: 'staff', role: 'catalog_manager',
+  })
 })
 beforeEach(async () => {
   await database.db.delete(auditLog)
@@ -30,7 +36,7 @@ beforeEach(async () => {
 })
 afterAll(async () => { await unlockDatabase?.(); await database.client.end() })
 
-const repository = new ProductRepository(database.db, new AuditService(new AuditRepository(database.db)), { getSellableVariantIds: async () => new Set() }, new MediaUrls(null))
+const repository = new ProductRepository(database.db, new AuditService(new AuditRepository(database.db)), { getSellableVariantIds: async () => new Set() }, new MediaUrls('https://media.example.test'))
 
 describe('product farm associations', () => {
   it('replaces an ordered farm list atomically and exposes only published links publicly', async () => {
@@ -49,5 +55,14 @@ describe('product farm associations', () => {
     const links = await database.db.select().from(productFarm).where(eq(productFarm.productId, productId))
     expect(links).toHaveLength(1)
     expect(links[0]?.farmId).toBe(farmIds[1])
+  })
+
+  it('exposes linked farm cover images on admin product reads', async () => {
+    const cover = await insertMediaAsset(database.db, { alt: 'ปกสวน' })
+    await database.db.update(farm).set({ coverMediaId: cover }).where(eq(farm.id, farmIds[0]!))
+    await repository.replaceFarms(productId, farmIds, actor)
+    const admin = await repository.getAdminById(productId)
+    expect(admin.farms.map(item => item.coverImage?.id ?? null)).toEqual([cover, null])
+    expect(admin.farms[0]?.coverImage?.alt).toBe('ปกสวน')
   })
 })

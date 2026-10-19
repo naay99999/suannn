@@ -24,9 +24,7 @@ export function buildFarmDemoFixtures(actorId: string, now: Date): {
     id: farmIds[index]!, slug: definition.slug, name: definition.name, farmerName: definition.farmerName,
     province: definition.province, district: definition.district, summary: definition.summary,
     story: definition.story, growingPractices: definition.growingPractices,
-    coverImageUrl: `https://picsum.photos/seed/suannn-demo-farm-${index + 1}/1200/800`,
-    coverImageAlt: 'ภาพประกอบสวนสำหรับข้อมูลสาธิต ไม่ใช่ภาพถ่ายฟาร์มจริง',
-    portraitImageUrl: null, portraitImageAlt: null, status: 'published', isDemo: true,
+    status: 'published', isDemo: true,
     createdAt: now, updatedAt: now, publishedAt: now,
   }))
   const associations = [

@@ -381,7 +381,7 @@ export class ProductRepository {
       ...variant,
       canPurchase: sellableVariantIds.has(id),
     }))
-    const linkedFarms = await readProductFarms(this.db, row.id, true)
+    const linkedFarms = await readProductFarms(this.db, row.id, this.urls, true)
     const images = (await readProductImages(this.db, [row.id], this.urls)).get(row.id) ?? []
     return {
       ...row,
@@ -452,14 +452,14 @@ export class ProductRepository {
     const variants = await this.db.select(variantProjection).from(productVariant)
       .where(eq(productVariant.productId, id))
       .orderBy(asc(productVariant.displayOrder), asc(productVariant.id))
-    const farms = await readProductFarms(this.db, id)
+    const farms = await readProductFarms(this.db, id, this.urls)
     const images = (await readProductImages(this.db, [id], this.urls)).get(id) ?? []
     return { ...row, images, variants, farms }
   }
 
   replaceFarms(id: string, farmIds: string[], actor: ProductActor) {
     const normalizedIds = normalizeFarmIds(farmIds)
-    return this.transaction(tx => replaceProductFarms(tx, id, normalizedIds, actor, this.audit))
+    return this.transaction(tx => replaceProductFarms(tx, id, normalizedIds, actor, this.audit, this.urls))
   }
 
   private async transaction<T>(callback: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {

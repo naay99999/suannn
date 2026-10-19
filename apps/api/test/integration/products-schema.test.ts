@@ -168,4 +168,23 @@ describe('product and variant schema constraints', () => {
         .where(eq(product.id, '00000000-0000-4000-8000-000000000019'))
     })()).rejects.toThrow()
   })
+
+  it('drops product.image_url and keeps media tables with their delete rules', async () => {
+    const columns = await database.client.unsafe<{ column_name: string }[]>(
+      `select column_name from information_schema.columns where table_name = 'product'`)
+    const names = columns.map(row => row.column_name)
+    expect(names).not.toContain('image_url')
+    expect(names).not.toContain('image_alt')
+    const tables = await database.client.unsafe<{ table_name: string }[]>(
+      `select table_name from information_schema.tables where table_schema = 'public' and table_name in ('media_asset', 'product_image')`)
+    expect(tables.map(row => row.table_name).sort()).toEqual(['media_asset', 'product_image'])
+    const rules = await database.client.unsafe<{ constraint_name: string; delete_rule: string }[]>(
+      `select constraint_name, delete_rule from information_schema.referential_constraints
+       where constraint_name in ('product_image_product_id_product_id_fk', 'product_image_media_id_media_asset_id_fk', 'media_asset_created_by_user_id_fk')`)
+    expect(Object.fromEntries(rules.map(row => [row.constraint_name, row.delete_rule]))).toEqual({
+      product_image_product_id_product_id_fk: 'CASCADE',
+      product_image_media_id_media_asset_id_fk: 'RESTRICT',
+      media_asset_created_by_user_id_fk: 'SET NULL',
+    })
+  })
 })

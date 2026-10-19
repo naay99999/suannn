@@ -1,4 +1,5 @@
 import type { AuditContext } from '../audit/model'
+import type { MediaImage } from '../media/types'
 import type { CursorPage } from '../products/types'
 
 export type FarmStatus = 'draft' | 'published' | 'archived'
@@ -12,20 +13,17 @@ export interface CreateFarmInput {
   summary?: string | null
   story?: string | null
   growingPractices?: string | null
-  coverImageUrl?: string | null
-  coverImageAlt?: string | null
-  portraitImageUrl?: string | null
-  portraitImageAlt?: string | null
+  coverMediaId?: string | null
+  portraitMediaId?: string | null
 }
 export type UpdateFarmInput = Partial<Omit<CreateFarmInput, 'slug'>>
 export interface FarmSummary {
   id: string; slug: string; name: string; farmerName: string | null; province: string | null
-  district: string | null; summary: string | null; coverImageUrl: string | null
-  coverImageAlt: string | null; isDemo: boolean
+  district: string | null; summary: string | null; coverImage: MediaImage | null; isDemo: boolean
 }
 export interface FarmDetail extends FarmSummary {
   story: string | null; growingPractices: string | null
-  portraitImageUrl: string | null; portraitImageAlt: string | null
+  portraitImage: MediaImage | null
 }
 export interface AdminFarm extends FarmDetail {
   status: FarmStatus; createdAt: Date; updatedAt: Date

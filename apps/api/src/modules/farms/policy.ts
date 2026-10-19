@@ -3,10 +3,10 @@ import type { AdminFarm, CreateFarmInput, UpdateFarmInput } from './types'
 
 const textLimits = {
   name: 160, farmerName: 160, province: 100, district: 100, summary: 300,
-  story: 5000, growingPractices: 5000, coverImageAlt: 200, portraitImageAlt: 200,
+  story: 5000, growingPractices: 5000,
 } as const
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const createFields = ['slug', ...Object.keys(textLimits), 'coverImageUrl', 'portraitImageUrl']
+const createFields = ['slug', ...Object.keys(textLimits), 'coverMediaId', 'portraitMediaId']
 const updateFields = createFields.filter(field => field !== 'slug')
 
 function invalidFarm(): never { throw new DomainError('INVALID_FARM') }
@@ -20,14 +20,10 @@ function normalizeText(value: unknown, max: number, required = false): string | 
   return normalized || (required ? invalidFarm() : null)
 }
 
-function normalizeImage(value: unknown): string | null | undefined {
-  const normalized = normalizeText(value, 2048)
-  if (typeof normalized !== 'string') return normalized
-  try {
-    const url = new URL(normalized)
-    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return invalidFarm()
-  } catch { return invalidFarm() }
-  return normalized
+function normalizeMediaId(value: unknown): string | null | undefined {
+  if (value === undefined || value === null) return value
+  if (typeof value !== 'string' || !uuidPattern.test(value)) return invalidFarm()
+  return value.toLowerCase()
 }
 
 function assertFields(input: object, fields: string[]) {
@@ -43,40 +39,37 @@ function normalizeTextFields(input: object) {
   return result
 }
 
+function mediaFields(input: { coverMediaId?: unknown; portraitMediaId?: unknown }) {
+  const coverMediaId = normalizeMediaId(input.coverMediaId)
+  const portraitMediaId = normalizeMediaId(input.portraitMediaId)
+  return {
+    ...(coverMediaId !== undefined ? { coverMediaId } : {}),
+    ...(portraitMediaId !== undefined ? { portraitMediaId } : {}),
+  }
+}
+
 export function normalizeFarmCreate(input: CreateFarmInput): CreateFarmInput {
   assertFields(input, createFields)
   const slug = input.slug.trim().toLowerCase()
   if (slug.length > 100 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return invalidFarm()
   const name = normalizeText(input.name, textLimits.name, true) as string
-  const coverImageUrl = normalizeImage(input.coverImageUrl)
-  const portraitImageUrl = normalizeImage(input.portraitImageUrl)
-  if (portraitImageUrl && !input.portraitImageAlt?.trim()) return invalidFarm()
-  if (input.portraitImageAlt?.trim() && !portraitImageUrl) return invalidFarm()
-  return {
-    slug, name, ...normalizeTextFields(input),
-    ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
-    ...(portraitImageUrl !== undefined ? { portraitImageUrl } : {}),
-  } as CreateFarmInput
+  return { slug, name, ...normalizeTextFields(input), ...mediaFields(input) } as CreateFarmInput
 }
 
 export function normalizeFarmUpdate(input: UpdateFarmInput): UpdateFarmInput {
   assertFields(input, updateFields)
   if (!Object.keys(input).length) return invalidFarm()
-  const coverImageUrl = normalizeImage(input.coverImageUrl)
-  const portraitImageUrl = normalizeImage(input.portraitImageUrl)
-  if (portraitImageUrl && input.portraitImageAlt !== undefined && !input.portraitImageAlt?.trim()) return invalidFarm()
-  if (input.portraitImageAlt?.trim() && portraitImageUrl === null) return invalidFarm()
-  return {
-    ...normalizeTextFields(input),
-    ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
-    ...(portraitImageUrl !== undefined ? { portraitImageUrl } : {}),
-  } as UpdateFarmInput
+  return { ...normalizeTextFields(input), ...mediaFields(input) } as UpdateFarmInput
 }
 
-export function assertFarmPublishable(farm: AdminFarm): void {
+// Structural so the repository can check raw rows; an AdminFarm satisfies it.
+export type PublishableFarm = Pick<AdminFarm, 'name' | 'farmerName' | 'province' | 'summary' | 'story' | 'growingPractices'>
+  & { coverImage: { alt: string | null } | null; portraitImage: { alt: string | null } | null }
+
+export function assertFarmPublishable(farm: PublishableFarm): void {
   if (!farm.name.trim() || !farm.farmerName?.trim() || !farm.province?.trim() || !farm.summary?.trim()
-    || !farm.story?.trim() || !farm.growingPractices?.trim() || !farm.coverImageUrl?.startsWith('https://')
-    || !farm.coverImageAlt?.trim() || (farm.portraitImageUrl && !farm.portraitImageAlt?.trim())) return invalidFarm()
+    || !farm.story?.trim() || !farm.growingPractices?.trim() || !farm.coverImage?.alt?.trim()
+    || (farm.portraitImage && !farm.portraitImage.alt?.trim())) return invalidFarm()
 }
 
 export function normalizeFarmIds(ids: string[]): string[] {

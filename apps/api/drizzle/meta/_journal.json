@@ -211,6 +211,13 @@
       "when": 1792395932063,
       "tag": "0032_media_library",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792397196708,
+      "tag": "0033_drop_legacy_image_urls",
+      "breakpoints": true
     }
   ]
 }
