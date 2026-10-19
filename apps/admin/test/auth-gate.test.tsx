@@ -115,6 +115,18 @@ test('rechecks staff access before showing another protected page', async () => 
   expect(sessionRequests).toBeGreaterThanOrEqual(2)
 })
 
+test('keeps the page mounted when only the query string changes', async () => {
+  sessionRequests = 0
+  sessionResult = async () => staffSession
+  const { router } = renderRoute('/orders')
+  const content = await screen.findByText('Orders content')
+  const requestsAfterLoad = sessionRequests
+  await act(async () => { await router.navigate('/orders?sort=totalSatang&order=desc') })
+  expect(screen.queryByText('Checking staff access…')).toBeNull()
+  expect(screen.getByText('Orders content')).toBe(content)
+  expect(sessionRequests).toBe(requestsAfterLoad)
+})
+
 test('offers retry for a temporary onboarding status failure', async () => {
   sessionResult = async () => ({ ...staffSession, staff: undefined })
   onboardingResult = async () => { throw Object.assign(new Error('offline'), { status: 0 }) }

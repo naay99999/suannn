@@ -1,4 +1,4 @@
-import { ArrowLeft01Icon, ArrowLeftDoubleIcon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, ArrowLeft01Icon, ArrowLeftDoubleIcon, ArrowRight01Icon, ArrowUp01Icon, ArrowUpDownIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   FlexRender,
@@ -12,11 +12,25 @@ import { Button } from '@workspace/ui/components/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@workspace/ui/components/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@workspace/ui/components/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@workspace/ui/components/table'
+import { cn } from '@workspace/ui/lib/utils'
 import { apiErrorMessage } from '@/lib/api-result'
 import { QueryState } from './query-state'
 
 const features = tableFeatures({})
 export type ServerDataTableFeatures = typeof features
+
+export type SortDirection = 'asc' | 'desc'
+
+// Server-side sorting: the server orders the whole result set, so the cursor must follow the sort.
+export type ServerDataTableSorting = {
+  field: string
+  direction: SortDirection
+  // Sortable column ids mapped to the direction applied on their first click.
+  columns: Record<string, { initialDirection: SortDirection; align?: 'end' }>
+  onChange: (field: string, direction: SortDirection) => void
+  // Called on hover/focus with the sort a click would apply, so callers can prefetch it.
+  onIntent?: (field: string, direction: SortDirection) => void
+}
 
 type ServerDataTableProps<TData extends RowData> = {
   columns: ColumnDef<ServerDataTableFeatures, TData>[]
@@ -28,6 +42,7 @@ type ServerDataTableProps<TData extends RowData> = {
   onRetry: () => void
   emptyTitle: string
   emptyDescription: string
+  sorting?: ServerDataTableSorting
   pagination: {
     limit: number
     nextCursor: string | null
@@ -50,6 +65,7 @@ export function ServerDataTable<TData extends RowData>({
   onRetry,
   emptyTitle,
   emptyDescription,
+  sorting,
   pagination,
 }: ServerDataTableProps<TData>) {
   const table = useTable({ features, data, columns, getRowId })
@@ -59,17 +75,50 @@ export function ServerDataTable<TData extends RowData>({
 
   return (
     <div aria-busy={isRefreshing} className="flex flex-col gap-4">
-      {isRefreshing && <p aria-live="polite" className="text-sm text-muted-foreground" role="status">กำลังอัปเดตข้อมูล...</p>}
-      <div className="overflow-hidden rounded-lg border">
+      <p aria-live="polite" className="sr-only" role="status">{isRefreshing ? 'กำลังอัปเดตข้อมูล...' : ''}</p>
+      <div className={cn('overflow-hidden rounded-lg border transition-opacity duration-150', isRefreshing && 'opacity-60')}>
         <Table>
           <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : <FlexRender header={header} />}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  const sortable = header.isPlaceholder ? undefined : sorting?.columns[header.column.id]
+                  if (!sorting || !sortable) {
+                    return (
+                      <TableHead key={header.id} colSpan={header.colSpan}>
+                        {header.isPlaceholder ? null : <FlexRender header={header} />}
+                      </TableHead>
+                    )
+                  }
+                  const active = sorting.field === header.column.id
+                  const nextDirection = active
+                    ? sorting.direction === 'asc' ? 'desc' : 'asc'
+                    : sortable.initialDirection
+                  return (
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      aria-sort={active ? sorting.direction === 'asc' ? 'ascending' : 'descending' : 'none'}
+                      className={cn(sortable.align === 'end' && 'text-right')}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(sortable.align === 'end' ? '-mr-2.5' : '-ml-2.5', active ? 'text-foreground' : 'text-muted-foreground')}
+                        onClick={() => sorting.onChange(header.column.id, nextDirection)}
+                        onPointerEnter={() => sorting.onIntent?.(header.column.id, nextDirection)}
+                        onFocus={() => sorting.onIntent?.(header.column.id, nextDirection)}
+                      >
+                        <FlexRender header={header} />
+                        <HugeiconsIcon
+                          data-icon="inline-end"
+                          icon={active ? sorting.direction === 'asc' ? ArrowUp01Icon : ArrowDown01Icon : ArrowUpDownIcon}
+                          strokeWidth={2}
+                        />
+                      </Button>
+                    </TableHead>
+                  )
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -103,7 +152,7 @@ export function ServerDataTable<TData extends RowData>({
           <Button aria-label="ไปหน้าก่อนหน้า" disabled={!pagination.canPrevious} onClick={pagination.onPrevious} size="icon" variant="outline">
             <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
           </Button>
-          <Button aria-label="ไปหน้าถัดไป" disabled={!pagination.nextCursor} onClick={() => pagination.nextCursor && pagination.onNext(pagination.nextCursor)} size="icon" variant="outline">
+          <Button aria-label="ไปหน้าถัดไป" disabled={!pagination.nextCursor || isRefreshing} onClick={() => pagination.nextCursor && pagination.onNext(pagination.nextCursor)} size="icon" variant="outline">
             <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
           </Button>
         </div>

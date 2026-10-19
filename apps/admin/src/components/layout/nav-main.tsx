@@ -23,7 +23,7 @@ export function NavMain({ items }: { items: NavigationItem[] }) {
   return (
     <SidebarGroup>
       <SidebarGroupContent>
-        <SidebarMenu aria-label="Admin navigation">
+        <SidebarMenu aria-label="เมนูหลัก">
           {items.map((item) => {
             const isActive = item.url === '/'
               ? pathname === '/'

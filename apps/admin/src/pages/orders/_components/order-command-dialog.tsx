@@ -4,6 +4,7 @@ import { Textarea } from '@workspace/ui/components/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@workspace/ui/components/dialog'
 import type { OrderCommand } from '@/lib/orders/api'
 import { carrierLabels, trackingNumberPattern, type Carrier } from '@/lib/orders/shipment'
+import { fulfillmentActionLabels, orderStatusLabels } from '@/lib/orders/labels'
 
 const titles: Record<OrderCommand['kind'], string> = { fulfillment: 'อัปเดตการจัดส่ง', cancel: 'ยกเลิกคำสั่งซื้อ', collectCod: 'บันทึกรับเงินปลายทาง', refund: 'ขอคืนเงินเต็มจำนวน', reissue: 'ส่งลิงก์ติดตามใหม่', revoke: 'เพิกถอนลิงก์ติดตาม', issueReceipt: 'ออกใบเสร็จ', cancelReceipt: 'ยกเลิกใบเสร็จ' }
 
@@ -37,7 +38,7 @@ export function OrderCommandDialog({ open, kind, totalSatang, nextStatus, pendin
       : kind === 'cancelReceipt' ? { kind, reason: receiptReason.trim() }
       : kind === 'reissue' || kind === 'revoke' ? { kind, reasonCode }
         : { kind }
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{titles[kind]}?</DialogTitle><DialogDescription>{kind === 'cancel' ? 'การยกเลิกจะคืนสต็อกที่จัดสรรไว้ หากรับเงิน Stripe แล้ว ต้องขอคืนเงินแยกต่างหาก' : kind === 'refund' ? 'ระบบจะส่งคำขอคืนเงินเต็มจำนวนไปยัง Stripe; สถานะสำเร็จจะแสดงเมื่อผู้ให้บริการยืนยัน' : kind === 'collectCod' ? 'ยืนยันยอดรับชำระเท่ากับยอดคำสั่งซื้อพอดี' : kind === 'issueReceipt' ? 'ระบบจะออกใบเสร็จตามข้อมูลผู้ขายในหน้า Settings' : kind === 'cancelReceipt' ? 'ใบเสร็จจะถูกทำเครื่องหมายยกเลิก และเลขที่ใบเสร็จจะไม่ถูกใช้ซ้ำ' : 'ตรวจสอบสถานะคำสั่งซื้อก่อนยืนยันการดำเนินการ'}</DialogDescription></DialogHeader>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{kind === 'fulfillment' && nextStatus ? fulfillmentActionLabels[nextStatus] : titles[kind]}?</DialogTitle><DialogDescription>{kind === 'cancel' ? 'การยกเลิกจะคืนสต็อกที่จัดสรรไว้ หากรับเงิน Stripe แล้ว ต้องขอคืนเงินแยกต่างหาก' : kind === 'refund' ? 'ระบบจะส่งคำขอคืนเงินเต็มจำนวนไปยัง Stripe; สถานะสำเร็จจะแสดงเมื่อผู้ให้บริการยืนยัน' : kind === 'collectCod' ? 'ยืนยันยอดรับชำระเท่ากับยอดคำสั่งซื้อพอดี' : kind === 'issueReceipt' ? 'ระบบจะออกใบเสร็จตามข้อมูลผู้ขายในหน้า Settings' : kind === 'cancelReceipt' ? 'ใบเสร็จจะถูกทำเครื่องหมายยกเลิก และเลขที่ใบเสร็จจะไม่ถูกใช้ซ้ำ' : kind === 'fulfillment' && nextStatus ? `สถานะคำสั่งซื้อจะเปลี่ยนเป็น “${orderStatusLabels[nextStatus].label}”${nextStatus === 'shipped' ? ' กรอกข้อมูลพัสดุเพื่อให้ลูกค้าติดตามได้' : ''}` : 'ตรวจสอบสถานะคำสั่งซื้อก่อนยืนยันการดำเนินการ'}</DialogDescription></DialogHeader>
     {(kind === 'reissue' || kind === 'revoke') && <label className="grid gap-2 text-sm">เหตุผล<select className="h-10 rounded-md border bg-background px-3" value={reasonCode} onChange={event => setReasonCode(event.target.value as typeof reasonCode)}><option value="support_recovery">ช่วยเหลือการเข้าถึง</option><option value="customer_request">ลูกค้าร้องขอ</option><option value="suspected_compromise">สงสัยว่าบัญชีถูกเข้าถึง</option></select></label>}
     {kind === 'cancelReceipt' && <label className="grid gap-2 text-sm">เหตุผลในการยกเลิกใบเสร็จ<Textarea value={receiptReason} maxLength={300} aria-invalid={reasonInvalid} onChange={event => setReceiptReason(event.target.value)} /></label>}
     {needsShipment && <div className="grid gap-4">

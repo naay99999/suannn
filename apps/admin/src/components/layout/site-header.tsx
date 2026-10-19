@@ -2,13 +2,20 @@ import { useLocation } from 'react-router'
 import { Separator } from '@workspace/ui/components/separator'
 import { SidebarTrigger } from '@workspace/ui/components/sidebar'
 
+const sectionTitles = [
+  ['/dashboard', 'ภาพรวม'],
+  ['/orders', 'คำสั่งซื้อ'],
+  ['/products', 'สินค้า'],
+  ['/farms', 'ฟาร์ม'],
+  ['/inventory', 'สต็อก'],
+  ['/customers', 'ลูกค้า'],
+  ['/audit', 'บันทึกกิจกรรม'],
+  ['/settings', 'ตั้งค่า'],
+] as const
+
 export function SiteHeader() {
   const { pathname } = useLocation()
-  const title = pathname === '/products' || pathname.startsWith('/products/')
-    ? 'สินค้า'
-    : pathname === '/inventory' || pathname.startsWith('/inventory/')
-      ? 'สต็อก'
-      : ({ '/dashboard': 'Dashboard', '/orders': 'Orders', '/customers': 'Customers', '/settings': 'Settings' } as Record<string, string>)[pathname] ?? 'Admin'
+  const title = sectionTitles.find(([url]) => pathname === url || pathname.startsWith(`${url}/`))?.[1] ?? 'Admin'
 
   return (
     <header className='flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)'>

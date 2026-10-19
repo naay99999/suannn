@@ -32,15 +32,15 @@ import {
 } from '@workspace/ui/components/sidebar'
 
 const navigation = [
-  { title: 'Dashboard', url: '/dashboard', icon: DashboardSquare01Icon },
-  { title: 'Orders', url: '/orders', icon: DeliveryBox01Icon, permission: 'order:read' },
+  { title: 'ภาพรวม', url: '/dashboard', icon: DashboardSquare01Icon },
+  { title: 'คำสั่งซื้อ', url: '/orders', icon: DeliveryBox01Icon, permission: 'order:read' },
   { title: 'สินค้า', url: '/products', icon: ShoppingBag01Icon, permission: 'catalog:read' },
   { title: 'ฟาร์ม', url: '/farms', icon: Plant02Icon, permission: 'catalog:read' },
   { title: 'คลังภาพ', url: '/media', icon: Image01Icon, permission: 'catalog:read' },
   { title: 'สต็อก', url: '/inventory', icon: WarehouseIcon, permission: 'inventory:read' },
-  { title: 'Customers', url: '/customers', icon: UserListIcon },
+  { title: 'ลูกค้า', url: '/customers', icon: UserListIcon },
   { title: 'บันทึกกิจกรรม', url: '/audit', icon: Audit01Icon, permission: 'audit:read' },
-  { title: 'Settings', url: '/settings', icon: SettingsIcon },
+  { title: 'ตั้งค่า', url: '/settings', icon: SettingsIcon },
 ]
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
@@ -80,7 +80,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton className="cursor-pointer">
                 <HugeiconsIcon icon={CustomerSupportIcon} strokeWidth={2} />
-                <span>Support</span>
+                <span>ช่วยเหลือ</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             {session?.staff && <SidebarMenuItem><StaffAccountMenu session={session} /></SidebarMenuItem>}

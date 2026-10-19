@@ -47,7 +47,8 @@ function nullable(value: string) {
 
 export function parseReceiptSettings(values: ReceiptSettingsFormValues): ReceiptSettingsInput {
   const taxId = values.taxId.replace(/[\s-]/g, '')
-  if (taxId && !isValidThaiTaxId(taxId)) throw new Error('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง ต้องเป็นตัวเลข 13 หลัก')
+  if (taxId && !/^[0-9]{13}$/.test(taxId)) throw new Error('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก')
+  if (taxId && !isValidThaiTaxId(taxId)) throw new Error('เลขประจำตัวผู้เสียภาษีไม่ถูกต้อง กรุณาตรวจสอบตัวเลขอีกครั้ง (หลักสุดท้ายไม่ตรงกับเลขตรวจสอบ)')
   let branch: string | null = headOfficeBranch
   if (values.branchKind === 'branch') {
     branch = values.branchCode.trim()

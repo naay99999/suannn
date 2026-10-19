@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { Add01Icon, Archive02Icon, ArrowDown01Icon, PencilEdit02Icon, WarehouseIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@workspace/ui/components/badge'
@@ -21,7 +21,7 @@ import { catalogKeys, invalidateCatalog, productQuery } from '@/lib/catalog/quer
 import { toast } from '@workspace/ui/components/toast'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { ProductForm } from './_components/product-form'
-import { ProductHeaderActions, PublicationChecklist, ConfirmActionDialog } from './_components/product-actions'
+import { ConfirmActionDialog } from './_components/product-actions'
 import { VariantDialog } from './_components/variant-dialog'
 import { ProductFarms } from './_components/product-farms'
 import { IconTooltip } from './_components/icon-tooltip'
@@ -43,9 +43,9 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const canUpdate = hasPermission(session, 'catalog:update')
   const canCreate = hasPermission(session, 'catalog:create')
   const canDelete = hasPermission(session, 'catalog:delete')
+  const canPublish = hasPermission(session, 'catalog:publish')
   const canReadInventory = hasPermission(session, 'inventory:read')
   const productArchived = product.status === 'archived'
-  const canEditProduct = canUpdate && !productArchived
   const canAddVariant = canCreate && !productArchived
   const [productDirty, setProductDirty] = useState(false)
   const [variantDialogOpen, setVariantDialogOpen] = useState(false)
@@ -55,7 +55,13 @@ function ProductDetail({ product }: { product: ProductDetail }) {
   const [variantBeingArchived, setVariantBeingArchived] = useState<Variant | null>(null)
   const [variantError, setVariantError] = useState<string | null>(null)
   const [showArchivedVariants, setShowArchivedVariants] = useState(false)
-  const unsavedConfirmation = useUnsavedChanges(productDirty || variantDirty)
+  const [leaving, setLeaving] = useState(false)
+  const navigate = useNavigate()
+  const unsavedConfirmation = useUnsavedChanges(!leaving && (productDirty || variantDirty))
+  // Runs after the blocker effects inside useUnsavedChanges, so the archived product can leave unblocked.
+  useEffect(() => {
+    if (leaving) navigate('/products')
+  }, [leaving, navigate])
   const orderedVariants = [...product.variants].sort((left, right) => left.displayOrder - right.displayOrder)
   const activeVariants = orderedVariants.filter((variant) => !variant.archivedAt)
   const archivedVariants = orderedVariants.filter((variant) => variant.archivedAt)
@@ -175,88 +181,82 @@ function ProductDetail({ product }: { product: ProductDetail }) {
             </div>
             {product.englishName && <p className="text-muted-foreground">{product.englishName}</p>}
           </div>
-          <ProductHeaderActions formDirty={productDirty} product={product} />
         </div>
       </header>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="flex min-w-0 flex-col gap-6">
-            <ProductForm
-              mode="edit"
-              onDirtyChange={setProductDirty}
-              product={product}
-              readOnlyReason={productArchived ? 'สินค้านี้ถูกเก็บถาวรแล้ว จึงแก้ไขข้อมูลไม่ได้' : !canUpdate ? 'บัญชีนี้ดูข้อมูลสินค้าได้อย่างเดียว' : undefined}
-            />
+      <ProductForm
+        mode="edit"
+        onDirtyChange={setProductDirty}
+        product={product}
+        readOnlyReason={productArchived ? 'สินค้านี้ถูกเก็บถาวรแล้ว จึงแก้ไขข้อมูลไม่ได้' : !canUpdate ? 'บัญชีนี้ดูข้อมูลสินค้าได้อย่างเดียว' : undefined}
+        canPublish={canPublish}
+        canArchive={canDelete}
+        onAddVariant={canAddVariant ? () => openVariantDialog(null) : undefined}
+        onArchived={() => setLeaving(true)}
+        main={<>
+          <Card aria-labelledby="product-variants-title" role="region">
+            <CardHeader>
+              <CardTitle><h2 id="product-variants-title">รูปแบบสินค้า</h2></CardTitle>
+              <CardDescription>SKU เปลี่ยนไม่ได้หลังสร้าง และรูปแบบที่เก็บถาวรยังคงแสดงในประวัติสินค้า</CardDescription>
+              {canAddVariant && <CardAction>
+                <Button onClick={() => openVariantDialog(null)} size="sm">
+                  <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} strokeWidth={2} />
+                  เพิ่มรูปแบบสินค้า
+                </Button>
+              </CardAction>}
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 px-0">
+              {variantError && <p aria-live="assertive" className="px-(--card-spacing) text-sm text-destructive" role="alert">{variantError}</p>}
+              <div className="overflow-x-auto border-y">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="pl-(--card-spacing)">SKU</TableHead>
+                      <TableHead>ชื่อรูปแบบ</TableHead>
+                      <TableHead>หน่วย · อายุขั้นต่ำ</TableHead>
+                      <TableHead className="text-right">ราคา</TableHead>
+                      <TableHead>การขาย</TableHead>
+                      <TableHead className="pr-(--card-spacing)"><span className="sr-only">การดำเนินการ</span></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="[&_td:first-child]:pl-(--card-spacing) [&_td:last-child]:pr-(--card-spacing)">
+                    {orderedVariants.length > 0
+                      ? <>
+                        {activeVariants.map(variantRow)}
+                        {archivedVariants.length > 0 && activeVariants.length > 0 && <TableRow className="hover:bg-transparent">
+                          <TableCell className="py-1" colSpan={6}>
+                            <Button aria-controls="archived-variant-rows" aria-expanded={archivedVisible} className="-ml-2 text-muted-foreground" onClick={() => setShowArchivedVariants((value) => !value)} size="sm" variant="ghost">
+                              <HugeiconsIcon className={cn('transition-transform', !archivedVisible && '-rotate-90')} data-icon="inline-start" icon={ArrowDown01Icon} strokeWidth={2} />
+                              เก็บถาวรแล้ว ({archivedVariants.length})
+                            </Button>
+                          </TableCell>
+                        </TableRow>}
+                        {archivedVisible && archivedVariants.map(variantRow)}
+                      </>
+                      : <TableRow><TableCell className="p-0" colSpan={6}><Empty className="min-h-32 border-0"><EmptyHeader><EmptyTitle>ยังไม่มีรูปแบบสินค้า</EmptyTitle><EmptyDescription>เพิ่มรูปแบบสินค้าเพื่อกำหนด SKU หน่วย และราคา</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card aria-labelledby="product-variants-title" role="region">
-              <CardHeader>
-                <CardTitle><h2 id="product-variants-title">รูปแบบสินค้า</h2></CardTitle>
-                <CardDescription>SKU เปลี่ยนไม่ได้หลังสร้าง และรูปแบบที่เก็บถาวรยังคงแสดงในประวัติสินค้า</CardDescription>
-                {canAddVariant && <CardAction>
-                  <Button onClick={() => openVariantDialog(null)} size="sm">
-                    <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} strokeWidth={2} />
-                    เพิ่มรูปแบบสินค้า
-                  </Button>
-                </CardAction>}
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 px-0">
-                {variantError && <p aria-live="assertive" className="px-(--card-spacing) text-sm text-destructive" role="alert">{variantError}</p>}
-                <div className="overflow-x-auto border-y">
-                  <Table>
-                    <TableHeader className="bg-muted/50">
-                      <TableRow>
-                        <TableHead className="pl-(--card-spacing)">SKU</TableHead>
-                        <TableHead>ชื่อรูปแบบ</TableHead>
-                        <TableHead>หน่วย · อายุขั้นต่ำ</TableHead>
-                        <TableHead className="text-right">ราคา</TableHead>
-                        <TableHead>การขาย</TableHead>
-                        <TableHead className="pr-(--card-spacing)"><span className="sr-only">การดำเนินการ</span></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="[&_td:first-child]:pl-(--card-spacing) [&_td:last-child]:pr-(--card-spacing)">
-                      {orderedVariants.length > 0
-                        ? <>
-                          {activeVariants.map(variantRow)}
-                          {archivedVariants.length > 0 && activeVariants.length > 0 && <TableRow className="hover:bg-transparent">
-                            <TableCell className="py-1" colSpan={6}>
-                              <Button aria-controls="archived-variant-rows" aria-expanded={archivedVisible} className="-ml-2 text-muted-foreground" onClick={() => setShowArchivedVariants((value) => !value)} size="sm" variant="ghost">
-                                <HugeiconsIcon className={cn('transition-transform', !archivedVisible && '-rotate-90')} data-icon="inline-start" icon={ArrowDown01Icon} strokeWidth={2} />
-                                เก็บถาวรแล้ว ({archivedVariants.length})
-                              </Button>
-                            </TableCell>
-                          </TableRow>}
-                          {archivedVisible && archivedVariants.map(variantRow)}
-                        </>
-                        : <TableRow><TableCell className="p-0" colSpan={6}><Empty className="min-h-32 border-0"><EmptyHeader><EmptyTitle>ยังไม่มีรูปแบบสินค้า</EmptyTitle><EmptyDescription>เพิ่มรูปแบบสินค้าเพื่อกำหนด SKU หน่วย และราคา</EmptyDescription></EmptyHeader></Empty></TableCell></TableRow>}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-
-            <ProductFarms product={product} />
-          </div>
-
-          <aside aria-label="ข้อมูลสรุปสินค้า" className="flex flex-col gap-6">
-            <PublicationChecklist
-              onAddVariant={canAddVariant ? () => openVariantDialog(null) : undefined}
-              canEdit={canEditProduct}
-              product={product}
-            />
-            <Card aria-labelledby="product-meta-title" role="region" size="sm">
-              <CardHeader>
-                <CardTitle><h2 id="product-meta-title">ประวัติ</h2></CardTitle>
-              </CardHeader>
-              <CardContent>
-                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-                  <MetaField label="สร้างเมื่อ" value={formatTimestamp(product.createdAt)} />
-                  {product.publishedAt && <MetaField label="เผยแพร่เมื่อ" value={formatTimestamp(product.publishedAt)} />}
-                  <MetaField label="แก้ไขล่าสุด" value={formatTimestamp(product.updatedAt)} />
-                </dl>
-              </CardContent>
-            </Card>
-          </aside>
-        </div>
+          <ProductFarms product={product} />
+        </>}
+        aside={
+          <Card aria-labelledby="product-meta-title" role="region" size="sm">
+            <CardHeader>
+              <CardTitle><h2 id="product-meta-title">ประวัติ</h2></CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+                <MetaField label="สร้างเมื่อ" value={formatTimestamp(product.createdAt)} />
+                {product.publishedAt && <MetaField label="เผยแพร่เมื่อ" value={formatTimestamp(product.publishedAt)} />}
+                <MetaField label="แก้ไขล่าสุด" value={formatTimestamp(product.updatedAt)} />
+              </dl>
+            </CardContent>
+          </Card>
+        }
+      />
 
       {variantDialogOpen && <VariantDialog
         latestProductStatus={product.status}
@@ -314,7 +314,7 @@ function ProductDetailSkeleton() {
           <Skeleton className="h-40 w-full rounded-surface" />
         </div>
         <div className="flex flex-col gap-6">
-          <Skeleton className="aspect-square w-full rounded-surface" />
+          <Skeleton className="h-72 w-full rounded-surface" />
           <Skeleton className="h-48 w-full rounded-surface" />
         </div>
       </div>

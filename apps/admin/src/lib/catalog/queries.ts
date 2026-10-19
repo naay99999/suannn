@@ -1,4 +1,4 @@
-import { queryOptions, type QueryClient } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions, type QueryClient } from '@tanstack/react-query'
 import { catalogApi, type CatalogListInput } from './api'
 
 export const catalogKeys = {
@@ -12,6 +12,8 @@ export function productsQuery(query: CatalogListInput) {
   return queryOptions({
     queryKey: catalogKeys.list(query),
     queryFn: () => catalogApi.list(query),
+    // Keep the current rows on screen while another filter, sort, or page loads, instead of flashing a skeleton.
+    placeholderData: keepPreviousData,
   })
 }
 

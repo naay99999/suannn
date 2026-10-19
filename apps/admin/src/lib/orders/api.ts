@@ -28,6 +28,12 @@ const revokeDelayMs = 10_000
 export function createOrdersApi(client: ApiClient = api, options: { fetcher?: typeof fetch; baseUrl?: string } = {}) {
   const fetcher = options.fetcher ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init))
   const baseUrl = options.baseUrl ?? resolveApiUrl(import.meta.env.VITE_API_URL, import.meta.env.PROD)
+  async function fetchReceipt(orderId: string) {
+    const response = await fetcher(`${baseUrl}/api/v1/admin/orders/${encodeURIComponent(orderId)}/receipt.pdf`, { credentials: 'include' })
+    if (!response.ok) throw new ApiRequestError(response.status, 'RECEIPT_DOWNLOAD_FAILED', 'โหลดใบเสร็จไม่ได้')
+    // Pin the type so the browser's built-in viewer renders the blob instead of downloading it.
+    return new Blob([await response.blob()], { type: 'application/pdf' })
+  }
   return {
     list: (query?: OrderListInput) => apiRequest(async () => apiData(await client.admin.orders.get({ query })) as OrderPage),
     get: (orderId: string) => apiRequest(async () => apiData(await client.admin.orders({ orderId }).get()) as OrderDetail),
@@ -44,25 +50,32 @@ export function createOrdersApi(client: ApiClient = api, options: { fetcher?: ty
         case 'revoke': return apiData(await route['guest-access'].revoke.post({ reasonCode: command.reasonCode }, { headers: { 'idempotency-key': key } })) as OrderDetail
       }
     }),
-    downloadReceipt: (orderId: string, receiptNumber: string) => apiRequest(async () => {
-      const response = await fetcher(`${baseUrl}/api/v1/admin/orders/${encodeURIComponent(orderId)}/receipt.pdf`, { credentials: 'include' })
-      if (!response.ok) throw new ApiRequestError(response.status, 'RECEIPT_DOWNLOAD_FAILED', 'ดาวน์โหลดใบเสร็จไม่ได้')
-      const url = URL.createObjectURL(await response.blob())
-      try {
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = `${receiptNumber}.pdf`
-        document.body.appendChild(anchor)
-        anchor.click()
-        anchor.remove()
-      } catch (error) {
-        URL.revokeObjectURL(url)
-        throw error
-      }
-      // Revoking synchronously can cancel the download in Firefox and Safari.
-      setTimeout(() => URL.revokeObjectURL(url), revokeDelayMs)
-    }),
+    fetchReceipt: (orderId: string) => apiRequest(() => fetchReceipt(orderId)),
+    downloadReceipt: (orderId: string, receiptNumber: string) => apiRequest(async () => saveReceipt(await fetchReceipt(orderId), receiptNumber)),
   }
+}
+
+export function saveReceipt(blob: Blob, receiptNumber: string) {
+  const url = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${receiptNumber}.pdf`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } catch (error) {
+    URL.revokeObjectURL(url)
+    throw error
+  }
+  // Revoking synchronously can cancel the download in Firefox and Safari.
+  setTimeout(() => URL.revokeObjectURL(url), revokeDelayMs)
+}
+
+export function openReceipt(blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener')
+  setTimeout(() => URL.revokeObjectURL(url), revokeDelayMs)
 }
 
 export const ordersApi = createOrdersApi()

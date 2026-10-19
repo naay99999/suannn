@@ -97,7 +97,17 @@ export const router = createBrowserRouter([
             element: <PermissionGate permission="audit:read" />,
             children: [{ index: true, lazy: () => import('./pages/audit/audit-page') }],
           },
-          { path: 'customers', lazy: () => import('./pages/customers/customers-page') },
+          {
+            path: 'customers',
+            children: [
+              { index: true, lazy: () => import('./pages/customers/customers-page') },
+              {
+                path: ':customerId',
+                element: <PermissionGate permission="customer:read" />,
+                children: [{ index: true, lazy: () => import('./pages/customers/customer-detail-page') }],
+              },
+            ],
+          },
           { path: 'settings', lazy: () => import('./pages/settings/system-settings-page') },
         ],
       },

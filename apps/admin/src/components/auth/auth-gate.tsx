@@ -27,8 +27,10 @@ export function AuthGate({ allow }: { allow: 'active' | 'onboarding' }) {
   const location = useLocation()
   const sessionQuery = useQuery(authSessionQuery)
   const { refetch: refetchSession } = sessionQuery
-  const [checkedLocationKey, setCheckedLocationKey] = useState(location.key)
-  const routeNeedsCheck = allow === 'active' && location.key !== checkedLocationKey
+  // Recheck before showing another page, but not when only the query string changes
+  // (sorting, paging, filters): blocking those would unmount the whole admin layout.
+  const [checkedPathname, setCheckedPathname] = useState(location.pathname)
+  const routeNeedsCheck = allow === 'active' && location.pathname !== checkedPathname
   const state = classifySession(sessionQuery.data ?? null)
   const onboardingQuery = useQuery({
     queryKey: ['auth', 'onboarding', sessionQuery.data?.session.id],
@@ -41,10 +43,10 @@ export function AuthGate({ allow }: { allow: 'active' | 'onboarding' }) {
     if (!routeNeedsCheck) return
     let current = true
     void refetchSession().then(() => {
-      if (current) setCheckedLocationKey(location.key)
+      if (current) setCheckedPathname(location.pathname)
     })
     return () => { current = false }
-  }, [location.key, routeNeedsCheck, refetchSession])
+  }, [location.pathname, routeNeedsCheck, refetchSession])
 
   if (sessionQuery.isPending || routeNeedsCheck) {
     return <main className="grid min-h-svh place-items-center text-muted-foreground">Checking staff access…</main>
