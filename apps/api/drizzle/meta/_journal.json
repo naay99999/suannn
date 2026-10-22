@@ -239,6 +239,13 @@
       "when": 1792397196708,
       "tag": "0033_drop_legacy_image_urls",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792653216852,
+      "tag": "0034_wooden_hellcat",
+      "breakpoints": true
     }
   ]
 }
