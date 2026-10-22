@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import type { ReactNode } from 'react'
 import { authSessionQuery } from '../src/lib/auth-session'
-import { storeProductDetailQueryKey, type StoreProductDetail, type StoreProductPage } from '../src/lib/store-products'
+import * as tracker from '../src/lib/tracking/tracker'
+import type { BrowserEvent } from '../src/lib/tracking/events'
+import { formatStorePrice, storeProductDetailQueryKey, type StoreProductDetail, type StoreProductPage } from '../src/lib/store-products'
 import type { StoreCartDetail } from '../src/lib/store-cart'
 import { CartProvider } from '../src/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '../src/components/cart/side-cart'
@@ -293,6 +295,47 @@ test('detail moves a former slug to the product\'s current slug and keeps the qu
   expect(router.state.location.search).toBe('?ref=line')
   expect(requests.filter(({ url }) => url.pathname.endsWith('/store/products/mango'))).toHaveLength(0)
   expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(`${window.location.origin}/products/mango`)
+})
+
+const variantSelect = () => screen.getByLabelText('ตัวเลือกสินค้า') as HTMLSelectElement
+
+test('detail preselects the variant named by ?variant= and shows its price', async () => {
+  mount(<CatalogPage />, `/products/mango?variant=${mango.variants[1]!.id}`)
+  await screen.findByRole('heading', { level: 1, name: mango.name })
+  expect(variantSelect().value).toBe(mango.variants[1]!.id)
+  expect(screen.getAllByText(formatStorePrice(mango.variants[1]!.priceSatang)).length).toBeGreaterThan(0)
+})
+
+test('detail falls back to the default variant for unknown or foreign ?variant= ids', async () => {
+  for (const id of ['unknown', jam.variants[0]!.id]) {
+    const router = mount(<CatalogPage />, `/products/mango?variant=${id}`)
+    await screen.findByRole('heading', { level: 1, name: mango.name })
+    expect(variantSelect().value).toBe(mango.variants[0]!.id)
+    expect(router.state.location.search).toBe(`?variant=${id}`)
+    cleanup()
+  }
+})
+
+test('detail keeps ?variant= through a former-slug redirect and selects it', async () => {
+  productResponse = url => url.pathname.endsWith('/old-mango') ? Response.json(mango) : Response.json({ items: [], nextCursor: null })
+  const router = mount(<CatalogPage />, `/products/old-mango?variant=${mango.variants[1]!.id}`)
+  await screen.findByRole('heading', { level: 1, name: mango.name })
+  expect(router.state.location.pathname).toBe('/products/mango')
+  expect(router.state.location.search).toBe(`?variant=${mango.variants[1]!.id}`)
+  expect(variantSelect().value).toBe(mango.variants[1]!.id)
+})
+
+test('detail fires view_item for the ?variant= variant and still lets the shopper change it', async () => {
+  const events: BrowserEvent[] = []
+  const spy = spyOn(tracker, 'track').mockImplementation((e: BrowserEvent) => { events.push(e) })
+  try {
+    mount(<CatalogPage />, `/products/mango?variant=${mango.variants[1]!.id}`)
+    await screen.findByRole('heading', { level: 1, name: mango.name })
+    await waitFor(() => expect(events.filter(e => e.name === 'view_item')).toHaveLength(1))
+    expect(events.find(e => e.name === 'view_item')).toMatchObject({ item: { productId: mango.id, variantId: mango.variants[1]!.id } })
+    await userEvent.setup().selectOptions(variantSelect(), mango.variants[0]!.id)
+    expect(variantSelect().value).toBe(mango.variants[0]!.id)
+  } finally { spy.mockRestore() }
 })
 
 test('detail distinguishes missing product from transient failure and retries', async () => {

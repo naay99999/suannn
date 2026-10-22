@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Badge } from '@workspace/ui/components/badge'
 import { buttonVariants } from '@workspace/ui/components/button'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@workspace/ui/components/breadcrumb'
@@ -36,7 +36,9 @@ export function Component() {
     queryClient.setQueryData(storeProductDetailQueryKey(currentSlug), product.data)
     navigate({ pathname: `/products/${currentSlug}`, search: location.search, hash: location.hash }, { replace: true })
   }, [redirecting, currentSlug, product.data, queryClient, navigate, location.search, location.hash])
-  const [selectedVariantId, setSelectedVariantId] = useState('')
+  // A catalog-feed link (?variant=) preselects that variant; unknown ids fall back to the default below.
+  const [searchParams] = useSearchParams()
+  const [selectedVariantId, setSelectedVariantId] = useState(searchParams.get('variant') ?? '')
   const related = useQuery({
     queryKey: storeProductQueryKey({ category: product.data?.category, limit: relatedProductLimit + 1 }),
     queryFn: () => getStoreProducts({ category: product.data!.category, limit: relatedProductLimit + 1 }),
