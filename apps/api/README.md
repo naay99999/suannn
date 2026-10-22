@@ -251,3 +251,34 @@ NODE_ENV=development bun --filter api db:seed:demo --database-name <verified-dat
 The command reports product, inventory, farm, and farm-link counts. Farm profiles
 are explicitly marked as demo records; their names and image assets are
 illustrative and do not identify real partner growers.
+
+## Tracking and ads
+
+The API sends server-side events (the `purchase` conversion) to PostHog, Meta, TikTok, and Google Ads. Each destination is configured by an environment group that is all-or-none: setting only some of a group's required variables is a startup error, and setting none turns that destination off (its queued rows are marked `skipped`). Optional variables are not part of the group. Ad destinations only receive events for orders whose stored marketing consent is true.
+
+| Destination | Required (all together) | Optional |
+| --- | --- | --- |
+| PostHog | `POSTHOG_API_KEY`, `POSTHOG_HOST` (https) | |
+| Meta | `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN` | `META_TEST_EVENT_CODE` |
+| TikTok | `TIKTOK_PIXEL_CODE`, `TIKTOK_EVENTS_ACCESS_TOKEN` | `TIKTOK_TEST_EVENT_CODE` |
+| Google Ads | `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID`, `GOOGLE_ADS_CONVERSION_ACTION_ID` | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` |
+| Alerts | | `TRACKING_ALERT_EMAIL` (receives delivery-failure alerts) |
+
+Google Ads customer ids may be written with dashes (`123-456-7890`); they are stored as digits only.
+
+The storefront (`apps/storefront/.env.local`) loads the browser SDKs from these variables; each is optional and an unset one disables that tool in the browser: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`, `VITE_META_PIXEL_ID`, `VITE_TIKTOK_PIXEL_CODE`, `VITE_GOOGLE_ADS_ID`. Use the same PostHog project, Meta pixel, and TikTok pixel as the API variables above so browser and server events match by `event_id` (the order id).
+
+### Where to find each value
+
+**PostHog.** Project settings, "Project API key" (starts with `phc_`) is `POSTHOG_API_KEY` and `VITE_POSTHOG_KEY`. The host is the region URL shown beside it, for example `https://us.i.posthog.com` or `https://eu.i.posthog.com`.
+
+**Meta.** In Events Manager choose the dataset (pixel). The Dataset ID shown there is `META_PIXEL_ID` and `VITE_META_PIXEL_ID`. Open Settings, "Conversions API", "Generate access token" for `META_CAPI_ACCESS_TOKEN`. To verify delivery without affecting reporting, open the "Test events" tab and copy its code into `META_TEST_EVENT_CODE`; remove it for production.
+
+**TikTok.** In TikTok Events Manager open the web pixel. The pixel code (for example `C...`) is `TIKTOK_PIXEL_CODE` and `VITE_TIKTOK_PIXEL_CODE`. Under the pixel's settings, "Events API", generate an access token for `TIKTOK_EVENTS_ACCESS_TOKEN`. The "Test Events" tab provides `TIKTOK_TEST_EVENT_CODE`; remove it for production.
+
+**Google Ads.**
+1. Developer token: in the Google Ads manager (MCC) account open Tools, "API Center", and apply for access. Basic access is enough for uploading conversions. The token is `GOOGLE_ADS_DEVELOPER_TOKEN`.
+2. OAuth client: in Google Cloud Console enable the Google Ads API, configure the OAuth consent screen, and create an OAuth client id (Web application). Its id and secret are `GOOGLE_ADS_CLIENT_ID` and `GOOGLE_ADS_CLIENT_SECRET`.
+3. Refresh token: authorise the scope `https://www.googleapis.com/auth/adwords` as a user with access to the account (for example through the OAuth 2.0 Playground using your own client credentials, offline access) and copy the refresh token to `GOOGLE_ADS_REFRESH_TOKEN`.
+4. Customer id: the 10-digit account id at the top right of Google Ads is `GOOGLE_ADS_CUSTOMER_ID`. If you access it through a manager account, set that manager's id as `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
+5. Conversion action id: in Goals, "Conversions", "Summary", create an action of type "Import" (from clicks, API) for purchases, open it, and take the numeric `ctId` from the URL as `GOOGLE_ADS_CONVERSION_ACTION_ID`. The browser tag id (`AW-…`) is `VITE_GOOGLE_ADS_ID`.

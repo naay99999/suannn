@@ -31,6 +31,7 @@ export interface AppConfig {
   requireTrustedClientIp: boolean
   stripe: StripeConfig | null
   media: MediaConfig | null
+  tracking: TrackingConfig
 }
 
 export interface MediaConfig {
@@ -39,6 +40,22 @@ export interface MediaConfig {
   secretAccessKey: string
   bucket: string
   publicUrl: string
+}
+
+export interface TrackingConfig {
+  posthog: { apiKey: string; host: string } | null
+  meta: { pixelId: string; accessToken: string; testEventCode: string | null } | null
+  tiktok: { pixelCode: string; accessToken: string; testEventCode: string | null } | null
+  googleAds: {
+    developerToken: string
+    clientId: string
+    clientSecret: string
+    refreshToken: string
+    customerId: string
+    conversionActionId: string
+    loginCustomerId: string | null
+  } | null
+  alertEmail: string | null
 }
 
 export interface StripeConfig {
@@ -250,6 +267,90 @@ function parseMediaConfig(env: Environment): MediaConfig | null {
   }
 }
 
+function trimmed(env: Environment, name: string) {
+  return env[name]?.trim() || undefined
+}
+
+// Reads an all-or-none group; returns null when none are set.
+function readGroup<const N extends readonly string[]>(
+  env: Environment,
+  names: N,
+  label: string,
+): Record<N[number], string> | null {
+  const values = names.map((name) => trimmed(env, name))
+  const present = values.filter(Boolean).length
+
+  if (present === 0) {
+    return null
+  }
+
+  if (present !== names.length) {
+    throw new Error(`${label} configuration must be provided together`)
+  }
+
+  return Object.fromEntries(names.map((name, index) => [name, values[index]])) as Record<N[number], string>
+}
+
+function parseDigitsId(name: string, value: string) {
+  const digits = value.replace(/-/g, '')
+
+  if (!/^\d+$/.test(digits)) {
+    throw new Error(`${name} must contain digits only`)
+  }
+
+  return digits
+}
+
+function parseTrackingConfig(env: Environment): TrackingConfig {
+  const posthogGroup = readGroup(env, ['POSTHOG_API_KEY', 'POSTHOG_HOST'], 'PostHog')
+  const metaGroup = readGroup(env, ['META_PIXEL_ID', 'META_CAPI_ACCESS_TOKEN'], 'Meta')
+  const tiktokGroup = readGroup(env, ['TIKTOK_PIXEL_CODE', 'TIKTOK_EVENTS_ACCESS_TOKEN'], 'TikTok')
+  const adsGroup = readGroup(env, [
+    'GOOGLE_ADS_DEVELOPER_TOKEN',
+    'GOOGLE_ADS_CLIENT_ID',
+    'GOOGLE_ADS_CLIENT_SECRET',
+    'GOOGLE_ADS_REFRESH_TOKEN',
+    'GOOGLE_ADS_CUSTOMER_ID',
+    'GOOGLE_ADS_CONVERSION_ACTION_ID',
+  ], 'Google Ads')
+  const alertEmail = trimmed(env, 'TRACKING_ALERT_EMAIL')
+
+  if (alertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
+    throw new Error('TRACKING_ALERT_EMAIL must be an email address')
+  }
+
+  const loginCustomerId = trimmed(env, 'GOOGLE_ADS_LOGIN_CUSTOMER_ID')
+
+  return {
+    posthog: posthogGroup && {
+      apiKey: posthogGroup.POSTHOG_API_KEY,
+      host: parseUrl('POSTHOG_HOST', posthogGroup.POSTHOG_HOST, ['https:']).replace(/\/+$/, ''),
+    },
+    meta: metaGroup && {
+      pixelId: metaGroup.META_PIXEL_ID,
+      accessToken: metaGroup.META_CAPI_ACCESS_TOKEN,
+      testEventCode: trimmed(env, 'META_TEST_EVENT_CODE') ?? null,
+    },
+    tiktok: tiktokGroup && {
+      pixelCode: tiktokGroup.TIKTOK_PIXEL_CODE,
+      accessToken: tiktokGroup.TIKTOK_EVENTS_ACCESS_TOKEN,
+      testEventCode: trimmed(env, 'TIKTOK_TEST_EVENT_CODE') ?? null,
+    },
+    googleAds: adsGroup && {
+      developerToken: adsGroup.GOOGLE_ADS_DEVELOPER_TOKEN,
+      clientId: adsGroup.GOOGLE_ADS_CLIENT_ID,
+      clientSecret: adsGroup.GOOGLE_ADS_CLIENT_SECRET,
+      refreshToken: adsGroup.GOOGLE_ADS_REFRESH_TOKEN,
+      customerId: parseDigitsId('GOOGLE_ADS_CUSTOMER_ID', adsGroup.GOOGLE_ADS_CUSTOMER_ID),
+      conversionActionId: adsGroup.GOOGLE_ADS_CONVERSION_ACTION_ID,
+      loginCustomerId: loginCustomerId
+        ? parseDigitsId('GOOGLE_ADS_LOGIN_CUSTOMER_ID', loginCustomerId)
+        : null,
+    },
+    alertEmail: alertEmail ?? null,
+  }
+}
+
 export function loadConfig(env: Environment = process.env): AppConfig {
   const corsOrigins = parseOrigins(env.CORS_ORIGINS)
   const isProduction = env.NODE_ENV === 'production'
@@ -319,5 +420,6 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     requireTrustedClientIp: isProduction,
     stripe,
     media: parseMediaConfig(env),
+    tracking: parseTrackingConfig(env),
   }
 }
