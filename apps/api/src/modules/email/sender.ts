@@ -13,6 +13,7 @@ export type EmailTemplate =
   | 'order-cancelled'
   | 'order-refunded'
   | 'receipt-issued'
+  | 'tracking-alert'
 
 export interface EmailMessage extends EmailContent {
   to: string

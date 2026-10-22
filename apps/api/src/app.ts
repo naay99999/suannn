@@ -50,6 +50,8 @@ import type { ReceiptSettingsService } from './modules/receipts/settings'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import { createStoreConsentModule } from './modules/tracking/consent'
 import type { ConsentService } from './modules/tracking/consent/service'
+import { createAdminTrackingStatusModule } from './modules/tracking/status'
+import type { TrackingStatusService } from './modules/tracking/status/service'
 import type { FarmService } from './modules/farms/service'
 import type { MediaService } from './modules/media/service'
 import type { DashboardService } from './modules/dashboard/service'
@@ -91,6 +93,7 @@ export interface AppDependencies {
   receiptSettings: ReceiptSettingsService
   storeAnnouncement: StoreAnnouncementService
   consent: ConsentService
+  trackingStatus: Pick<TrackingStatusService, 'get'>
   dashboard: DashboardService
   customers: AdminCustomerService
   staffMfaRequired(): Promise<boolean>
@@ -165,7 +168,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(new Elysia({ name: 'admin-checkout-and-receipt-settings' })
       .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
       .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))
-    .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
+    .use(new Elysia({ name: 'admin-announcement-and-tracking' })
+      .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
+      .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus)))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

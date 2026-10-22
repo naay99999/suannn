@@ -4,6 +4,23 @@ export type TrackingConfigOf<K extends 'posthog' | 'meta' | 'tiktok' | 'googleAd
 
 export type TrackingDestination = 'posthog' | 'meta' | 'tiktok' | 'google_ads'
 
+export const trackingDestinations: readonly TrackingDestination[] = ['posthog', 'meta', 'tiktok', 'google_ads']
+
+export const trackingDestinationLabels: Record<TrackingDestination, string> = {
+  posthog: 'PostHog',
+  meta: 'Meta',
+  tiktok: 'TikTok',
+  google_ads: 'Google Ads',
+}
+
+// Config key per destination (google_ads is googleAds in TrackingConfig).
+export const trackingConfigKeys: Record<TrackingDestination, keyof TrackingConfig> = {
+  posthog: 'posthog',
+  meta: 'meta',
+  tiktok: 'tiktok',
+  google_ads: 'googleAds',
+}
+
 export interface PurchaseEvent {
   eventId: string
   orderNumber: string

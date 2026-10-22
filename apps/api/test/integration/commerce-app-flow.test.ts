@@ -44,6 +44,7 @@ import { StoreAnnouncementRepository } from '../../src/modules/store-announcemen
 import { StoreAnnouncementService } from '../../src/modules/store-announcement/service'
 import { ConsentRepository } from '../../src/modules/tracking/consent/repository'
 import { ConsentService } from '../../src/modules/tracking/consent/service'
+import { fakeTrackingStatus } from '../helpers/fakes'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -104,6 +105,7 @@ const app = await createApp(config, {
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   storeAnnouncement: new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit)),
   consent: new ConsentService(new ConsentRepository(database.db)),
+  trackingStatus: fakeTrackingStatus,
   dashboard: {} as never,
   customers: {} as never,
   staffMfaRequired: async () => false,

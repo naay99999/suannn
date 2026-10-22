@@ -145,6 +145,15 @@ export function orderRefundedEmail(
   ], orderUrl(orderId, storefrontUrl, guest), 'ดูคำสั่งซื้อ')
 }
 
+export function trackingAlertEmail(destinationLabel: string, lastErrorCode: string | null, settingsUrl: string): EmailContent {
+  return linkEmail(
+    `[suannn] Tracking delivery failing: ${destinationLabel}`,
+    `Purchase events are not reaching ${destinationLabel}. Latest error: ${lastErrorCode ?? 'none recorded'}. Open the admin settings to check delivery status.`,
+    'Open settings',
+    settingsUrl,
+  )
+}
+
 export function receiptIssuedEmail(
   orderId: string,
   orderNumber: string,

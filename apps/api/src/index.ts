@@ -61,6 +61,10 @@ import { createMetaAdapter } from './modules/tracking/adapters/meta'
 import { createPostHogAdapter } from './modules/tracking/adapters/posthog'
 import { createTikTokAdapter } from './modules/tracking/adapters/tiktok'
 import { TrackingOutbox } from './modules/tracking/outbox'
+import { TrackingAlerts } from './modules/tracking/alerts'
+import { TrackingStatusRepository } from './modules/tracking/status/repository'
+import { TrackingStatusService } from './modules/tracking/status/service'
+import { logError } from './shared/logger'
 import { DashboardRepository, DashboardService } from './modules/dashboard'
 import { AdminCustomerRepository, AdminCustomerService } from './modules/customers'
 import { createDatabaseReadinessProbe } from './modules/system/readiness'
@@ -126,6 +130,8 @@ const trackingOutbox = new TrackingOutbox(database.db, {
   ...(config.tracking.tiktok ? { tiktok: createTikTokAdapter(config.tracking.tiktok) } : {}),
   ...(config.tracking.googleAds ? { google_ads: createGoogleAdsAdapter(config.tracking.googleAds) } : {}),
 })
+const trackingAlerts = new TrackingAlerts(database.db, config.tracking, emailSender, config.adminUrl)
+const trackingStatus = new TrackingStatusService(new TrackingStatusRepository(database.db), config.tracking)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
 const auth = createAuth(config, database.db, {
@@ -192,6 +198,7 @@ const app = await createApp(config, {
   receiptSettings,
   storeAnnouncement,
   consent,
+  trackingStatus,
   dashboard: new DashboardService(new DashboardRepository(database.db)),
   customers: new AdminCustomerService(new AdminCustomerRepository(database.db)),
   staffMfaRequired,
@@ -238,7 +245,15 @@ const stopOrderOutboxMaintenance = startCommerceMaintenanceLoop(
 )
 
 const stopTrackingOutboxMaintenance = startCommerceMaintenanceLoop(
-  (limit) => trackingOutbox.processBatch(limit),
+  async (limit) => {
+    const processed = await trackingOutbox.processBatch(limit)
+    // An alert failure must never break delivery.
+    await trackingAlerts.check().catch((error: unknown) => logError({
+      level: 'error', code: 'TRACKING_ALERT_CHECK_FAILED', message: 'Tracking alert check failed',
+      errorCategory: error instanceof Error ? error.name : 'UnknownError',
+    }))
+    return processed
+  },
   (error) => console.error(JSON.stringify({
     level: 'error', code: 'TRACKING_OUTBOX_WORKER_FAILED',
     errorCategory: error instanceof Error ? error.name : 'UnknownError',

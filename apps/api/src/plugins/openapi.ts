@@ -31,6 +31,7 @@ export const apiTags = [
   { name: 'Admin Commerce Settings', description: 'Staff controls for the shipping fee and checkout switch.' },
   { name: 'Admin Receipt Settings', description: 'Staff controls for the seller details and VAT rate printed on receipts.' },
   { name: 'Admin Store Announcement', description: 'Staff controls for the storefront promotion bar.' },
+  { name: 'Admin Tracking', description: 'Staff view of purchase tracking delivery status per destination.' },
   { name: 'Admin Products', description: 'Staff catalog management for products and variants.' },
   { name: 'Admin Farms', description: 'Staff management for farm profiles and product sources.' },
   { name: 'Admin Media', description: 'Staff media library for uploading and managing shared images.' },

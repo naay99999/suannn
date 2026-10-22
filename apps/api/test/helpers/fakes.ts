@@ -34,6 +34,14 @@ export class FakeConsentService extends ConsentService {
   }
 }
 
+export const fakeTrackingStatus = {
+  get: async () => ({
+    destinations: (['posthog', 'meta', 'tiktok', 'google_ads'] as const).map((destination) => ({
+      destination, configured: false, lastSuccessAt: null, failures24h: 0, lastErrorCode: null,
+    })),
+  }),
+}
+
 export class InMemoryMediaStorage implements MediaStorage {
   readonly objects = new Map<string, Uint8Array>()
   failNextPut?: boolean
