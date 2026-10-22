@@ -22,6 +22,8 @@ import { OrderSummary } from './order-summary'
 import { PaymentMethodOptions, paymentNextStep } from './payment-method-options'
 import { useStickyVisibility } from '@/lib/use-sticky-visibility'
 import { redirectToStripe } from '@/lib/store-orders'
+import { track } from '@/lib/tracking/tracker'
+import { buildCheckoutTracking } from '@/lib/tracking/checkout-context'
 import { ButtonSpinner } from '@/components/loading/button-spinner'
 import { PageLoading } from '@/components/loading/page-loading'
 
@@ -97,6 +99,19 @@ export function Component() {
     if (defaultBillingId !== defaultShippingId) setValue('shipDifferent', true)
   }, [defaultBillingId, defaultShippingId, setValue])
 
+  // begin_checkout fires once per mount, when the quote first has lines.
+  const beganCheckout = useRef(false)
+  const quoteData = quote.data
+  useEffect(() => {
+    if (beganCheckout.current || !quoteData || quoteData.lines.length === 0) return
+    beganCheckout.current = true
+    track({
+      name: 'begin_checkout',
+      items: quoteData.lines.flatMap(line => line.productId && line.productName ? [{ productId: line.productId, variantId: line.variantId, name: line.productName, price: line.unitPriceSatang / 100, quantity: line.quantity }] : []),
+      value: quoteData.subtotalSatang / 100,
+    })
+  }, [quoteData])
+
   async function submit(values: CheckoutForm) {
     setSubmitError('')
     if (!sessionResolved) {
@@ -123,8 +138,10 @@ export function Component() {
     const input = buildCheckoutOrderBody(currentQuote, selectedPaymentMethod, { email: values.email.trim() }, billingAddress, shippingAddress)
     const fingerprint = await fingerprintCheckoutInput(input)
     const key = getOrCreateSubmissionKey(currentQuote.quoteToken, fingerprint)
+    // Attached after the fingerprint so attribution changes never invalidate an in-flight submission key.
+    const tracking = buildCheckoutTracking()
     try {
-      const result = await orderMutation.mutateAsync({ input, key })
+      const result = await orderMutation.mutateAsync({ input: tracking ? { ...input, tracking } : input, key })
       if (!('order' in result)) throw new StoreCheckoutRequestError(502, 'INVALID_ORDER_RESPONSE')
       await queryClient.invalidateQueries({ queryKey: ['store-cart'] })
       if (paysWithStripe) {

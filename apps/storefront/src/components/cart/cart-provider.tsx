@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authSessionQuery, clearStoreCartQuery } from '@/lib/auth-session'
 import { getStoreCart, mergeCustomerCartOnce, removeCartItem, setCartItem, storeCartQueryKey, StoreCartRequestError } from '@/lib/store-cart'
 import { cartMergeNotice, discardLegacyCart } from '@/lib/cart'
+import { track } from '@/lib/tracking/tracker'
 import { CartContext } from './cart-context'
 
 function requestMessage(error: unknown) {
@@ -49,8 +50,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [queryClient, session.data, session.isSuccess])
 
   async function setItem(variantId: string, quantity: number) {
+    const previous = cartQuery.data?.lines.find(line => line.variantId === variantId)
     try {
-      await setMutation.mutateAsync({ variantId, quantity })
+      const updated = await setMutation.mutateAsync({ variantId, quantity })
+      const delta = quantity - (previous?.quantity ?? 0)
+      const line = updated.lines.find(candidate => candidate.variantId === variantId) ?? previous
+      if (delta > 0 && line?.productId && line.productName && line.priceSatang !== null) {
+        track({ name: 'add_to_cart', item: { productId: line.productId, variantId, name: line.productName, price: line.priceSatang / 100, quantity: delta } })
+      }
     } catch (error) {
       throw new Error(requestMessage(error))
     }

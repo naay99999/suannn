@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { Badge } from '@workspace/ui/components/badge'
@@ -15,6 +15,7 @@ import { ProductFarms } from '@/components/farms/product-farms'
 import { RelatedProductsCarousel, relatedProductLimit } from './_components/related-products-carousel'
 import { useProductMotion } from './_components/use-product-motion'
 import { ProductDetailSkeleton } from './_components/product-detail-skeleton'
+import { track } from '@/lib/tracking/tracker'
 
 export function Component() {
   const { slug } = useParams()
@@ -41,6 +42,16 @@ export function Component() {
     queryFn: () => getStoreProducts({ category: product.data!.category, limit: relatedProductLimit + 1 }),
     enabled: Boolean(product.data),
   })
+
+  // One view_item per product id, however often the page re-renders.
+  const viewedProductId = useRef<string | null>(null)
+  const viewedProduct = product.data
+  const viewedVariant = viewedProduct?.variants.find(variant => variant.id === selectedVariantId) ?? viewedProduct?.variants.find(variant => variant.canPurchase) ?? viewedProduct?.variants[0]
+  useEffect(() => {
+    if (!viewedProduct || redirecting || !viewedVariant || viewedProductId.current === viewedProduct.id) return
+    viewedProductId.current = viewedProduct.id
+    track({ name: 'view_item', item: { productId: viewedProduct.id, variantId: viewedVariant.id, name: viewedProduct.name, price: viewedVariant.priceSatang / 100, quantity: 1 } })
+  }, [viewedProduct, viewedVariant, redirecting])
 
   if (product.isPending || redirecting) return <ProductDetailSkeleton />
   if (product.isError && (product.error instanceof StoreProductRequestError && product.error.status === 404)) {
