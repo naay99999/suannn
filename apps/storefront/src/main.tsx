@@ -6,6 +6,7 @@ import { Toaster } from '@workspace/ui/components/toast'
 import { TooltipProvider } from '@workspace/ui/components/tooltip'
 import { RouterProvider } from 'react-router'
 import { useApiHealth } from './lib/api-health'
+import { recordLanding } from './lib/tracking/attribution'
 import { QueryProvider } from './lib/query-provider'
 import { router } from './router'
 
@@ -14,6 +15,8 @@ function ApiHealthCheck() {
 
   return null
 }
+
+recordLanding(window.location, document.referrer)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
