@@ -1,6 +1,6 @@
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import { integrationsKeys } from '../integrations/queries'
-import { marketingApi, type FunnelFilter, type UpdateMarginInput } from './api'
+import { marketingApi, type FunnelFilter, type UpdateCatalogBrandInput, type UpdateMarginInput } from './api'
 import type { DateRange } from './format'
 
 export const marketingKeys = {
@@ -10,6 +10,7 @@ export const marketingKeys = {
   experiments: () => [...marketingKeys.all, 'experiments'] as const,
   settings: () => [...marketingKeys.all, 'settings'] as const,
   templates: () => [...marketingKeys.all, 'templates'] as const,
+  catalogFeed: () => [...marketingKeys.all, 'catalog-feed'] as const,
 }
 
 const overviewPrefix = [...marketingKeys.all, 'overview'] as const
@@ -51,6 +52,26 @@ export const marketingTemplatesQuery = queryOptions({
   staleTime: 5 * 60_000,
   retry: false,
 })
+
+export const marketingCatalogFeedQuery = queryOptions({
+  queryKey: marketingKeys.catalogFeed(),
+  queryFn: () => marketingApi.catalogFeed(),
+  retry: false,
+})
+
+export function useUpdateCatalogBrandMutation() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (input: UpdateCatalogBrandInput) => marketingApi.updateCatalogBrand(input),
+    onSuccess: (settings) => {
+      client.setQueryData(marketingKeys.settings(), settings)
+      return client.invalidateQueries({ queryKey: marketingKeys.catalogFeed() })
+    },
+    onError: (error) => {
+      if ((error as { status?: number }).status === 409) return client.invalidateQueries({ queryKey: marketingKeys.settings() })
+    },
+  })
+}
 
 export function useUpdateMarginMutation() {
   const client = useQueryClient()

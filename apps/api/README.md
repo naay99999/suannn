@@ -362,3 +362,22 @@ The integrations were built from fixtures and have never run against real accoun
 - Meta Insights, TikTok reporting, and Google GAQL return data, using `ซิงก์ตอนนี้` and the Integrations tab.
 - The PostHog funnel query accepts the `+07:00` date boundaries and the `(?i)` regex filter.
 - PostHog experiment results arrive in a format the page can read. The legacy results format is assumed. If the page shows `ยังสรุปไม่ได้ — ดูใน PostHog` for every experiment, the format differs.
+
+## Product catalog feed
+
+`GET /api/v1/store/catalog/feed.xml` is a public Google Shopping style XML feed (`application/xml; charset=utf-8`) that Merchant Center, Meta Commerce Manager, and the TikTok catalog fetch on a schedule. It needs no new environment variables.
+
+- **Caching.** The feed is built in-process and cached for 5 minutes, with concurrent builds deduplicated. A database error returns 503 (`{ code, message }`); an empty or stale feed is never served on error. The admin summary bypasses the cache.
+- **What is included.** Only non-archived variants of `published` products. Item id is the variant id and group id is the product id, matching the storefront tracker's `variantId`. A variant whose product has no image is left out (admin lists it as `no_image`); this takes precedence over out of stock.
+- **Availability.** `in_stock` only when the variant has at least one free unit, `salesEnabled` is true, and commerce settings have `checkoutEnabled = true`. Otherwise `out_of_stock`. There is no stock threshold.
+- **Price and shipping.** Price is `(priceSatang / 100).toFixed(2) THB`, computed from integer satang. Shipping is emitted for `TH` when commerce settings have a shipping fee; otherwise it is omitted and the admin shows the `shipping_fee_unset` warning.
+- **Brand.** `brand` comes from `marketing_settings.catalog_brand_name` (default `suannn`, 1 to 70 characters). Staff with `marketing:update` edit it on the Marketing page (`PUT /api/v1/admin/marketing/settings/catalog-brand`).
+- **Admin.** The Marketing page section `ฟีดสินค้า` (`GET /api/v1/admin/marketing/catalog-feed`, `marketing:read`) shows the feed URL, counts, per-product problems, feed-wide warnings, and a setup guide for each platform.
+- **Migration.** `0036` (`drizzle/0036_faithful_joystick.sql`) adds `catalog_brand_name`. Run `bun --filter api db:migrate` before deploying the API.
+
+### Feed go-live checklist
+
+1. Open the feed URL in a browser and confirm the XML is well formed and contains the expected items.
+2. Add it as a scheduled fetch (daily, or hourly where offered) in Google Merchant Center (country Thailand, language Thai), Meta Commerce Manager, and the TikTok catalog.
+3. Compare one item's price with its landing page.
+4. Link Merchant Center to Google Ads and connect the Meta and TikTok catalogs to the existing pixels.

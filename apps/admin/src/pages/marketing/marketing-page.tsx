@@ -12,6 +12,7 @@ import { hasPermission } from '@/lib/permissions'
 import { MAX_RANGE_DAYS, funnelPlatforms, isDateKey, rangeDays, presetLabels, presetRange, warningText, type DateRange, type RangePreset } from '@/lib/marketing/format'
 import { marketingOverviewQuery } from '@/lib/marketing/queries'
 import { CampaignTable } from './_components/campaign-table'
+import { CatalogFeedSection } from './_components/catalog-feed-section'
 import { DateRangePicker } from './_components/date-range-picker'
 import { ExperimentsList } from './_components/experiments-list'
 import { FunnelSection } from './_components/funnel-chart'
@@ -136,6 +137,7 @@ export function Component() {
         <ExperimentsList />
         <MarginSetting canUpdate={canUpdate} />
         <UtmTemplates />
+        <CatalogFeedSection />
       </div>
     </>
   )

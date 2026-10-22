@@ -41,7 +41,7 @@ const overview = {
   ],
   warnings: [{ code: 'SPEND_DATA_STARTS_LATE', platform: 'meta', date: '2026-10-18' }],
 }
-const settings = { marginPercent: 35, version: 3, updatedAt: '2026-10-20T00:00:00.000Z' }
+const settings = { marginPercent: 35, catalogBrandName: 'suannn', version: 3, updatedAt: '2026-10-20T00:00:00.000Z' }
 const templates = { templates: [{ platform: 'meta', where: 'Meta Ads > URL parameters', template: 'utm_source=facebook&utm_campaign={{campaign.id}}' }] }
 const freshTracking = {
   destinations: [],
@@ -63,6 +63,7 @@ beforeEach(() => {
     'GET /api/v1/admin/marketing/overview': () => Response.json(overview),
     'GET /api/v1/admin/marketing/settings': () => Response.json(settings),
     'GET /api/v1/admin/marketing/templates': () => Response.json(templates),
+    'GET /api/v1/admin/marketing/catalog-feed': () => Response.json({ problems: [], warnings: [], counts: { total: 0, inFeed: 0, inStock: 0, outOfStock: 0, excluded: 0 }, brandName: 'suannn' }),
     'GET /api/v1/admin/marketing/funnel': () => Response.json({ steps: [] }),
     'GET /api/v1/admin/marketing/experiments': () => Response.json({ experiments: [] }),
     'GET /api/v1/admin/integrations/tracking': () => Response.json(freshTracking),
