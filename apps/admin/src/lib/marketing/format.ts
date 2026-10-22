@@ -38,6 +38,13 @@ export function addDays(day: string, days: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
 }
 
+export const MAX_RANGE_DAYS = 366
+
+// Inclusive day count of a YYYY-MM-DD range.
+export function rangeDays(range: DateRange): number {
+  return Math.round((Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / DAY_MS) + 1
+}
+
 export function presetRange(preset: Exclude<RangePreset, 'custom'>, now: number = Date.now()): DateRange {
   const today = bangkokToday(now)
   if (preset === 'today') return { from: today, to: today }

@@ -8,9 +8,10 @@ function isPreset(value: unknown): value is RangePreset {
   return presets.some((preset) => preset === value)
 }
 
-export function DateRangePicker({ preset, range, onPresetChange, onCustomChange }: {
+export function DateRangePicker({ preset, range, error, onPresetChange, onCustomChange }: {
   preset: RangePreset
   range: DateRange
+  error?: string
   onPresetChange: (preset: RangePreset) => void
   onCustomChange: (range: DateRange) => void
 }) {
@@ -35,6 +36,7 @@ export function DateRangePicker({ preset, range, onPresetChange, onCustomChange 
           <Input aria-label="ถึงวันที่" className="w-40" min={range.from} onChange={(event) => event.target.value && onCustomChange({ from: range.from, to: event.target.value })} type="date" value={range.to} />
         </div>
       )}
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
     </div>
   )
 }

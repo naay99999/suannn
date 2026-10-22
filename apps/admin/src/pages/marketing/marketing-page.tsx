@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -8,7 +9,7 @@ import { authSessionQuery } from '@/lib/auth-session'
 import { STALE_SYNC_MS } from '@/lib/integrations/health'
 import { trackingStatusQuery } from '@/lib/integrations/queries'
 import { hasPermission } from '@/lib/permissions'
-import { isDateKey, presetLabels, presetRange, warningText, type DateRange, type RangePreset } from '@/lib/marketing/format'
+import { MAX_RANGE_DAYS, isDateKey, rangeDays, presetLabels, presetRange, warningText, type DateRange, type RangePreset } from '@/lib/marketing/format'
 import { marketingOverviewQuery } from '@/lib/marketing/queries'
 import { CampaignTable } from './_components/campaign-table'
 import { DateRangePicker } from './_components/date-range-picker'
@@ -26,12 +27,14 @@ function isPreset(value: string | null): value is RangePreset {
 // The range lives in the URL as YYYY-MM-DD strings that are serialised here, never from Date objects.
 function useMarketingRange() {
   const [params, setParams] = useSearchParams()
+  // Fixed when the page opens so rendering stays pure; presets resolve against this instant.
+  const [now] = useState(() => Date.now())
   const requested = params.get('range')
   const from = params.get('from')
   const to = params.get('to')
   const customValid = isDateKey(from) && isDateKey(to) && from <= to
   const preset: RangePreset = isPreset(requested) && (requested !== 'custom' || customValid) ? requested : defaultPreset
-  const range: DateRange = preset === 'custom' ? { from: from!, to: to! } : presetRange(preset)
+  const range: DateRange = preset === 'custom' ? { from: from!, to: to! } : presetRange(preset, now)
   function setPreset(next: RangePreset) {
     const nextParams = new URLSearchParams(params)
     nextParams.set('range', next)
@@ -58,7 +61,8 @@ function useMarketingRange() {
 function useStaleSpendWarning() {
   const session = useQuery(authSessionQuery)
   const tracking = useQuery({ ...trackingStatusQuery, enabled: hasPermission(session.data, 'settings:read'), retry: false })
-  const now = Date.now()
+  // Judge freshness as of the fetch, which also keeps render pure.
+  const now = tracking.dataUpdatedAt
   return tracking.data?.adSpend.some((row) => {
     if (!row.configured) return false
     if (row.lastRunStatus === 'failed' || !row.lastSuccessAt) return true
@@ -70,7 +74,8 @@ export function Component() {
   const { preset, range, setPreset, setCustom } = useMarketingRange()
   const session = useQuery(authSessionQuery)
   const canUpdate = hasPermission(session.data, 'marketing:update')
-  const overview = useQuery(marketingOverviewQuery(range))
+  const tooLong = rangeDays(range) > MAX_RANGE_DAYS
+  const overview = useQuery({ ...marketingOverviewQuery(range), enabled: !tooLong })
   const stale = useStaleSpendWarning()
 
   return (
@@ -78,7 +83,7 @@ export function Component() {
       <div className="flex flex-wrap items-start justify-between gap-4 px-4 lg:px-6">
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-semibold tracking-tight">การตลาด</h1>
-          <DateRangePicker onCustomChange={setCustom} onPresetChange={setPreset} preset={preset} range={range} />
+          <DateRangePicker error={tooLong ? 'ช่วงวันที่ต้องไม่เกิน 366 วัน' : undefined} onCustomChange={setCustom} onPresetChange={setPreset} preset={preset} range={range} />
         </div>
         {canUpdate && <SyncButton />}
       </div>
@@ -89,7 +94,7 @@ export function Component() {
             <AlertDescription>ข้อมูลค่าโฆษณาอาจไม่ครบ</AlertDescription>
           </Alert>
         )}
-        {overview.isPending
+        {tooLong ? null : overview.isPending
           ? <QueryState kind="loading" />
           : overview.isError
             ? <QueryState kind="error" message={overview.error.message} onRetry={() => void overview.refetch()} />

@@ -34,7 +34,8 @@ function health(row: TrackingDestinationStatus, now: number) {
 
 export function TrackingStatus() {
   const status = useQuery(trackingStatusQuery)
-  const now = Date.now()
+  // Judge freshness as of the fetch, which also keeps render pure.
+  const now = status.dataUpdatedAt
 
   return (
     <div className="flex flex-col gap-6">

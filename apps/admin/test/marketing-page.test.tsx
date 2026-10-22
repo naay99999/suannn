@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router'
 import { SidebarProvider } from '@workspace/ui/components/sidebar'
 import { AppSidebar } from '../src/components/layout/app-sidebar'
 import { authSessionQuery, type AuthSession } from '../src/lib/auth-session'
+import { presetRange } from '../src/lib/marketing/format'
 import { Component as MarketingPage } from '../src/pages/marketing/marketing-page'
 
 const sessionFor = (permissions: string[]): AuthSession => ({
@@ -80,10 +81,10 @@ afterEach(() => {
   globalThis.fetch = previousFetch
 })
 
-function renderPage(permissions = ['marketing:read', 'marketing:update', 'settings:read']) {
+function renderPage(permissions = ['marketing:read', 'marketing:update', 'settings:read'], entry = '/marketing') {
   return render(
     <QueryClientProvider client={queryClientFor(permissions)}>
-      <MemoryRouter initialEntries={['/marketing']}><MarketingPage /></MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}><MarketingPage /></MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -181,4 +182,43 @@ test('hides the sidebar item without marketing:read', () => {
     expect(screen.queryByText('การตลาด') !== null).toBe(visible)
     cleanup()
   }
+})
+
+test('saving a stale margin refetches the settings and shows the conflict message', async () => {
+  routes['PUT /api/v1/admin/marketing/settings'] = () => Response.json({ code: 'MARKETING_SETTINGS_CONFLICT', message: 'x' }, { status: 409 })
+  const user = userEvent.setup()
+  renderPage()
+
+  const input = await screen.findByLabelText('กำไรขั้นต้น (%)')
+  await waitFor(() => expect((input as HTMLInputElement).value).toBe('35'))
+  await user.clear(input)
+  await user.type(input, '40')
+  await user.click(screen.getByRole('button', { name: 'บันทึก' }))
+
+  expect(await screen.findByText('มีคนแก้ไขค่านี้ไปแล้ว กรุณาลองอีกครั้ง')).toBeTruthy()
+  await waitFor(() => expect(calls.filter((call) => call.method === 'GET' && call.path.endsWith('/settings')).length).toBeGreaterThan(1))
+})
+
+test('shows a rate-limit message when sync returns 429', async () => {
+  routes['POST /api/v1/admin/marketing/sync'] = () => Response.json({ code: 'RATE_LIMITED', message: 'x' }, { status: 429 })
+  const user = userEvent.setup()
+  renderPage()
+
+  await user.click(await screen.findByRole('button', { name: 'ซิงก์ตอนนี้' }))
+
+  expect(await screen.findByText('ซิงก์บ่อยเกินไป กรุณารอสักครู่')).toBeTruthy()
+})
+
+test('does not query a custom range longer than 366 days', async () => {
+  renderPage(undefined, '/marketing?range=custom&from=2025-01-01&to=2026-10-22')
+
+  expect(await screen.findByText('ช่วงวันที่ต้องไม่เกิน 366 วัน')).toBeTruthy()
+  await screen.findByLabelText('กำไรขั้นต้น (%)')
+  expect(calls.some((call) => call.path.endsWith('/overview'))).toBe(false)
+})
+
+test('resolves the month preset in Bangkok time', () => {
+  // 18:00 UTC on 31 Oct is already 1 Nov in Bangkok.
+  expect(presetRange('month', Date.parse('2026-10-31T18:00:00Z'))).toEqual({ from: '2026-11-01', to: '2026-11-01' })
+  expect(presetRange('7d', Date.parse('2026-10-31T18:00:00Z'))).toEqual({ from: '2026-10-26', to: '2026-11-01' })
 })
