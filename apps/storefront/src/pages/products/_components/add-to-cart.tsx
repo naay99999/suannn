@@ -42,7 +42,7 @@ export function AddToCart({ product, variant }: {
       {remaining > 0 && available && <p className="text-xs text-muted-foreground">เลือกจำนวนที่ต้องการได้ สูงสุด {MAX_QUANTITY} ชิ้นต่อรายการ</p>}
       {available && variant && <div
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl transition-transform duration-300 ease-out',
+          'fixed inset-x-0 bottom-(--consent-banner-offset,0px) z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl transition-transform duration-300 ease-out',
           !sticky && 'translate-y-full',
         )}
         aria-hidden={!sticky}

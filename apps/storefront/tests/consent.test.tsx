@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router'
 import { ConsentProvider } from '../src/components/consent/consent-provider'
 import { useConsent } from '../src/components/consent/consent-context'
 import { readConsent, writeConsent } from '../src/lib/tracking/consent'
@@ -43,8 +44,25 @@ function Footer() {
 
 function mount() {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><ConsentProvider><Footer /></ConsentProvider></QueryClientProvider>)
+  render(<MemoryRouter><QueryClientProvider client={client}><ConsentProvider><Footer /></ConsentProvider></QueryClientProvider></MemoryRouter>)
 }
+
+test('banner publishes its height as --consent-banner-offset and resets it when decided', async () => {
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 96 })
+  try {
+    mount()
+    await screen.findByRole('button', { name: 'ปฏิเสธ' })
+    expect(document.documentElement.style.getPropertyValue('--consent-banner-offset')).toBe('96px')
+    expect(screen.getByRole('link', { name: 'นโยบายความเป็นส่วนตัว' }).getAttribute('href')).toBe('/privacy')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'ปฏิเสธ' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'ปฏิเสธ' })).toBeNull())
+    expect(document.documentElement.style.getPropertyValue('--consent-banner-offset')).toBe('0px')
+  } finally {
+    if (original) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', original)
+    else delete (HTMLElement.prototype as { offsetHeight?: number }).offsetHeight
+  }
+})
 
 test('first visit shows the banner with three buttons', async () => {
   mount()

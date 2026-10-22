@@ -202,7 +202,7 @@ export function Component() {
       </div>
       <div
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl transition-transform duration-300 ease-out lg:hidden',
+          'fixed inset-x-0 bottom-(--consent-banner-offset,0px) z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl transition-transform duration-300 ease-out lg:hidden',
           !sticky && 'translate-y-full',
         )}
         aria-hidden={!sticky}
