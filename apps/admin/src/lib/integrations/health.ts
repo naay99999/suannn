@@ -16,10 +16,10 @@ export function formatRelative(value: string, now: number) {
 
 export function adSpendHealth(row: AdSpendStatus, now: number) {
   if (!row.configured) return { label: 'Not configured', variant: 'secondary' } as const
-  if (row.lastRunStatus === 'failed') {
-    const stale = !row.lastSuccessAt || now - new Date(row.lastSuccessAt).getTime() > STALE_SYNC_MS
-    return stale ? { label: 'Failing', variant: 'destructive' } as const : { label: 'Degraded', variant: 'warning' } as const
-  }
+  // Stale data is failing whatever the last run did, matching the Marketing page warning.
+  const stale = !row.lastSuccessAt || now - new Date(row.lastSuccessAt).getTime() > STALE_SYNC_MS
+  if (stale) return { label: 'Failing', variant: 'destructive' } as const
+  if (row.lastRunStatus === 'failed') return { label: 'Degraded', variant: 'warning' } as const
   return { label: 'Healthy', variant: 'success' } as const
 }
 

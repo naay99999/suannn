@@ -65,6 +65,17 @@ describe('AdSpendSync', () => {
     expect(run!.finishedAt).not.toBeNull()
   })
 
+  it('does not re-backfill after a succeeded run that returned no rows', async () => {
+    const today = bangkokToday(new Date())
+    const meta = fakeSource('meta', () => [])
+    const sync = new AdSpendSync(database.db, { meta: meta.source })
+
+    await sync.run()
+    expect(meta.calls[0]).toEqual({ from: addDays(today, -89), to: today })
+    await sync.run()
+    expect(meta.calls[1]).toEqual({ from: addDays(today, -2), to: today })
+  })
+
   it('overwrites a re-synced day without adding rows', async () => {
     const today = bangkokToday(new Date())
     let spend = 1000

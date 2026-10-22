@@ -8,9 +8,10 @@ const upsertBatchSize = 500
 export class SpendRepository {
   constructor(private readonly db: Database) {}
 
-  async hasSpend(platform: AdPlatform): Promise<boolean> {
-    const [found] = await this.db.select({ platform: adSpendDaily.platform }).from(adSpendDaily)
-      .where(eq(adSpendDaily.platform, platform)).limit(1)
+  // A succeeded run (even with zero rows) means the backfill already happened.
+  async hasSucceededRun(platform: AdPlatform): Promise<boolean> {
+    const [found] = await this.db.select({ id: marketingSyncRun.id }).from(marketingSyncRun)
+      .where(and(eq(marketingSyncRun.platform, platform), eq(marketingSyncRun.status, 'succeeded'))).limit(1)
     return Boolean(found)
   }
 

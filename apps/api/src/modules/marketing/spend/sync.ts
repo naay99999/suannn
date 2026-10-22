@@ -53,7 +53,7 @@ export class AdSpendSync {
 
     const startedAt = this.now()
     const today = bangkokToday(startedAt)
-    const first = !(await this.repository.hasSpend(platform))
+    const first = !(await this.repository.hasSucceededRun(platform))
     const range = { from: addDays(today, first ? -(backfillDays - 1) : -(resyncDays - 1)), to: today }
     const runId = await this.repository.startRun(platform, range, startedAt)
 
