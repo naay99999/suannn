@@ -24,6 +24,18 @@ function toSettings(row: typeof marketingSettings.$inferSelect): MarketingSettin
   return { marginPercent: Number(row.marginPercent), version: row.version, updatedAt: row.updatedAt.toISOString() }
 }
 
+export function assertMarketingSettingsInput(input: unknown): asserts input is { marginPercent: number, version: number } {
+  const value = input as { marginPercent?: unknown, version?: unknown } | null
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).length !== 2
+    || typeof value.marginPercent !== 'number' || !Number.isFinite(value.marginPercent)
+    || Math.round(value.marginPercent * 10) !== value.marginPercent * 10
+    || value.marginPercent < 1 || value.marginPercent > 100
+    || typeof value.version !== 'number' || !Number.isInteger(value.version) || value.version < 1) {
+    invalid()
+  }
+}
+
 export class MarketingSettingsService {
   constructor(
     private readonly db: Database,
@@ -37,14 +49,7 @@ export class MarketingSettingsService {
   }
 
   async update(input: { marginPercent: number, version: number }, actor: MarketingSettingsActor): Promise<MarketingSettings> {
-    if (!input || typeof input !== 'object' || Array.isArray(input)
-      || Object.keys(input).length !== 2
-      || typeof input.marginPercent !== 'number' || !Number.isFinite(input.marginPercent)
-      || Math.round(input.marginPercent * 10) !== input.marginPercent * 10
-      || input.marginPercent < 1 || input.marginPercent > 100
-      || !Number.isInteger(input.version) || input.version < 1) {
-      invalid()
-    }
+    assertMarketingSettingsInput(input)
     const marginPercent = input.marginPercent.toFixed(1)
 
     return this.db.transaction(async (tx) => {

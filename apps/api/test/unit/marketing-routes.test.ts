@@ -6,12 +6,28 @@ import { MarketingSettingsService } from '../../src/modules/marketing/settings'
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
+const overview = {
+  range: { from: '2026-10-01', to: '2026-10-07' },
+  previousRange: { from: '2026-09-24', to: '2026-09-30' },
+  breakEvenRoas: 100 / 35,
+  summary: {
+    spendSatang: 100000, revenueSatang: 400000, orders: 4, roas: 4, costPerOrderSatang: 25000,
+    previous: { spendSatang: 0, revenueSatang: 0, orders: 0, roas: null },
+    unmatched: { revenueSatang: 0, orders: 0 },
+    nonAdOrders: 1,
+  },
+  campaigns: [{
+    platform: 'meta' as const, utmSource: 'meta', campaignId: '1', campaignName: null, spendSatang: 100000,
+    orders: 4, revenueSatang: 400000, roas: 4, costPerOrderSatang: 25000, verdict: 'profit' as const,
+  }],
+  warnings: [{ code: 'NON_THB_CURRENCY' as const, platform: 'meta' as const }],
+}
 const settings = { marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }
 
 async function createHarness(role = 'owner', allowSync = true, settingsOverride?: AppDependencies['marketing']['settings']) {
   const calls: Array<{ method: string, args: unknown[] }> = []
   const marketing = {
-    metrics: { overview: async (...args: unknown[]) => { calls.push({ method: 'overview', args }); return { marker: 'overview' } as never } },
+    metrics: { overview: async (...args: unknown[]) => { calls.push({ method: 'overview', args }); return overview } },
     settings: settingsOverride ?? {
       get: async () => { calls.push({ method: 'get', args: [] }); return settings },
       update: async (...args: unknown[]) => { calls.push({ method: 'update', args }); return settings },
@@ -93,7 +109,7 @@ describe('admin marketing routes', () => {
     const { app, calls } = await createHarness()
     const response = await app.handle(request('/api/v1/admin/marketing/overview?from=2026-10-01&to=2026-10-07'))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ marker: 'overview' })
+    expect(await response.json()).toEqual(overview)
     expect(calls.find((call) => call.method === 'overview')?.args).toEqual([{ from: '2026-10-01', to: '2026-10-07' }, 35])
   })
 
