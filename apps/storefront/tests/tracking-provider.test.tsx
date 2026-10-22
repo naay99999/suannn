@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
 import { act, cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useNavigate } from 'react-router'
-import { useState, type ReactNode } from 'react'
+import { useLayoutEffect, useState, type ReactNode } from 'react'
 
 const captured: string[] = []
 const identified: Array<string | null> = []
@@ -34,13 +34,13 @@ let setMarketing: (value: boolean) => void
 
 function Nav() {
   const navigate = useNavigate()
-  goTo = path => { void navigate(path) }
+  useLayoutEffect(() => { goTo = path => { void navigate(path) } }, [navigate])
   return null
 }
 
 function ConsentHarness({ children }: { children: ReactNode }) {
   const [marketing, setMarketingState] = useState(false)
-  setMarketing = setMarketingState
+  useLayoutEffect(() => { setMarketing = setMarketingState }, [])
   const noop = async () => {}
   const choice = marketing
     ? { analytics: true, marketing: true, policyVersion: 'v1', consentId: 'c1', decidedAt: '2026-10-22T00:00:00.000Z' }
@@ -91,4 +91,15 @@ test('each location change produces a page_view', () => {
   mount()
   act(() => goTo('/products'))
   expect(captured.filter(name => name === '$pageview').length).toBe(2)
+})
+
+test('granting marketing consent replays the current page_view to pixels only', () => {
+  mount()
+  act(() => goTo('/products?page=2'))
+  const before = captured.filter(name => name === '$pageview').length
+  act(() => setMarketing(true))
+  const fbq = window.fbq as unknown as { queue: unknown[][] }
+  const pageViews = fbq.queue.filter(args => args[0] === 'track' && args[1] === 'PageView')
+  expect(pageViews.length).toBe(1)
+  expect(captured.filter(name => name === '$pageview').length).toBe(before)
 })

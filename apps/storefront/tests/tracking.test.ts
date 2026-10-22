@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 
 const captured: Array<[string, Record<string, unknown>]> = []
 let captureThrows = false
+const calls: string[] = []
 
 mock.module('posthog-js', () => ({
   default: {
@@ -10,10 +11,10 @@ mock.module('posthog-js', () => ({
       if (captureThrows) throw new Error('boom')
       captured.push([name, properties])
     },
-    set_config: () => {},
+    set_config: (config: Record<string, unknown>) => { calls.push(`set_config:${JSON.stringify(config)}`) },
     startSessionRecording: () => {},
     stopSessionRecording: () => {},
-    reset: () => {},
+    reset: () => { calls.push('reset') },
     identify: () => {},
     get_distinct_id: () => 'distinct',
     getFeatureFlag: () => undefined,
@@ -23,7 +24,7 @@ mock.module('posthog-js', () => ({
 
 const { toGoogle, toMeta, toPostHog, toTikTok } = await import('../src/lib/tracking/mappings')
 const { loadPixels } = await import('../src/lib/tracking/pixels')
-const { initPostHog } = await import('../src/lib/tracking/posthog')
+const { initPostHog, setAnalyticsConsent } = await import('../src/lib/tracking/posthog')
 const { setTrackingConsent, track } = await import('../src/lib/tracking/tracker')
 type BrowserEvent = import('../src/lib/tracking/events').BrowserEvent
 
@@ -87,6 +88,24 @@ describe('track', () => {
     track(events[1]!)
     expect(fbq.queue.length).toBe(before + 1)
     expect(Array.from(fbq.queue.at(-1)!).slice(0, 2)).toEqual(['track', 'ViewContent'])
+  })
+
+  test('stops calling pixels after marketing consent is revoked', () => {
+    loadPixels({ metaPixelId: '111' })
+    const fbq = window.fbq as unknown as { queue: unknown[][] }
+    setTrackingConsent({ analytics: true, marketing: true })
+    track(events[1]!)
+    const sent = fbq.queue.length
+    setTrackingConsent({ analytics: true, marketing: false })
+    track(events[1]!)
+    expect(fbq.queue.length).toBe(sent)
+  })
+
+  test('revoking analytics resets PostHog and returns to memory persistence', () => {
+    calls.length = 0
+    setAnalyticsConsent(false)
+    expect(calls).toContain('reset')
+    expect(calls.some(call => call.startsWith('set_config:') && call.includes('"persistence":"memory"'))).toBe(true)
   })
 
   test('never throws when a sink throws', () => {

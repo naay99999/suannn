@@ -78,7 +78,8 @@ function loadGoogle(id: string) {
     window.gtag('js', new Date())
   }
   injectScript('google', `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`)
-  window.gtag('config', id)
+  // The page_view is sent explicitly by the tracker; the automatic one would double-count.
+  window.gtag('config', id, { send_page_view: false })
 }
 
 // Idempotent: each pixel's script is injected at most once, keyed by data-tracking-pixel.
