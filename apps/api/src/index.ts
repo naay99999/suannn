@@ -66,6 +66,8 @@ import { createGoogleAdsAccessTokens } from './modules/google-ads/auth'
 import { createCachedPostHog } from './modules/marketing/posthog/cache'
 import { MarketingMetrics } from './modules/marketing/metrics/service'
 import { MarketingSettingsService } from './modules/marketing/settings'
+import { CatalogFeedRepository } from './modules/catalog-feed/repository'
+import { CatalogFeedService } from './modules/catalog-feed/service'
 import { AdSpendAlerts } from './modules/marketing/spend/alerts'
 import { createGoogleSpendSource } from './modules/marketing/spend/google'
 import { createMetaSpendSource } from './modules/marketing/spend/meta'
@@ -142,6 +144,13 @@ const trackingOutbox = new TrackingOutbox(database.db, {
 })
 const trackingAlerts = new TrackingAlerts(database.db, config.tracking, emailSender, config.adminUrl)
 // Spend sources exist only for configured platforms; Google spend sync follows the existing GOOGLE_ADS_* group.
+const marketingSettings = new MarketingSettingsService(database.db, audit)
+const catalogFeed = new CatalogFeedService(
+  new CatalogFeedRepository(database.db, inventoryReadRepository, mediaUrls),
+  marketingSettings,
+  commerceSettings,
+  config.storefrontUrl,
+)
 const marketingSync = new AdSpendSync(database.db, {
   ...(config.marketing.metaAds ? { meta: createMetaSpendSource(config.marketing.metaAds) } : {}),
   ...(config.marketing.tiktokAds ? { tiktok: createTikTokSpendSource(config.marketing.tiktokAds) } : {}),
@@ -222,9 +231,10 @@ const app = await createApp(config, {
   storeAnnouncement,
   consent,
   trackingStatus,
+  catalogFeed,
   marketing: {
     metrics: new MarketingMetrics(database.db, configuredAdPlatforms),
-    settings: new MarketingSettingsService(database.db, audit),
+    settings: marketingSettings,
     sync: marketingSync,
     posthog: config.marketing.posthogRead ? createCachedPostHog(config.marketing.posthogRead) : null,
   },

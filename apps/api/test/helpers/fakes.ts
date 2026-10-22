@@ -45,6 +45,16 @@ export const fakeTrackingStatus = {
   }),
 }
 
+export const fakeCatalogFeed = {
+  xml: async () => '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"/>',
+  summary: async () => ({
+    brandName: 'suannn',
+    warnings: [],
+    problems: [],
+    counts: { total: 0, inFeed: 0, inStock: 0, outOfStock: 0, excluded: 0 },
+  }),
+}
+
 export const fakeMarketing = {
   metrics: { overview: async () => ({}) as never },
   settings: {

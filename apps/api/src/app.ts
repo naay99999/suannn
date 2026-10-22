@@ -47,6 +47,8 @@ import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { ReceiptSettingsService } from './modules/receipts/settings'
+import { createAdminCatalogFeedModule, createStoreCatalogFeedModule } from './modules/catalog-feed'
+import type { CatalogFeedService } from './modules/catalog-feed/service'
 import { createAdminMarketingModule, type MarketingDependencies } from './modules/marketing'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import { createStoreConsentModule } from './modules/tracking/consent'
@@ -96,6 +98,7 @@ export interface AppDependencies {
   consent: ConsentService
   trackingStatus: Pick<TrackingStatusService, 'get'>
   marketing: MarketingDependencies
+  catalogFeed: Pick<CatalogFeedService, 'xml' | 'summary'>
   dashboard: DashboardService
   customers: AdminCustomerService
   staffMfaRequired(): Promise<boolean>
@@ -153,7 +156,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createAuditModule(dependencies.auth, dependencies.audit))
     .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
-    .use(createStoreFarmsModule(dependencies.farms))
+    .use(new Elysia({ name: 'store-farms-and-catalog-feed' })
+      .use(createStoreFarmsModule(dependencies.farms))
+      .use(createStoreCatalogFeedModule(config, dependencies.catalogFeed, dependencies.limiter)))
     .use(new Elysia({ name: 'store-announcement-and-consent' })
       .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
       .use(createStoreConsentModule(config, dependencies.auth, dependencies.consent, dependencies.limiter)))
@@ -173,7 +178,8 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(new Elysia({ name: 'admin-announcement-and-tracking' })
       .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
       .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus))
-      .use(createAdminMarketingModule(config, dependencies.auth, dependencies.marketing, dependencies.limiter)))
+      .use(createAdminMarketingModule(config, dependencies.auth, dependencies.marketing, dependencies.limiter))
+      .use(createAdminCatalogFeedModule(dependencies.auth, dependencies.catalogFeed)))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

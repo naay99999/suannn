@@ -44,6 +44,7 @@ export type DomainErrorCode =
   | 'INVALID_MARKETING_SETTINGS'
   | 'MARKETING_SETTINGS_CONFLICT'
   | 'INVALID_MARKETING_FILTER'
+  | 'CATALOG_FEED_UNAVAILABLE'
   | 'POSTHOG_READ_NOT_CONFIGURED'
   | 'POSTHOG_READ_AUTH'
   | 'POSTHOG_READ_UNAVAILABLE'
@@ -125,6 +126,7 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_MARKETING_SETTINGS: { status: 422, message: 'Marketing settings are invalid' },
   MARKETING_SETTINGS_CONFLICT: { status: 409, message: 'Marketing settings changed; reload and try again' },
   INVALID_MARKETING_FILTER: { status: 422, message: 'Marketing filter is invalid' },
+  CATALOG_FEED_UNAVAILABLE: { status: 503, message: 'Product feed is temporarily unavailable' },
   POSTHOG_READ_NOT_CONFIGURED: { status: 503, message: 'PostHog reporting is not configured' },
   POSTHOG_READ_AUTH: { status: 503, message: 'PostHog reporting is unavailable' },
   POSTHOG_READ_UNAVAILABLE: { status: 503, message: 'PostHog reporting is unavailable' },

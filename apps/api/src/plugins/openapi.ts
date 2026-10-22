@@ -19,6 +19,7 @@ export const apiTags = [
   { name: 'Customer Account', description: 'Delete (anonymize) the signed-in customer account.' },
   { name: 'Store Products', description: 'Public catalog products and active variants available to storefront clients.' },
   { name: 'Store Farms', description: 'Public farm profiles and product associations for storefront clients.' },
+  { name: 'Store Catalog Feed', description: 'Public product feed for Google Merchant Center and Meta catalogs.' },
   { name: 'Store Announcement', description: 'Public storefront promotion bar.' },
   { name: 'Store Consent', description: 'Storefront cookie consent policy version and consent recording.' },
   { name: 'Store Cart', description: 'Maintain the current customer or guest cart.' },
