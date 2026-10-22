@@ -47,6 +47,7 @@ import type { StripeRefundService } from './modules/payments/stripe/refunds'
 import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { ReceiptSettingsService } from './modules/receipts/settings'
+import { createAdminMarketingModule, type MarketingDependencies } from './modules/marketing'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
 import { createStoreConsentModule } from './modules/tracking/consent'
 import type { ConsentService } from './modules/tracking/consent/service'
@@ -94,6 +95,7 @@ export interface AppDependencies {
   storeAnnouncement: StoreAnnouncementService
   consent: ConsentService
   trackingStatus: Pick<TrackingStatusService, 'get'>
+  marketing: MarketingDependencies
   dashboard: DashboardService
   customers: AdminCustomerService
   staffMfaRequired(): Promise<boolean>
@@ -170,7 +172,8 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
       .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))
     .use(new Elysia({ name: 'admin-announcement-and-tracking' })
       .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
-      .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus)))
+      .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus))
+      .use(createAdminMarketingModule(config, dependencies.auth, dependencies.marketing, dependencies.limiter)))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

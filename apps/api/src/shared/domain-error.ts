@@ -40,6 +40,9 @@ export type DomainErrorCode =
   | 'RECEIPT_NOT_FOUND'
   | 'INVALID_STORE_ANNOUNCEMENT'
   | 'STORE_ANNOUNCEMENT_UNAVAILABLE'
+  | 'INVALID_MARKETING_RANGE'
+  | 'INVALID_MARKETING_SETTINGS'
+  | 'MARKETING_SETTINGS_CONFLICT'
   | 'INVALID_CONSENT'
   | 'CONSENT_POLICY_OUTDATED'
   | 'CHECKOUT_DISABLED'
@@ -113,6 +116,9 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   RECEIPT_NOT_FOUND: { status: 404, message: 'Receipt was not found' },
   INVALID_STORE_ANNOUNCEMENT: { status: 422, message: 'Store announcement is invalid' },
   STORE_ANNOUNCEMENT_UNAVAILABLE: { status: 503, message: 'Store announcement is unavailable' },
+  INVALID_MARKETING_RANGE: { status: 422, message: 'Marketing date range is invalid' },
+  INVALID_MARKETING_SETTINGS: { status: 422, message: 'Marketing settings are invalid' },
+  MARKETING_SETTINGS_CONFLICT: { status: 409, message: 'Marketing settings changed; reload and try again' },
   INVALID_CONSENT: { status: 422, message: 'Consent request is invalid' },
   CONSENT_POLICY_OUTDATED: { status: 422, message: 'Consent policy version is outdated' },
   CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },

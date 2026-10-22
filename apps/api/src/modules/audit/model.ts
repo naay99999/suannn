@@ -20,6 +20,7 @@ export const auditMetadataKeys = {
   'settings.commerce-updated': ['fields'],
   'settings.receipt-updated': ['fields'],
   'settings.store-announcement-updated': ['fields'],
+  'marketing.settings.updated': ['from', 'to'],
   'order.placed': ['actorType', 'principalId', 'reservationId', 'paymentId', 'totalSatang', 'lineCount'],
   'order.pending_payment': ['actorType', 'principalId', 'reservationId', 'paymentId', 'totalSatang', 'lineCount'],
   'order.cancelled': ['actorType', 'principalId', 'operationId', 'restoredQuantity', 'totalSatang'],

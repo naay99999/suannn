@@ -63,6 +63,8 @@ import { createTikTokAdapter } from './modules/tracking/adapters/tiktok'
 import { TrackingOutbox } from './modules/tracking/outbox'
 import { TrackingAlerts } from './modules/tracking/alerts'
 import { createGoogleAdsAccessTokens } from './modules/google-ads/auth'
+import { MarketingMetrics } from './modules/marketing/metrics/service'
+import { MarketingSettingsService } from './modules/marketing/settings'
 import { AdSpendAlerts } from './modules/marketing/spend/alerts'
 import { createGoogleSpendSource } from './modules/marketing/spend/google'
 import { createMetaSpendSource } from './modules/marketing/spend/meta'
@@ -219,6 +221,11 @@ const app = await createApp(config, {
   storeAnnouncement,
   consent,
   trackingStatus,
+  marketing: {
+    metrics: new MarketingMetrics(database.db, configuredAdPlatforms),
+    settings: new MarketingSettingsService(database.db, audit),
+    sync: marketingSync,
+  },
   dashboard: new DashboardService(new DashboardRepository(database.db)),
   customers: new AdminCustomerService(new AdminCustomerRepository(database.db)),
   staffMfaRequired,
