@@ -54,6 +54,40 @@ export const marketingModels = {
     campaigns: t.Array(campaignRow),
     warnings: t.Array(warning),
   }, { additionalProperties: false }),
+  'marketing.funnelQuery': t.Object({
+    from: t.Optional(t.String()),
+    to: t.Optional(t.String()),
+    platform: t.Optional(t.String()),
+    campaign: t.Optional(t.String({ maxLength: 200 })),
+  }),
+  'marketing.funnel': t.Object({
+    steps: t.Array(t.Object({
+      event: t.String(),
+      label: t.String(),
+      count: t.Number(),
+      conversionFromPrevious: nullableNumber,
+      dropOffFromPrevious: nullableNumber,
+    }, { additionalProperties: false })),
+  }, { additionalProperties: false }),
+  'marketing.experiments': t.Object({
+    experiments: t.Array(t.Object({
+      id: t.Number(),
+      name: t.String(),
+      status: t.Union([t.Literal('draft'), t.Literal('running'), t.Literal('complete')]),
+      startDate: nullableString,
+      endDate: nullableString,
+      flagKey: t.String(),
+      url: t.String(),
+      variants: t.Union([t.Array(t.Object({
+        key: t.String(),
+        exposures: t.Number(),
+        conversions: t.Number(),
+        conversionRate: t.Number(),
+      }, { additionalProperties: false })), t.Null()]),
+      winner: nullableString,
+      readable: t.Boolean(),
+    }, { additionalProperties: false })),
+  }, { additionalProperties: false }),
   'marketing.settings': t.Object({
     marginPercent: t.Number(),
     version: t.Integer({ minimum: 1 }),

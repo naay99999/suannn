@@ -43,6 +43,11 @@ export type DomainErrorCode =
   | 'INVALID_MARKETING_RANGE'
   | 'INVALID_MARKETING_SETTINGS'
   | 'MARKETING_SETTINGS_CONFLICT'
+  | 'INVALID_MARKETING_FILTER'
+  | 'POSTHOG_READ_NOT_CONFIGURED'
+  | 'POSTHOG_READ_AUTH'
+  | 'POSTHOG_READ_UNAVAILABLE'
+  | 'POSTHOG_READ_REJECTED'
   | 'INVALID_CONSENT'
   | 'CONSENT_POLICY_OUTDATED'
   | 'CHECKOUT_DISABLED'
@@ -119,6 +124,11 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   INVALID_MARKETING_RANGE: { status: 422, message: 'Marketing date range is invalid' },
   INVALID_MARKETING_SETTINGS: { status: 422, message: 'Marketing settings are invalid' },
   MARKETING_SETTINGS_CONFLICT: { status: 409, message: 'Marketing settings changed; reload and try again' },
+  INVALID_MARKETING_FILTER: { status: 422, message: 'Marketing filter is invalid' },
+  POSTHOG_READ_NOT_CONFIGURED: { status: 503, message: 'PostHog reporting is not configured' },
+  POSTHOG_READ_AUTH: { status: 503, message: 'PostHog reporting is unavailable' },
+  POSTHOG_READ_UNAVAILABLE: { status: 503, message: 'PostHog reporting is unavailable' },
+  POSTHOG_READ_REJECTED: { status: 503, message: 'PostHog reporting is unavailable' },
   INVALID_CONSENT: { status: 422, message: 'Consent request is invalid' },
   CONSENT_POLICY_OUTDATED: { status: 422, message: 'Consent policy version is outdated' },
   CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },

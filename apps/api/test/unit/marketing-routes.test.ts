@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { createApp, type AppDependencies } from '../../src/app'
 import { loadConfig } from '../../src/config/env'
+import { DomainError } from '../../src/shared/domain-error'
 import type { Auth } from '../../src/plugins/auth/auth'
 import { MarketingSettingsService } from '../../src/modules/marketing/settings'
 import { testEnv } from '../fixtures'
@@ -24,7 +25,7 @@ const overview = {
 }
 const settings = { marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }
 
-async function createHarness(role = 'owner', allowSync = true, settingsOverride?: AppDependencies['marketing']['settings']) {
+async function createHarness(role = 'owner', allowSync = true, settingsOverride?: AppDependencies['marketing']['settings'], posthog: AppDependencies['marketing']['posthog'] = null) {
   const calls: Array<{ method: string, args: unknown[] }> = []
   const marketing = {
     metrics: { overview: async (...args: unknown[]) => { calls.push({ method: 'overview', args }); return overview } },
@@ -32,6 +33,7 @@ async function createHarness(role = 'owner', allowSync = true, settingsOverride?
       get: async () => { calls.push({ method: 'get', args: [] }); return settings },
       update: async (...args: unknown[]) => { calls.push({ method: 'update', args }); return settings },
     },
+    posthog,
     sync: { run: async () => { calls.push({ method: 'run', args: [] }); return [{ platform: 'meta' as const, status: 'succeeded' as const }] } },
   }
   const auth = {
@@ -81,6 +83,7 @@ describe('admin marketing routes', () => {
     const { app, calls } = await createHarness()
     for (const [method, path] of [
       ['GET', '/overview?from=2026-10-01&to=2026-10-02'], ['GET', '/settings'], ['GET', '/templates'],
+      ['GET', '/funnel?from=2026-10-01&to=2026-10-02'], ['GET', '/experiments'],
       ['PUT', '/settings'], ['POST', '/sync'],
     ]) {
       const init: RequestInit = method === 'PUT' ? { method, body: JSON.stringify({ marginPercent: 40, version: 1 }) }
@@ -95,6 +98,7 @@ describe('admin marketing routes', () => {
     const { app, calls } = await createHarness('support')
     for (const [method, path] of [
       ['GET', '/overview?from=2026-10-01&to=2026-10-02'], ['GET', '/settings'], ['GET', '/templates'],
+      ['GET', '/funnel?from=2026-10-01&to=2026-10-02'], ['GET', '/experiments'],
       ['PUT', '/settings'], ['POST', '/sync'],
     ]) {
       const init: RequestInit = method === 'PUT' ? { method, body: JSON.stringify({ marginPercent: 40, version: 1 }) }
@@ -201,5 +205,73 @@ describe('admin marketing routes', () => {
     expect(templates[0]?.template).toContain('{{campaign.id}}')
     expect(templates[1]?.template).toContain('__CAMPAIGN_ID__')
     expect(templates[2]?.template).toContain('{campaignid}')
+  })
+
+  describe('PostHog reports', () => {
+    const steps = [{ event: '$pageview', label: 'เข้าเว็บ', count: 10, conversionFromPrevious: null, dropOffFromPrevious: null }]
+    const experiments = [{
+      id: 1, name: 'Hero', status: 'running' as const, startDate: '2026-10-01T00:00:00Z', endDate: null, flagKey: 'hero',
+      url: 'https://us.posthog.com/project/1/experiments/1', variants: null, winner: null, readable: false,
+    }]
+    const posthog = () => {
+      const funnelCalls: unknown[][] = []
+      return {
+        funnelCalls,
+        client: {
+          funnel: async (...args: unknown[]) => { funnelCalls.push(args); return { steps } },
+          experiments: async () => ({ experiments }),
+        },
+      }
+    }
+
+    it('returns 503 POSTHOG_READ_NOT_CONFIGURED without PostHog config', async () => {
+      const { app } = await createHarness()
+      for (const path of ['/funnel?from=2026-10-01&to=2026-10-02', '/experiments']) {
+        const response = await app.handle(request(`/api/v1/admin/marketing${path}`))
+        expect(response.status).toBe(503)
+        expect(await response.json()).toMatchObject({ code: 'POSTHOG_READ_NOT_CONFIGURED' })
+      }
+    })
+
+    it('serves the funnel with parsed range and filters', async () => {
+      const { client, funnelCalls } = posthog()
+      const { app } = await createHarness('owner', true, undefined, client)
+      const response = await app.handle(request('/api/v1/admin/marketing/funnel?from=2026-10-01&to=2026-10-07&platform=meta&campaign=c1'))
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ steps })
+      expect(funnelCalls[0]).toEqual([{ from: '2026-10-01', to: '2026-10-07' }, { platform: 'meta', campaign: 'c1' }])
+    })
+
+    it('rejects a bad range or platform with 422', async () => {
+      const { app } = await createHarness('owner', true, undefined, posthog().client)
+      const range = await app.handle(request('/api/v1/admin/marketing/funnel?from=2026-10-09&to=2026-10-07'))
+      expect(range.status).toBe(422)
+      expect(await range.json()).toMatchObject({ code: 'INVALID_MARKETING_RANGE' })
+      const filter = await app.handle(request('/api/v1/admin/marketing/funnel?from=2026-10-01&to=2026-10-07&platform=bing'))
+      expect(filter.status).toBe(422)
+      expect(await filter.json()).toMatchObject({ code: 'INVALID_MARKETING_FILTER' })
+    })
+
+    it('serves experiments and maps client failures to 503 with the client code', async () => {
+      const ok = await createHarness('owner', true, undefined, posthog().client)
+      expect(await (await ok.app.handle(request('/api/v1/admin/marketing/experiments'))).json()).toEqual({ experiments })
+      const failing = await createHarness('admin', true, undefined, {
+        funnel: async () => { throw new DomainError('POSTHOG_READ_AUTH') },
+        experiments: async () => { throw new DomainError('POSTHOG_READ_UNAVAILABLE') },
+      })
+      const funnel = await failing.app.handle(request('/api/v1/admin/marketing/funnel?from=2026-10-01&to=2026-10-02'))
+      expect(funnel.status).toBe(503)
+      expect(await funnel.json()).toMatchObject({ code: 'POSTHOG_READ_AUTH' })
+      const list = await failing.app.handle(request('/api/v1/admin/marketing/experiments'))
+      expect(list.status).toBe(503)
+      expect(await list.json()).toMatchObject({ code: 'POSTHOG_READ_UNAVAILABLE' })
+    })
+
+    it('forbids the support role', async () => {
+      const { app } = await createHarness('support', true, undefined, posthog().client)
+      for (const path of ['/funnel?from=2026-10-01&to=2026-10-02', '/experiments']) {
+        expect((await app.handle(request(`/api/v1/admin/marketing${path}`))).status).toBe(403)
+      }
+    })
   })
 })

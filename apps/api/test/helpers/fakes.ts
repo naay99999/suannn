@@ -49,6 +49,7 @@ export const fakeMarketing = {
     update: async () => ({ marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
   },
   sync: { run: async () => [] },
+  posthog: null,
 }
 
 export class InMemoryMediaStorage implements MediaStorage {
