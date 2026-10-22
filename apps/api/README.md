@@ -282,3 +282,21 @@ The storefront (`apps/storefront/.env.local`) loads the browser SDKs from these 
 3. Refresh token: authorise the scope `https://www.googleapis.com/auth/adwords` as a user with access to the account (for example through the OAuth 2.0 Playground using your own client credentials, offline access) and copy the refresh token to `GOOGLE_ADS_REFRESH_TOKEN`.
 4. Customer id: the 10-digit account id at the top right of Google Ads is `GOOGLE_ADS_CUSTOMER_ID`. If you access it through a manager account, set that manager's id as `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
 5. Conversion action id: in Goals, "Conversions", "Summary", create an action of type "Import" (from clicks, API) for purchases, open it, and take the numeric `ctId` from the URL as `GOOGLE_ADS_CONVERSION_ACTION_ID`. The browser tag id (`AW-…`) is `VITE_GOOGLE_ADS_ID`.
+
+### Deployment order
+
+1. Run the migrations (`bun run db:migrate`, includes `0034`).
+2. Deploy the API.
+3. Deploy the storefront.
+
+The storefront sends consent and attribution to endpoints that only exist after step 2, so the API must be live first.
+
+### Verify events before going live
+
+1. Meta: set `META_TEST_EVENT_CODE` (Events Manager, "Test events") and place a test order with marketing consent accepted. The `Purchase` event appears in the Test events tab with a matching browser event (deduplicated by `event_id`, the order id). Remove the code for production.
+2. TikTok: set `TIKTOK_TEST_EVENT_CODE` (Events Manager, "Test Events") and repeat the order. A TikTok purchase uses the `Purchase` event. Remove the code for production.
+3. Google Ads: click through a real ad (so the order stores a `gclid`), place a test order, then check the conversion action's diagnostics. Uploads can take several hours to appear.
+4. PostHog: open "Activity" / live events and confirm the funnel events and the server-side `purchase` arrive for an order placed with analytics consent accepted.
+5. Admin, Settings, Integrations tab: confirm each configured destination shows as enabled and that no destination has failing or dead rows.
+
+The Google Ads API version is a constant (`v25`) in `src/modules/tracking/adapters/google-ads.ts`. Bump it before Google sunsets that version; see https://developers.google.com/google-ads/api/docs/sunset-dates.

@@ -27,6 +27,7 @@ export const router = createBrowserRouter([
         path: 'products/:slug',
         lazy: () => import('./pages/products/product-detail-page'),
       },
+      { path: 'privacy', lazy: () => import('./pages/privacy/privacy-page') },
       { path: 'farms', lazy: () => import('./pages/farms/farm-list-page') },
       { path: 'farms/:slug', lazy: () => import('./pages/farms/farm-detail-page') },
       {
