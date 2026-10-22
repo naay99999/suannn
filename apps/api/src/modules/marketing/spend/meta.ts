@@ -46,13 +46,17 @@ export function createMetaSpendSource(
           if (typeof row.campaign_id !== 'string' || typeof row.date_start !== 'string') {
             throw new SpendSyncError('META_ADS_INVALID_ROW')
           }
+          // Never assume THB: a missing currency would skew spend totals and verdicts.
+          if (typeof row.account_currency !== 'string' || !row.account_currency) {
+            throw new SpendSyncError('META_ADS_INVALID_ROW')
+          }
           rows.push({
             accountId: config.accountId,
             campaignId: row.campaign_id,
             campaignName: typeof row.campaign_name === 'string' ? row.campaign_name : '',
             date: row.date_start,
             spendSatang: decimalToSatang(amountString(row.spend ?? '0', INVALID), INVALID),
-            currency: typeof row.account_currency === 'string' ? row.account_currency : 'THB',
+            currency: row.account_currency,
             impressions: countValue(row.impressions, INVALID),
             clicks: countValue(row.clicks, INVALID),
           })

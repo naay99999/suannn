@@ -98,6 +98,11 @@ describe('meta spend source', () => {
     expect(result.accountTimezone).toBeNull()
   })
 
+  test('a row without a currency is invalid, never defaulted to THB', async () => {
+    const { impl } = fakeFetch(() => json({ data: [{ campaign_id: 'c1', spend: '1', date_start: '2026-10-01' }] }))
+    expect(await codeOf(createMetaSpendSource(config, impl).fetch(range))).toBe('META_ADS_INVALID_ROW')
+  })
+
   test('maps HTTP failures to codes without leaking the token', async () => {
     const cases: Array<[number, string]> = [
       [401, 'META_ADS_AUTH'],
@@ -117,7 +122,7 @@ describe('meta spend source', () => {
   test('network failure and bad amounts map to codes', async () => {
     const down = fakeFetch(() => { throw new Error('connect SECRET_TOKEN') })
     expect(await codeOf(createMetaSpendSource(config, down.impl).fetch(range))).toBe('META_ADS_UNAVAILABLE')
-    const bad = fakeFetch(() => json({ data: [{ campaign_id: 'c', spend: 1e21, date_start: '2026-10-01' }] }))
+    const bad = fakeFetch(() => json({ data: [{ campaign_id: 'c', spend: 1e21, account_currency: 'THB', date_start: '2026-10-01' }] }))
     expect(await codeOf(createMetaSpendSource(config, bad.impl).fetch(range))).toBe('META_ADS_INVALID_AMOUNT')
   })
 })
@@ -157,6 +162,28 @@ describe('tiktok spend source', () => {
     expect(u.searchParams.get('start_date')).toBe('2026-10-01')
     const headers = reports[0]!.init?.headers as Record<string, string>
     expect(headers['Access-Token']).toBe('TT_SECRET')
+  })
+
+  test('splits a 90-day range into 30-day windows and looks up the advertiser once', async () => {
+    const { calls, impl } = fakeFetch((url) => {
+      const u = new URL(url)
+      if (u.pathname.endsWith('/advertiser/info/')) return json({ code: 0, data: { list: [{ timezone: 'Asia/Bangkok', currency: 'THB' }] } })
+      const start = u.searchParams.get('start_date')!
+      return json({ code: 0, data: { list: [row(`c${start}`, start, '1')], page_info: { total_page: 1 } } })
+    })
+    const result = await createTikTokSpendSource(config, impl).fetch({ from: '2026-07-25', to: '2026-10-22' })
+    const reports = calls.filter((c) => c.url.includes('/report/integrated/get/')).map((c) => new URL(c.url).searchParams)
+    expect(reports.map((p) => [p.get('start_date'), p.get('end_date')])).toEqual([
+      ['2026-07-25', '2026-08-23'],
+      ['2026-08-24', '2026-09-22'],
+      ['2026-09-23', '2026-10-22'],
+    ])
+    expect(result.rows.map((r) => r.date)).toEqual(['2026-07-25', '2026-08-24', '2026-09-23'])
+    expect(calls.filter((c) => c.url.includes('/advertiser/info/')).length).toBe(1)
+    const short = fakeFetch(() => json({ code: 0, data: { list: [], page_info: { total_page: 1 } } }))
+    await createTikTokSpendSource(config, short.impl).fetch({ from: '2026-10-01', to: '2026-10-01' })
+    const only = new URL(short.calls[0]!.url).searchParams
+    expect([only.get('start_date'), only.get('end_date')]).toEqual(['2026-10-01', '2026-10-01'])
   })
 
   test('falls back to the advertiser currency once when the report omits it', async () => {
@@ -249,6 +276,12 @@ describe('google spend source', () => {
     const out = await createGoogleSpendSource(config, tokens, impl).fetch(range)
     expect(out.accountTimezone).toBeNull()
     expect(out.rows.length).toBe(1)
+  })
+
+  test('a row without a currency is invalid, never defaulted to THB', async () => {
+    const noCurrency = { ...result('1', '1000000', '5'), customer: {} }
+    const { impl } = fakeFetch(() => json({ results: [noCurrency] }))
+    expect(await codeOf(createGoogleSpendSource(config, tokens, impl).fetch(range))).toBe('GOOGLE_ADS_INVALID_ROW')
   })
 
   test('HTTP failures map to codes', async () => {

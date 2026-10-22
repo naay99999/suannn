@@ -54,14 +54,16 @@ export function createGoogleSpendSource(
           const spendSatang = microsToSatang(micros)
           const impressions = countValue(metrics.impressions, INVALID)
           if (BigInt(micros) === 0n && impressions === 0) continue
+          // Never assume THB: a missing currency would skew spend totals and verdicts.
           const currency = asRecord(result.customer).currencyCode
+          if (typeof currency !== 'string' || !currency) throw new SpendSyncError('GOOGLE_ADS_INVALID_ROW')
           rows.push({
             accountId: config.customerId,
             campaignId: String(campaign.id),
             campaignName: typeof campaign.name === 'string' ? campaign.name : '',
             date: segments.date,
             spendSatang,
-            currency: typeof currency === 'string' ? currency : 'THB',
+            currency,
             impressions,
             clicks: countValue(metrics.clicks, INVALID),
           })
