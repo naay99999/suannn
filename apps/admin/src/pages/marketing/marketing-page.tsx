@@ -97,6 +97,8 @@ export function Component() {
   const overview = useQuery({ ...marketingOverviewQuery(range), enabled: !tooLong })
   const stale = useStaleSpendWarning()
   const { platform, campaign, setFilter } = useFunnelFilter()
+  // A campaign counts only if it belongs to the selected platform; until the overview loads it is treated as "all".
+  const validCampaign = platform && overview.data?.campaigns.some((row) => row.platform === platform && row.campaignId === campaign) ? campaign : undefined
 
   return (
     <>
@@ -130,7 +132,7 @@ export function Component() {
                 <CampaignTable campaigns={overview.data.campaigns} />
               </>
             )}
-        <FunnelSection campaign={campaign} campaigns={overview.data?.campaigns ?? []} enabled={!tooLong} onFilterChange={setFilter} platform={platform} range={range} />
+        <FunnelSection campaign={validCampaign} campaigns={overview.data?.campaigns ?? []} enabled={!tooLong} onFilterChange={setFilter} platform={platform} range={range} />
         <ExperimentsList />
         <MarginSetting canUpdate={canUpdate} />
         <UtmTemplates />

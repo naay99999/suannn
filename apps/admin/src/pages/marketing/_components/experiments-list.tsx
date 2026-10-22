@@ -71,7 +71,7 @@ export function ExperimentsList() {
   return (
     <section aria-labelledby="experiments-heading" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold" id="experiments-heading">การทดลอง</h2>
+        <h2 className="text-xl font-semibold" id="experiments-heading">การทดสอบ A/B</h2>
         <p className="text-sm text-muted-foreground">รวมเฉพาะผู้เยี่ยมชมที่ยอมรับคุกกี้วิเคราะห์</p>
       </div>
       {experiments.isPending
@@ -79,7 +79,7 @@ export function ExperimentsList() {
         : experiments.isError
           ? <PosthogState error={experiments.error} onRetry={() => void experiments.refetch()} />
           : experiments.data.experiments.length === 0
-            ? <QueryState kind="empty" message="ยังไม่มีการทดลอง" />
+            ? <QueryState kind="empty" message="ยังไม่มีการทดสอบ" />
             : experiments.data.experiments.map((experiment) => <ExperimentCard experiment={experiment} key={experiment.id} />)}
     </section>
   )

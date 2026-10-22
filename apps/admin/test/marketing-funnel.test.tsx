@@ -106,8 +106,7 @@ test('renders the five funnel steps with conversion from the previous step', asy
 test('selecting a platform refetches the funnel with platform=meta and resets the campaign', async () => {
   const user = userEvent.setup()
   renderPage('/marketing?platform=tiktok&campaign=c2')
-  await screen.findByRole('list', { name: 'ขั้นตอนการซื้อ' })
-  expect(calls.filter((call) => call.path.endsWith('/funnel')).at(-1)!.search.get('campaign')).toBe('c2')
+  await waitFor(() => expect(calls.filter((call) => call.path.endsWith('/funnel')).at(-1)!.search.get('campaign')).toBe('c2'))
 
   await user.click(screen.getByRole('combobox', { name: 'แพลตฟอร์ม' }))
   await user.click(await screen.findByRole('option', { name: 'Meta' }))
@@ -117,6 +116,21 @@ test('selecting a platform refetches the funnel with platform=meta and resets th
     expect(last.search.get('platform')).toBe('meta')
     expect(last.search.get('campaign')).toBeNull()
   })
+})
+
+test('ignores a campaign that does not belong to the selected platform', async () => {
+  renderPage('/marketing?platform=meta&campaign=c2')
+
+  const combobox = await screen.findByRole('combobox', { name: 'แคมเปญ' })
+  await screen.findByRole('list', { name: 'ขั้นตอนการซื้อ' })
+  await screen.findByText('แคมเปญมังคุด')
+  await waitFor(() => expect(within(combobox).getByText('ทุกแคมเปญ')).toBeTruthy())
+  const funnelCalls = calls.filter((call) => call.path.endsWith('/funnel'))
+  expect(funnelCalls.length).toBeGreaterThan(0)
+  for (const call of funnelCalls) {
+    expect(call.search.get('platform')).toBe('meta')
+    expect(call.search.get('campaign')).toBeNull()
+  }
 })
 
 test('does not request the funnel for a range that is too long', async () => {
@@ -136,6 +150,16 @@ test('renders experiment verdicts, status and the PostHog link', async () => {
   const links = screen.getAllByRole('link', { name: 'เปิดใน PostHog' })
   expect(links[0]!.getAttribute('target')).toBe('_blank')
   expect(links[0]!.getAttribute('rel')).toBe('noreferrer')
+})
+
+test('says the result is inconclusive for a readable experiment without a winner', async () => {
+  routes['GET /api/v1/admin/marketing/experiments'] = () => Response.json({
+    experiments: [{ ...experiments.experiments[0]!, winner: null }],
+  })
+  renderPage()
+
+  expect(await screen.findByText('ยังสรุปไม่ได้')).toBeTruthy()
+  expect(screen.queryByText(/ชนะ/)).toBeNull()
 })
 
 test('shows an empty state, not an error, when PostHog reading is not configured', async () => {
