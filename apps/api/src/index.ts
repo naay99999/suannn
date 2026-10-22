@@ -56,6 +56,7 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { TrackingOutbox } from './modules/tracking/outbox'
 import { DashboardRepository, DashboardService } from './modules/dashboard'
 import { AdminCustomerRepository, AdminCustomerService } from './modules/customers'
 import { createDatabaseReadinessProbe } from './modules/system/readiness'
@@ -114,6 +115,8 @@ const stripeEvents = new StripeEventService(database.db, stripeGateway)
 const stripeRefunds = new StripeRefundService(database.db, stripeGateway)
 const orders = new OrderService(database.db, config.commerceSecret)
 const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret, config.storefrontUrl)
+// Real adapters are built from config.tracking once they exist; with none, rows are marked skipped.
+const trackingOutbox = new TrackingOutbox(database.db, {})
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
 const auth = createAuth(config, database.db, {
@@ -225,6 +228,14 @@ const stopOrderOutboxMaintenance = startCommerceMaintenanceLoop(
   })),
 )
 
+const stopTrackingOutboxMaintenance = startCommerceMaintenanceLoop(
+  (limit) => trackingOutbox.processBatch(limit),
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'TRACKING_OUTBOX_WORKER_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
 const stopGuestCartCleanup = startCommerceMaintenanceLoop(
   (limit) => cartRepository.cleanupExpiredGuestCarts(limit),
   (error) => console.error(JSON.stringify({
@@ -269,6 +280,7 @@ async function shutdown(signal: string) {
       { name: 'listener', run: async () => { await app.stop() } },
       { name: 'inventory', run: stopInventoryMaintenance },
       { name: 'order-outbox', run: stopOrderOutboxMaintenance },
+      { name: 'tracking-outbox', run: stopTrackingOutboxMaintenance },
       { name: 'guest-cart-cleanup', run: stopGuestCartCleanup },
       { name: 'stripe-attempts', run: stopStripeAttemptReconciliation },
       { name: 'stripe-refunds', run: stopStripeRefundReconciliation },

@@ -13,6 +13,8 @@ interface ErrorLog {
   message: string
   requestId?: string
   errorCategory?: string
+  destination?: string
+  attemptCount?: number
 }
 
 export function logRequest(entry: RequestLog) {
