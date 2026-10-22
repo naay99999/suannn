@@ -1,3 +1,7 @@
+import type { TrackingConfig } from '../../config/env'
+
+export type TrackingConfigOf<K extends 'posthog' | 'meta' | 'tiktok' | 'googleAds'> = NonNullable<TrackingConfig[K]>
+
 export type TrackingDestination = 'posthog' | 'meta' | 'tiktok' | 'google_ads'
 
 export interface PurchaseEvent {

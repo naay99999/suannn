@@ -56,6 +56,8 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { createMetaAdapter } from './modules/tracking/adapters/meta'
+import { createPostHogAdapter } from './modules/tracking/adapters/posthog'
 import { TrackingOutbox } from './modules/tracking/outbox'
 import { DashboardRepository, DashboardService } from './modules/dashboard'
 import { AdminCustomerRepository, AdminCustomerService } from './modules/customers'
@@ -115,8 +117,11 @@ const stripeEvents = new StripeEventService(database.db, stripeGateway)
 const stripeRefunds = new StripeRefundService(database.db, stripeGateway)
 const orders = new OrderService(database.db, config.commerceSecret)
 const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSecret, config.storefrontUrl)
-// Real adapters are built from config.tracking once they exist; with none, rows are marked skipped.
-const trackingOutbox = new TrackingOutbox(database.db, {})
+// Adapters exist only for configured destinations; rows for the others are marked skipped.
+const trackingOutbox = new TrackingOutbox(database.db, {
+  ...(config.tracking.posthog ? { posthog: createPostHogAdapter(config.tracking.posthog) } : {}),
+  ...(config.tracking.meta ? { meta: createMetaAdapter(config.tracking.meta) } : {}),
+})
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
 const auth = createAuth(config, database.db, {
