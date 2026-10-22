@@ -48,6 +48,8 @@ import type { OrderService } from './modules/orders/service'
 import type { CommerceSettingsService } from './modules/commerce-settings/service'
 import type { ReceiptSettingsService } from './modules/receipts/settings'
 import type { StoreAnnouncementService } from './modules/store-announcement/service'
+import { createStoreConsentModule } from './modules/tracking/consent'
+import type { ConsentService } from './modules/tracking/consent/service'
 import type { FarmService } from './modules/farms/service'
 import type { MediaService } from './modules/media/service'
 import type { DashboardService } from './modules/dashboard/service'
@@ -88,6 +90,7 @@ export interface AppDependencies {
   commerceSettings: CommerceSettingsService
   receiptSettings: ReceiptSettingsService
   storeAnnouncement: StoreAnnouncementService
+  consent: ConsentService
   dashboard: DashboardService
   customers: AdminCustomerService
   staffMfaRequired(): Promise<boolean>
@@ -146,7 +149,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
     .use(createStoreFarmsModule(dependencies.farms))
-    .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
+    .use(new Elysia({ name: 'store-announcement-and-consent' })
+      .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
+      .use(createStoreConsentModule(config, dependencies.auth, dependencies.consent, dependencies.limiter)))
     .use(new Elysia({ name: 'admin-farms-and-media' })
       .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
       .use(createAdminMediaModule(config, dependencies.auth, dependencies.media, dependencies.limiter)))

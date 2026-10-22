@@ -1,5 +1,7 @@
 import type { EmailMessage, EmailSender } from '../../src/modules/email/sender'
 import type { MediaStorage } from '../../src/modules/media/storage'
+import type { ConsentRecordValues } from '../../src/modules/tracking/consent/repository'
+import { ConsentService } from '../../src/modules/tracking/consent/service'
 
 export class FakeEmailSender implements EmailSender {
   readonly messages: EmailMessage[] = []
@@ -13,6 +15,22 @@ export class FakeEmailSender implements EmailSender {
     }
 
     return { id: `email-${this.messages.length}` }
+  }
+}
+
+export class FakeConsentService extends ConsentService {
+  readonly rows = new Map<string, ConsentRecordValues & { id: string }>()
+
+  constructor() {
+    super({
+      insert: async (values: ConsentRecordValues) => {
+        const id = crypto.randomUUID()
+        this.rows.set(id, { ...values, id })
+
+        return id
+      },
+      find: async (id: string) => this.rows.get(id) ?? null,
+    })
   }
 }
 

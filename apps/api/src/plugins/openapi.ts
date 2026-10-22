@@ -20,6 +20,7 @@ export const apiTags = [
   { name: 'Store Products', description: 'Public catalog products and active variants available to storefront clients.' },
   { name: 'Store Farms', description: 'Public farm profiles and product associations for storefront clients.' },
   { name: 'Store Announcement', description: 'Public storefront promotion bar.' },
+  { name: 'Store Consent', description: 'Storefront cookie consent policy version and consent recording.' },
   { name: 'Store Cart', description: 'Maintain the current customer or guest cart.' },
   { name: 'Store Checkout', description: 'Quote the current cart and place cash-on-delivery or Stripe orders.' },
   { name: 'Payments', description: 'Receive verified Stripe payment events.' },

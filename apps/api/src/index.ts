@@ -45,6 +45,8 @@ import { CommerceSettingsRepository } from './modules/commerce-settings/reposito
 import { CommerceSettingsService } from './modules/commerce-settings/service'
 import { StoreAnnouncementRepository } from './modules/store-announcement/repository'
 import { StoreAnnouncementService } from './modules/store-announcement/service'
+import { ConsentRepository } from './modules/tracking/consent/repository'
+import { ConsentService } from './modules/tracking/consent/service'
 import { ReceiptSettingsRepository, ReceiptSettingsService } from './modules/receipts/settings'
 import { QuoteService } from './modules/checkout/quote'
 import { CheckoutService } from './modules/checkout/service'
@@ -98,6 +100,7 @@ const cartRepository = new CartRepository(database.db, inventoryReadRepository, 
 const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
+const consent = new ConsentService(new ConsentRepository(database.db))
 const receiptSettings = new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit))
 const quote = new QuoteService(cart, commerceSettings, config.commerceSecret)
 const checkout = new CheckoutService(database.db, config.commerceSecret)
@@ -176,6 +179,7 @@ const app = await createApp(config, {
   commerceSettings,
   receiptSettings,
   storeAnnouncement,
+  consent,
   dashboard: new DashboardService(new DashboardRepository(database.db)),
   customers: new AdminCustomerService(new AdminCustomerRepository(database.db)),
   staffMfaRequired,

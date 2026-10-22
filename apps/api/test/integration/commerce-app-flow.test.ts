@@ -42,6 +42,8 @@ import { CommerceSettingsService } from '../../src/modules/commerce-settings/ser
 import { ReceiptSettingsRepository, ReceiptSettingsService } from '../../src/modules/receipts/settings'
 import { StoreAnnouncementRepository } from '../../src/modules/store-announcement/repository'
 import { StoreAnnouncementService } from '../../src/modules/store-announcement/service'
+import { ConsentRepository } from '../../src/modules/tracking/consent/repository'
+import { ConsentService } from '../../src/modules/tracking/consent/service'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -101,6 +103,7 @@ const app = await createApp(config, {
   commerceSettings: settings,
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   storeAnnouncement: new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit)),
+  consent: new ConsentService(new ConsentRepository(database.db)),
   dashboard: {} as never,
   customers: {} as never,
   staffMfaRequired: async () => false,

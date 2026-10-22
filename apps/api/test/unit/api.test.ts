@@ -40,6 +40,7 @@ import { CommerceSettingsService } from '../../src/modules/commerce-settings/ser
 import { ReceiptSettingsRepository, ReceiptSettingsService } from '../../src/modules/receipts/settings'
 import { StoreAnnouncementRepository } from '../../src/modules/store-announcement/repository'
 import { StoreAnnouncementService } from '../../src/modules/store-announcement/service'
+import { FakeConsentService } from '../helpers/fakes'
 import { QuoteService } from '../../src/modules/checkout/quote'
 import { CheckoutService } from '../../src/modules/checkout/service'
 import { OrderService } from '../../src/modules/orders/service'
@@ -113,6 +114,7 @@ const app = await createApp(config, {
   commerceSettings,
   receiptSettings: new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit)),
   storeAnnouncement,
+  consent: new FakeConsentService(),
   dashboard: {} as never,
   customers: {} as never,
   staffMfaRequired: async () => true,
@@ -228,6 +230,7 @@ describe('API routes', () => {
       'Store Products',
       'Store Farms',
       'Store Announcement',
+      'Store Consent',
       'Store Cart',
       'Store Checkout',
       'Payments',
@@ -388,7 +391,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(124)
+    expect(operations).toHaveLength(126)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

@@ -40,6 +40,8 @@ export type DomainErrorCode =
   | 'RECEIPT_NOT_FOUND'
   | 'INVALID_STORE_ANNOUNCEMENT'
   | 'STORE_ANNOUNCEMENT_UNAVAILABLE'
+  | 'INVALID_CONSENT'
+  | 'CONSENT_POLICY_OUTDATED'
   | 'CHECKOUT_DISABLED'
   | 'SHIPPING_FEE_UNSET'
   | 'CART_NOT_PURCHASABLE'
@@ -111,6 +113,8 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   RECEIPT_NOT_FOUND: { status: 404, message: 'Receipt was not found' },
   INVALID_STORE_ANNOUNCEMENT: { status: 422, message: 'Store announcement is invalid' },
   STORE_ANNOUNCEMENT_UNAVAILABLE: { status: 503, message: 'Store announcement is unavailable' },
+  INVALID_CONSENT: { status: 422, message: 'Consent request is invalid' },
+  CONSENT_POLICY_OUTDATED: { status: 422, message: 'Consent policy version is outdated' },
   CHECKOUT_DISABLED: { status: 409, message: 'Checkout is disabled' },
   SHIPPING_FEE_UNSET: { status: 409, message: 'Shipping fee is not configured' },
   CART_NOT_PURCHASABLE: { status: 409, message: 'One or more cart items cannot be purchased' },
