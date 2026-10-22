@@ -3,7 +3,7 @@ import { TrackingDeliveryError } from '../types'
 import type { TrackingAdapter, TrackingConfigOf } from '../types'
 import { deliveryErrorForStatus, postJson } from './http'
 
-const GOOGLE_ADS_API_VERSION = 'v21'
+const GOOGLE_ADS_API_VERSION = 'v25'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const TOKEN_SAFETY_MARGIN_MS = 60_000
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000
@@ -76,6 +76,8 @@ export function createGoogleAdsAdapter(
           conversionValue: event.value,
           currencyCode: event.currency,
           orderId: event.eventId,
+          // Rows are only enqueued when the order has marketing consent, so GRANTED is accurate.
+          consent: { adUserData: 'GRANTED', adPersonalization: 'GRANTED' },
           ...clickId,
           ...(userIdentifiers.length > 0 ? { userIdentifiers } : {}),
         }],

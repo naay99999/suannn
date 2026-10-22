@@ -7,6 +7,7 @@ const TIKTOK_EVENTS_API_VERSION = 'v1.3'
 const TIKTOK_EVENTS_URL = `https://business-api.tiktok.com/open_api/${TIKTOK_EVENTS_API_VERSION}/event/track/`
 // Application-level codes TikTok returns inside an HTTP 200 body.
 const TIKTOK_AUTH_CODES = new Set([40001, 40104, 40105])
+const TIKTOK_RATE_LIMIT_CODE = 40100
 
 export function createTikTokAdapter(
   config: TrackingConfigOf<'tiktok'>,
@@ -30,7 +31,7 @@ export function createTikTokAdapter(
         event_source_id: config.pixelCode,
         ...(config.testEventCode ? { test_event_code: config.testEventCode } : {}),
         data: [{
-          event: 'Purchase',
+          event: 'Purchase', // TikTok renamed CompletePayment to Purchase for new setups.
           event_id: event.eventId,
           event_time: Math.floor(event.occurredAt.getTime() / 1000),
           user: userData,
@@ -46,10 +47,12 @@ export function createTikTokAdapter(
       }, { 'Access-Token': config.accessToken })
 
       const result = await response.json().catch(() => null) as { code?: unknown } | null
-      const code = typeof result?.code === 'number' ? result.code : 0
+      // A 200 we cannot parse is not proof of delivery.
+      if (!result) throw new TrackingDeliveryError('TIKTOK_UNAVAILABLE', true)
+      const code = typeof result.code === 'number' ? result.code : 0
       if (code === 0) return
       if (TIKTOK_AUTH_CODES.has(code)) throw new TrackingDeliveryError('TIKTOK_AUTH', false)
-      if (code >= 50000) throw new TrackingDeliveryError('TIKTOK_UNAVAILABLE', true)
+      if (code === TIKTOK_RATE_LIMIT_CODE || code >= 50000) throw new TrackingDeliveryError('TIKTOK_UNAVAILABLE', true)
       throw new TrackingDeliveryError('TIKTOK_REJECTED', false)
     },
   }

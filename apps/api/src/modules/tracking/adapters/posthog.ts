@@ -13,6 +13,8 @@ export function createPostHogAdapter(
     async send(event) {
       await postJson(fetchImpl, 'POSTHOG', url, {
         api_key: config.apiKey,
+        // PostHog dedupes on uuid; order ids are UUIDs, so retries never double-count.
+        uuid: event.eventId,
         event: 'purchase',
         distinct_id: event.posthogDistinctId ?? `order:${event.eventId}`,
         timestamp: event.occurredAt.toISOString(),

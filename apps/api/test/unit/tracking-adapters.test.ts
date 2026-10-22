@@ -60,7 +60,7 @@ describe('PostHog adapter', () => {
     await adapter.send(event())
     expect(calls[0]!.url).toBe('https://eu.i.posthog.com/i/v0/e/')
     expect(calls[0]!.body).toMatchObject({
-      api_key: 'phc_key', event: 'purchase', distinct_id: 'ph-1', timestamp: '2026-10-21T03:04:05.000Z',
+      api_key: 'phc_key', uuid: 'order-1', event: 'purchase', distinct_id: 'ph-1', timestamp: '2026-10-21T03:04:05.000Z',
       properties: { order_id: 'order-1', revenue: 450, currency: 'THB' },
     })
     expect(calls[0]!.body.properties.$process_person_profile).toBeUndefined()
@@ -178,6 +178,13 @@ describe('TikTok adapter', () => {
     expect(await failure(adapter(40001).send(event()))).toMatchObject({ code: 'TIKTOK_AUTH', retryable: false })
     expect(await failure(adapter(40002).send(event()))).toMatchObject({ code: 'TIKTOK_REJECTED', retryable: false })
     expect(await failure(adapter(50002).send(event()))).toMatchObject({ code: 'TIKTOK_UNAVAILABLE', retryable: true })
+    expect(await failure(adapter(40100).send(event()))).toMatchObject({ code: 'TIKTOK_UNAVAILABLE', retryable: true })
+  })
+
+  test('an unparseable 200 body is retryable, not success', async () => {
+    const impl = (async () => new Response('<html>oops</html>', { status: 200 })) as unknown as typeof fetch
+    expect(await failure(createTikTokAdapter(config, impl).send(event())))
+      .toMatchObject({ code: 'TIKTOK_UNAVAILABLE', retryable: true })
   })
 })
 
@@ -206,7 +213,7 @@ describe('Google Ads adapter', () => {
 
     const upload = calls[1]!
     expect(new URL(upload.url).origin + new URL(upload.url).pathname).toMatch(
-      /^https:\/\/googleads\.googleapis\.com\/v\d+\/customers\/1234567890:uploadClickConversions$/,
+      /^https:\/\/googleads\.googleapis\.com\/v25\/customers\/1234567890:uploadClickConversions$/,
     )
     const headers = upload.init.headers as Record<string, string>
     expect(headers.authorization).toBe('Bearer at-1')
@@ -219,6 +226,7 @@ describe('Google Ads adapter', () => {
       conversionValue: 450,
       currencyCode: 'THB',
       orderId: 'order-1',
+      consent: { adUserData: 'GRANTED', adPersonalization: 'GRANTED' },
       gclid: 'g1',
       userIdentifiers: [{ hashedEmail: 'e'.repeat(64) }, { hashedPhoneNumber: 'f'.repeat(64) }],
     }])
