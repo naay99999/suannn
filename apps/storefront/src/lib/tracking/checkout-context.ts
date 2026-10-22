@@ -16,6 +16,11 @@ function readCookie(name: string): string | undefined {
   return undefined
 }
 
+function fbcTimestamp(capturedAt: string): number {
+  const parsed = Date.parse(capturedAt)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
 // Context the server stores with the order so the purchase can be attributed and sent to ad destinations.
 // Tracking must never break checkout: any failure yields no context.
 export function buildCheckoutTracking(): CheckoutTracking | undefined {
@@ -33,7 +38,7 @@ export function buildCheckoutTracking(): CheckoutTracking | undefined {
     if (lastTouch) tracking.lastTouch = lastTouch
     if (consent?.marketing) {
       const fbp = readCookie('_fbp')
-      const fbc = readCookie('_fbc') ?? (lastTouch?.fbclid ? `fb.1.${Date.now()}.${lastTouch.fbclid}` : undefined)
+      const fbc = readCookie('_fbc') ?? (lastTouch?.fbclid ? `fb.1.${fbcTimestamp(lastTouch.capturedAt)}.${lastTouch.fbclid}` : undefined)
       const ttp = readCookie('_ttp')
       if (fbp) tracking.fbp = fbp
       if (fbc) tracking.fbc = fbc

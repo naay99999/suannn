@@ -165,12 +165,12 @@ test('place-order body carries stored attribution, without ad ids or distinct id
 
 test('buildCheckoutTracking adds distinct id and ad cookies when consented, deriving _fbc from fbclid', () => {
   localStorage.setItem('suannn.consent', JSON.stringify(stored(true, true)))
-  localStorage.setItem('suannn.attribution', JSON.stringify({ lastTouch: { fbclid: 'abc', capturedAt: new Date().toISOString() } }))
+  localStorage.setItem('suannn.attribution', JSON.stringify({ lastTouch: { fbclid: 'abc', capturedAt: '2026-10-20T00:00:00.000Z' } }))
   document.cookie = '_fbp=fb.1.1.123'
   document.cookie = '_ttp=ttp-1'
   spies.push(spyOn(posthog, 'getDistinctId').mockReturnValue('distinct-1'))
   spies.push(spyOn(Date, 'now').mockReturnValue(1_700_000_000_000))
-  expect(buildCheckoutTracking()).toMatchObject({ consentId: 'consent-1', posthogDistinctId: 'distinct-1', fbp: 'fb.1.1.123', fbc: 'fb.1.1700000000000.abc', ttp: 'ttp-1' })
+  expect(buildCheckoutTracking()).toMatchObject({ consentId: 'consent-1', posthogDistinctId: 'distinct-1', fbp: 'fb.1.1.123', fbc: `fb.1.${Date.parse('2026-10-20T00:00:00.000Z')}.abc`, ttp: 'ttp-1' })
   document.cookie = '_fbp=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
   document.cookie = '_ttp=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
