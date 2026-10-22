@@ -13,6 +13,7 @@ import { NavigationProgress } from '@/components/loading/navigation-progress'
 import { useCart } from '@/components/cart/cart-context'
 import { ConsentProvider } from '@/components/consent/consent-provider'
 import { useConsent } from '@/components/consent/consent-context'
+import { TrackingProvider } from '@/components/tracking/tracking-provider'
 import { CartProvider } from '@/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '@/components/cart/side-cart'
 import { getCartSummary } from '@/lib/cart'
@@ -103,7 +104,7 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
 }
 
 export function StorefrontLayout() {
-  return <ConsentProvider><CartProvider><StorefrontShell /></CartProvider></ConsentProvider>
+  return <ConsentProvider><TrackingProvider><CartProvider><StorefrontShell /></CartProvider></TrackingProvider></ConsentProvider>
 }
 
 function StorefrontShell() {
