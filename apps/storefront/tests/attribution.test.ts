@@ -43,6 +43,19 @@ test('new touch replaces lastTouch but firstTouch is set once', () => {
   expect(merged.lastTouch).toEqual(b)
 })
 
+test('referrer-only touch does not replace a fresh lastTouch', () => {
+  const campaign = touchFromUrl(new URL('https://shop.test/?utm_source=a'), '', new Date(now.getTime() - day))!
+  const stripe = touchFromUrl(new URL('https://shop.test/checkout/success'), 'https://checkout.stripe.com/', now)!
+  expect(mergeAttribution({ firstTouch: campaign, lastTouch: campaign }, stripe, now).lastTouch).toEqual(campaign)
+})
+
+test('referrer-only touch becomes lastTouch when none is stored or the stored one is stale', () => {
+  const stripe = touchFromUrl(new URL('https://shop.test/'), 'https://checkout.stripe.com/', now)!
+  expect(mergeAttribution(null, stripe, now).lastTouch).toEqual(stripe)
+  const old = touchFromUrl(new URL('https://shop.test/?utm_source=a'), '', new Date(now.getTime() - 31 * day))!
+  expect(mergeAttribution({ lastTouch: old }, stripe, now).lastTouch).toEqual(stripe)
+})
+
 test('touches older than 30 days are dropped', () => {
   const old = touchFromUrl(new URL('https://shop.test/?utm_source=a'), '', new Date(now.getTime() - 31 * day))!
   expect(mergeAttribution({ firstTouch: old, lastTouch: old }, null, now)).toEqual({})

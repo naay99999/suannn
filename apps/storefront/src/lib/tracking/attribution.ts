@@ -69,9 +69,15 @@ function fresh(touch: TrackingTouch | undefined, now: Date): TrackingTouch | und
   return Number.isFinite(age) && age <= WINDOW_MS ? touch : undefined
 }
 
+function hasCampaignSignal(touch: TrackingTouch): boolean {
+  return PARAM_FIELDS.some(([, field]) => Boolean(touch[field]))
+}
+
 export function mergeAttribution(stored: Attribution | null, touch: TrackingTouch | null, now: Date): Attribution {
   const firstTouch = fresh(stored?.firstTouch, now) ?? touch ?? undefined
-  const lastTouch = touch ?? fresh(stored?.lastTouch, now)
+  const storedLast = fresh(stored?.lastTouch, now)
+  // A referrer-only touch (e.g. returning from Stripe or an auth provider) must not displace a fresh campaign touch.
+  const lastTouch = touch && (hasCampaignSignal(touch) || !storedLast) ? touch : storedLast
   return {
     ...(firstTouch ? { firstTouch } : {}),
     ...(lastTouch ? { lastTouch } : {}),
