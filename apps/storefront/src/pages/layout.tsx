@@ -11,6 +11,8 @@ import { cn } from '@workspace/ui/lib/utils'
 import { AnnouncementBar } from '@/components/announcement-bar'
 import { NavigationProgress } from '@/components/loading/navigation-progress'
 import { useCart } from '@/components/cart/cart-context'
+import { ConsentProvider } from '@/components/consent/consent-provider'
+import { useConsent } from '@/components/consent/consent-context'
 import { CartProvider } from '@/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '@/components/cart/side-cart'
 import { getCartSummary } from '@/lib/cart'
@@ -101,12 +103,13 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
 }
 
 export function StorefrontLayout() {
-  return <CartProvider><StorefrontShell /></CartProvider>
+  return <ConsentProvider><CartProvider><StorefrontShell /></CartProvider></ConsentProvider>
 }
 
 function StorefrontShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const session = useQuery(authSessionQuery)
+  const { openSettings } = useConsent()
   const { pathname, hash } = useLocation()
 
   useEffect(() => {
@@ -267,8 +270,12 @@ function StorefrontShell() {
             </div>
           </div>
         </div>
-        <div className="pt-6 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-3 pt-6 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} suannn. <span lang="en">Grown with care, shared with you.</span></p>
+          <div className="flex gap-6">
+            <Link className="nav-link" to="/privacy">นโยบายความเป็นส่วนตัว</Link>
+            <button type="button" className="nav-link" onClick={openSettings}>ตั้งค่าคุกกี้</button>
+          </div>
         </div>
       </footer>
       <SideCart />
