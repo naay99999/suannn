@@ -2,7 +2,7 @@ import { MAX_EVENT_AGE_MS } from '../purchase'
 import type { TrackingAdapter, TrackingConfigOf } from '../types'
 import { postJson } from './http'
 
-const META_GRAPH_API_VERSION = 'v23.0'
+export const META_GRAPH_API_VERSION = 'v23.0'
 
 export function createMetaAdapter(
   config: TrackingConfigOf<'meta'>,
