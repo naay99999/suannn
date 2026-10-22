@@ -41,6 +41,7 @@ const actionLabels: Record<string, string> = {
   'settings.customer-email-verification-policy-changed': 'เปลี่ยนนโยบายยืนยันอีเมลลูกค้า',
   'settings.commerce-updated': 'แก้ไขการตั้งค่า checkout',
   'settings.store-announcement-updated': 'แก้ไขแถบโปรโมชันหน้าร้าน',
+  'marketing.settings.updated': 'แก้ไข % กำไรของหน้าการตลาด',
   'order.placed': 'สร้างคำสั่งซื้อ',
   'order.pending_payment': 'คำสั่งซื้อรอชำระเงิน',
   'order.cancelled': 'ยกเลิกคำสั่งซื้อ',

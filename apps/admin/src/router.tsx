@@ -98,6 +98,11 @@ export const router = createBrowserRouter([
             children: [{ index: true, lazy: () => import('./pages/audit/audit-page') }],
           },
           {
+            path: 'marketing',
+            element: <PermissionGate permission="marketing:read" />,
+            children: [{ index: true, lazy: () => import('./pages/marketing/marketing-page') }],
+          },
+          {
             path: 'customers',
             children: [
               { index: true, lazy: () => import('./pages/customers/customers-page') },
