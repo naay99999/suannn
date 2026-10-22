@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 const captured: Array<[string, Record<string, unknown>]> = []
 let captureThrows = false
 const calls: string[] = []
+const registered: Array<Record<string, unknown>> = []
 
 mock.module('posthog-js', () => ({
   default: {
     init: () => {},
+    register: (properties: Record<string, unknown>) => { registered.push(properties) },
     capture: (name: string, properties: Record<string, unknown>) => {
       if (captureThrows) throw new Error('boom')
       captured.push([name, properties])
@@ -24,8 +26,9 @@ mock.module('posthog-js', () => ({
 
 const { toGoogle, toMeta, toPostHog, toTikTok } = await import('../src/lib/tracking/mappings')
 const { loadPixels } = await import('../src/lib/tracking/pixels')
-const { initPostHog, setAnalyticsConsent } = await import('../src/lib/tracking/posthog')
+const { initPostHog, registerAttribution, setAnalyticsConsent } = await import('../src/lib/tracking/posthog')
 const { setTrackingConsent, track } = await import('../src/lib/tracking/tracker')
+const { recordLanding } = await import('../src/lib/tracking/attribution')
 type BrowserEvent = import('../src/lib/tracking/events').BrowserEvent
 
 const item = { productId: 'p1', variantId: 'v1', name: 'ทุเรียน', price: 250, quantity: 2 }
@@ -60,6 +63,36 @@ describe('mappings', () => {
     const posthog = toPostHog(events[3]!).properties
     expect(posthog.currency).toBe('THB')
     expect(posthog.value).toBe(500)
+  })
+})
+
+describe('campaign attribution super-properties', () => {
+  test('init registers the stored last touch', async () => {
+    recordLanding({ href: 'https://shop.test/?utm_source=meta&utm_campaign=123' } as Location, '')
+    registered.length = 0
+    // A fresh module instance, since other files may already have initialised the shared one.
+    const fresh = await import('../src/lib/tracking/posthog?fresh-init')
+    fresh.initPostHog('phc_test', 'https://example.test')
+    expect(registered).toEqual([{ utm_source: 'meta', utm_campaign: '123' }])
+  })
+
+  test('registers only present values and nothing for no touch', () => {
+    registered.length = 0
+    registerAttribution(undefined)
+    registerAttribution({ capturedAt: '2026-10-22T00:00:00Z' })
+    expect(registered).toEqual([])
+    registerAttribution({ utmSource: 'tiktok', utmMedium: 'paid', utmContent: 'ad1', capturedAt: '2026-10-22T00:00:00Z' })
+    expect(registered).toEqual([{ utm_source: 'tiktok', utm_medium: 'paid', utm_content: 'ad1' }])
+  })
+
+  test('re-registers after the persistence mode changes', () => {
+    registered.length = 0
+    setAnalyticsConsent(true)
+    setAnalyticsConsent(false)
+    expect(registered).toEqual([
+      { utm_source: 'meta', utm_campaign: '123' },
+      { utm_source: 'meta', utm_campaign: '123' },
+    ])
   })
 })
 

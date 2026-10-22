@@ -32,6 +32,13 @@ export interface PurchaseEvent {
   analyticsConsent: boolean
   marketingConsent: boolean
   posthogDistinctId: string | null
+  // Shop-internal campaign attribution, stored regardless of consent and sent only to PostHog.
+  attribution: {
+    utmSource: string | null
+    utmMedium: string | null
+    utmCampaign: string | null
+    utmContent: string | null
+  }
   // Filled only when marketingConsent is true; otherwise every field is null.
   user: {
     emailSha256: string | null

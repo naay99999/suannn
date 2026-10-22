@@ -34,6 +34,7 @@ function event(overrides: Partial<PurchaseEvent> = {}): PurchaseEvent {
     analyticsConsent: true,
     marketingConsent: true,
     posthogDistinctId: 'ph-1',
+    attribution: { utmSource: null, utmMedium: null, utmCampaign: null, utmContent: null },
     user: {
       emailSha256: 'e'.repeat(64), phoneSha256: 'f'.repeat(64), clientIp: '203.0.113.9', userAgent: 'UA',
       fbp: 'fb.1.1.1', fbc: 'fb.1.1.2', ttclid: 'ttc', ttp: 'ttp1', gclid: 'g1', gbraid: 'gb1', wbraid: 'wb1',
@@ -71,6 +72,15 @@ describe('PostHog adapter', () => {
     await createPostHogAdapter(config, impl).send(event({ posthogDistinctId: null, analyticsConsent: false }))
     expect(calls[0]!.body.distinct_id).toBe('order:order-1')
     expect(calls[0]!.body.properties.$process_person_profile).toBe(false)
+  })
+
+  test('adds campaign attribution properties only when present', async () => {
+    const { calls, impl } = fakeFetch()
+    await createPostHogAdapter(config, impl).send(event({ attribution: { utmSource: 'meta', utmMedium: null, utmCampaign: '123', utmContent: null } }))
+    expect(calls[0]!.body.properties.utm_source).toBe('meta')
+    expect(calls[0]!.body.properties.utm_campaign).toBe('123')
+    expect('utm_medium' in calls[0]!.body.properties).toBe(false)
+    expect('utm_content' in calls[0]!.body.properties).toBe(false)
   })
 
   test('tolerates a host with a trailing slash', async () => {

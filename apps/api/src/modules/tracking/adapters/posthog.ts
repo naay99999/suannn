@@ -28,6 +28,10 @@ export function createPostHogAdapter(
           products: event.contents.map((item) => ({
             product_id: item.productId, variant_id: item.variantId, quantity: item.quantity, price: item.unitPrice,
           })),
+          ...(event.attribution.utmSource ? { utm_source: event.attribution.utmSource } : {}),
+          ...(event.attribution.utmMedium ? { utm_medium: event.attribution.utmMedium } : {}),
+          ...(event.attribution.utmCampaign ? { utm_campaign: event.attribution.utmCampaign } : {}),
+          ...(event.attribution.utmContent ? { utm_content: event.attribution.utmContent } : {}),
           ...(event.analyticsConsent ? {} : { $process_person_profile: false }),
         },
       })

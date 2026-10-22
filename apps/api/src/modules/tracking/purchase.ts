@@ -117,6 +117,12 @@ export async function loadPurchaseEvent(db: Database, orderId: string): Promise<
     analyticsConsent: attribution?.analyticsConsent ?? false,
     marketingConsent,
     posthogDistinctId: attribution?.analyticsConsent ? attribution.posthogDistinctId ?? null : null,
+    attribution: {
+      utmSource: attribution?.utmSource ?? null,
+      utmMedium: attribution?.utmMedium ?? null,
+      utmCampaign: attribution?.utmCampaign ?? null,
+      utmContent: attribution?.utmContent ?? null,
+    },
     user: {
       emailSha256: hashes?.emailSha256 ?? null,
       phoneSha256: hashes?.phoneSha256 ?? null,

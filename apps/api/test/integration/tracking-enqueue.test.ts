@@ -332,5 +332,6 @@ describe('order attribution and purchase tracking enqueue', () => {
     const plainEvent = await loadPurchaseEvent(database.db, plain.result.order.id)
     expect(plainEvent!.marketingConsent).toBe(false)
     expect(Object.values(plainEvent!.user).every((value) => value === null)).toBe(true)
+    expect(plainEvent!.attribution.utmCampaign).toBe('spring')
   })
 })
