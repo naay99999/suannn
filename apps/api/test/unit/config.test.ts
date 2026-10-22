@@ -13,6 +13,7 @@ function r2Env(overrides: Record<string, string> = {}) {
   }
 }
 
+const allNullMarketing = { metaAds: null, tiktokAds: null, posthogRead: null }
 const allNullTracking = { posthog: null, meta: null, tiktok: null, googleAds: null, alertEmail: null }
 
 describe('API configuration', () => {
@@ -43,6 +44,7 @@ describe('API configuration', () => {
       stripe: null,
       media: null,
       tracking: allNullTracking,
+      marketing: allNullMarketing,
     })
   })
 
@@ -187,6 +189,7 @@ describe('API configuration', () => {
       stripe: null,
       media: null,
       tracking: allNullTracking,
+      marketing: allNullMarketing,
     })
   })
 
@@ -293,6 +296,67 @@ describe('API configuration', () => {
     for (const [name, message] of cases) {
       expect(() => loadConfig({ ...testEnv, [name]: 'x' })).toThrow(message)
     }
+  })
+
+  it('marketing integrations are null when unset', () => {
+    expect(loadConfig(testEnv).marketing).toEqual(allNullMarketing)
+  })
+
+  it('rejects partial marketing groups', () => {
+    const cases: Array<[string, string]> = [
+      ['META_ADS_ACCOUNT_ID', 'Meta Ads configuration must be provided together'],
+      ['META_ADS_ACCESS_TOKEN', 'Meta Ads configuration must be provided together'],
+      ['TIKTOK_ADVERTISER_ID', 'TikTok Ads configuration must be provided together'],
+      ['TIKTOK_MARKETING_ACCESS_TOKEN', 'TikTok Ads configuration must be provided together'],
+      ['POSTHOG_PERSONAL_API_KEY', 'PostHog read configuration must be provided together'],
+      ['POSTHOG_PROJECT_ID', 'PostHog read configuration must be provided together'],
+    ]
+    for (const [name, message] of cases) {
+      expect(() => loadConfig({ ...testEnv, [name]: '123' })).toThrow(message)
+    }
+  })
+
+  it('parses complete marketing groups', () => {
+    const config = loadConfig({
+      ...testEnv,
+      META_ADS_ACCOUNT_ID: 'act_123',
+      META_ADS_ACCESS_TOKEN: 'meta-token',
+      TIKTOK_ADVERTISER_ID: '7001',
+      TIKTOK_MARKETING_ACCESS_TOKEN: 'tt-token',
+      POSTHOG_PERSONAL_API_KEY: 'phx_key',
+      POSTHOG_PROJECT_ID: '4242',
+    })
+
+    expect(config.marketing.metaAds).toEqual({ accountId: '123', accessToken: 'meta-token' })
+    expect(config.marketing.tiktokAds).toEqual({ advertiserId: '7001', accessToken: 'tt-token' })
+    expect(config.marketing.posthogRead).toEqual({
+      personalApiKey: 'phx_key',
+      projectId: '4242',
+      host: 'https://us.posthog.com',
+    })
+    expect(loadConfig({ ...testEnv, META_ADS_ACCOUNT_ID: '99', META_ADS_ACCESS_TOKEN: 't' })
+      .marketing.metaAds?.accountId).toBe('99')
+  })
+
+  it('uses POSTHOG_HOST for the PostHog read host', () => {
+    const config = loadConfig({
+      ...testEnv,
+      POSTHOG_API_KEY: 'phc_x',
+      POSTHOG_HOST: 'https://eu.posthog.com/',
+      POSTHOG_PERSONAL_API_KEY: 'phx_key',
+      POSTHOG_PROJECT_ID: '4242',
+    })
+
+    expect(config.marketing.posthogRead?.host).toBe('https://eu.posthog.com')
+  })
+
+  it('rejects non-numeric marketing ids', () => {
+    expect(() => loadConfig({ ...testEnv, POSTHOG_PERSONAL_API_KEY: 'k', POSTHOG_PROJECT_ID: 'abc' }))
+      .toThrow('POSTHOG_PROJECT_ID')
+    expect(() => loadConfig({ ...testEnv, META_ADS_ACCOUNT_ID: 'act_abc', META_ADS_ACCESS_TOKEN: 't' }))
+      .toThrow('META_ADS_ACCOUNT_ID')
+    expect(() => loadConfig({ ...testEnv, TIKTOK_ADVERTISER_ID: 'x1', TIKTOK_MARKETING_ACCESS_TOKEN: 't' }))
+      .toThrow('TIKTOK_ADVERTISER_ID')
   })
 
   it('parses complete tracking groups with optional values', () => {

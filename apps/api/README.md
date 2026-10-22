@@ -300,3 +300,35 @@ The storefront sends consent and attribution to endpoints that only exist after 
 5. Admin, Settings, Integrations tab: confirm each configured destination shows as enabled and that no destination has failing or dead rows.
 
 The Google Ads API version is a constant (`v25`) in `src/modules/tracking/adapters/google-ads.ts`. Bump it before Google sunsets that version; see https://developers.google.com/google-ads/api/docs/sunset-dates.
+
+## Marketing page
+
+The admin Marketing page (`marketing:read` and `marketing:update`, owner and admin only) reads ad spend from Meta Ads, TikTok Ads, and Google Ads and reads funnel and experiment data from PostHog. Each integration is configured by an all-or-none environment group: setting only some variables of a group is a startup error, and setting none turns that integration off (the page then shows `ยังไม่ได้เชื่อมบัญชีโฆษณา`). Tokens stay on the API and are never sent to the browser or logged.
+
+| Integration | Required (all together) | Notes |
+| --- | --- | --- |
+| Meta Ads spend | `META_ADS_ACCOUNT_ID`, `META_ADS_ACCESS_TOKEN` | Account id may be written with the `act_` prefix; it is stored as digits only. |
+| TikTok Ads spend | `TIKTOK_ADVERTISER_ID`, `TIKTOK_MARKETING_ACCESS_TOKEN` | Advertiser id is digits only. |
+| Google Ads spend | the existing `GOOGLE_ADS_*` group (see "Tracking and ads") | The spend sync is on whenever that group is configured. |
+| PostHog reads | `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` | Digits-only project id. Host comes from `POSTHOG_HOST`, default `https://us.posthog.com`. |
+
+These are separate from the event-sending credentials above: the PostHog personal API key is not the `phc_` project key, and the Meta and TikTok marketing tokens are not the Conversions API or Events API tokens.
+
+### Where to find each value
+
+**Meta Ads.**
+1. Account id: open Meta Ads Manager. The ad account id is shown in the account dropdown at the top and in the URL (`act=1234567890`). Use it as `META_ADS_ACCOUNT_ID` (with or without `act_`).
+2. Read-only token: in Meta Business Settings open "Users", "System users", and add a system user with the "Employee" role. Assign the ad account to it with "View performance" access only. Choose "Generate new token", select your app, tick only the `ads_read` permission, and copy the never-expiring token to `META_ADS_ACCESS_TOKEN`. (The app needs to be a Business-type app connected to the same business.)
+3. Timezone: in Business Settings, "Accounts", "Ad accounts", open the account, "Settings", and confirm the time zone is Asia/Bangkok. Spend is reported by the account's own days, so a different zone shifts spend across days. The time zone cannot be changed on an existing account; create the account with Asia/Bangkok.
+
+**TikTok Ads.**
+1. Advertiser id: in TikTok Ads Manager the advertiser (account) id is shown beside the account name and under "Account Setting". Use it as `TIKTOK_ADVERTISER_ID`.
+2. Read-only token: sign in at business-api.tiktok.com (TikTok for Business developers), create a developer app, and request the "Reporting" scope only (no ad management scopes). Have the advertiser account owner authorise the app, exchange the returned auth code for a long-lived access token, and put it in `TIKTOK_MARKETING_ACCESS_TOKEN`. This is a different token from the Events API token.
+3. Timezone: in Ads Manager open "Account Setting" and confirm the time zone is (UTC+07:00) Asia/Bangkok. TikTok fixes the time zone when the account is created.
+
+**Google Ads.** Use the existing credentials from "Tracking and ads". In Google Ads open "Admin", "Account settings", and confirm the time zone is Asia/Bangkok (it also cannot be changed after creation).
+
+**PostHog.**
+1. Project id: open the project in PostHog; the number in the URL (`/project/12345`) or under Project settings is `POSTHOG_PROJECT_ID`.
+2. Read-only personal key: open your user menu, "Personal API keys", "Create personal API key". Scope it to the project and give it read access only to `query` and `experiment`. Copy it to `POSTHOG_PERSONAL_API_KEY`.
+3. Host: reads go to `POSTHOG_HOST` (default `https://us.posthog.com`). If `POSTHOG_HOST` is already set for event sending it is usually the ingestion host (`https://us.i.posthog.com`); check that the query API is reachable on the host you configure.

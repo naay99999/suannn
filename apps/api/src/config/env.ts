@@ -32,6 +32,7 @@ export interface AppConfig {
   stripe: StripeConfig | null
   media: MediaConfig | null
   tracking: TrackingConfig
+  marketing: MarketingConfig
 }
 
 export interface MediaConfig {
@@ -56,6 +57,12 @@ export interface TrackingConfig {
     loginCustomerId: string | null
   } | null
   alertEmail: string | null
+}
+
+export interface MarketingConfig {
+  metaAds: { accountId: string; accessToken: string } | null
+  tiktokAds: { advertiserId: string; accessToken: string } | null
+  posthogRead: { personalApiKey: string; projectId: string; host: string } | null
 }
 
 export interface StripeConfig {
@@ -301,6 +308,29 @@ function parseDigitsId(name: string, value: string) {
   return digits
 }
 
+function parseMarketingConfig(env: Environment): MarketingConfig {
+  const metaGroup = readGroup(env, ['META_ADS_ACCOUNT_ID', 'META_ADS_ACCESS_TOKEN'], 'Meta Ads')
+  const tiktokGroup = readGroup(env, ['TIKTOK_ADVERTISER_ID', 'TIKTOK_MARKETING_ACCESS_TOKEN'], 'TikTok Ads')
+  const posthogGroup = readGroup(env, ['POSTHOG_PERSONAL_API_KEY', 'POSTHOG_PROJECT_ID'], 'PostHog read')
+
+  return {
+    metaAds: metaGroup && {
+      accountId: parseDigitsId('META_ADS_ACCOUNT_ID', metaGroup.META_ADS_ACCOUNT_ID.replace(/^act_/i, '')),
+      accessToken: metaGroup.META_ADS_ACCESS_TOKEN,
+    },
+    tiktokAds: tiktokGroup && {
+      advertiserId: parseDigitsId('TIKTOK_ADVERTISER_ID', tiktokGroup.TIKTOK_ADVERTISER_ID),
+      accessToken: tiktokGroup.TIKTOK_MARKETING_ACCESS_TOKEN,
+    },
+    posthogRead: posthogGroup && {
+      personalApiKey: posthogGroup.POSTHOG_PERSONAL_API_KEY,
+      projectId: parseDigitsId('POSTHOG_PROJECT_ID', posthogGroup.POSTHOG_PROJECT_ID),
+      host: parseUrl('POSTHOG_HOST', trimmed(env, 'POSTHOG_HOST') ?? 'https://us.posthog.com', ['https:'])
+        .replace(/\/+$/, ''),
+    },
+  }
+}
+
 function parseTrackingConfig(env: Environment): TrackingConfig {
   const posthogGroup = readGroup(env, ['POSTHOG_API_KEY', 'POSTHOG_HOST'], 'PostHog')
   const metaGroup = readGroup(env, ['META_PIXEL_ID', 'META_CAPI_ACCESS_TOKEN'], 'Meta')
@@ -421,5 +451,6 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     stripe,
     media: parseMediaConfig(env),
     tracking: parseTrackingConfig(env),
+    marketing: parseMarketingConfig(env),
   }
 }

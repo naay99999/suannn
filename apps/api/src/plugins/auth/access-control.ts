@@ -12,6 +12,7 @@ export const permissions = {
   staff: ['read', 'invite', 'change-role', 'suspend', 'revoke-session', 'reset-mfa'],
   audit: ['read'],
   settings: ['read', 'update', 'manage-owner'],
+  marketing: ['read', 'update'],
 } as const
 
 export type AccountType = 'customer' | 'staff'
@@ -44,6 +45,7 @@ export const rolePermissions = {
     staff: permissions.staff,
     audit: permissions.audit,
     settings: ['read', 'update'],
+    marketing: permissions.marketing,
   },
   catalog_manager: {
     catalog: permissions.catalog,

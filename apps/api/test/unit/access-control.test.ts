@@ -63,6 +63,15 @@ describe('fixed access control', () => {
     }
   })
 
+  it('grants marketing only to owner and admin', () => {
+    for (const role of ['owner', 'admin'] as const) {
+      expect(hasPermissions(role, { marketing: ['read', 'update'] })).toBe(true)
+    }
+    for (const role of ['catalog_manager', 'fulfillment', 'support', 'customer'] as const) {
+      expect(hasPermissions(role, { marketing: ['read'] })).toBe(false)
+    }
+  })
+
   it('requires every action in a structured permission declaration', () => {
     expect(hasPermissions('admin', { order: ['read', 'refund'] })).toBe(true)
     expect(hasPermissions('support', { order: ['read', 'refund'] })).toBe(false)
