@@ -706,13 +706,16 @@ export function createPlaceOrderInTransaction(
 async function insertOrderAttribution(tx: DatabaseTransaction, orderId: string, tracking: PlacementTracking | undefined) {
   const context = tracking?.context
   const lastTouch = context?.lastTouch
+  const marketing = tracking?.consent.marketing === true
+  const analytics = tracking?.consent.analytics === true
   const capturedAt = lastTouch ? new Date(lastTouch.capturedAt) : null
   await tx.insert(orderAttribution).values({
     orderId,
     consentRecordId: tracking?.consent.consentRecordId ?? null,
     analyticsConsent: tracking?.consent.analytics ?? false,
     marketingConsent: tracking?.consent.marketing ?? false,
-    posthogDistinctId: context?.posthogDistinctId ?? null,
+    // Identifiers and device data are stored only under the matching consent; UTM/click ids are necessary attribution.
+    posthogDistinctId: analytics ? context?.posthogDistinctId ?? null : null,
     utmSource: lastTouch?.utmSource ?? null,
     utmMedium: lastTouch?.utmMedium ?? null,
     utmCampaign: lastTouch?.utmCampaign ?? null,
@@ -727,11 +730,11 @@ async function insertOrderAttribution(tx: DatabaseTransaction, orderId: string, 
     landingPath: lastTouch?.landingPath ?? null,
     lastTouchAt: capturedAt && Number.isFinite(capturedAt.getTime()) ? capturedAt : null,
     firstTouch: context?.firstTouch ?? null,
-    fbp: context?.fbp ?? null,
-    fbc: context?.fbc ?? null,
-    ttp: context?.ttp ?? null,
-    clientIp: tracking?.clientIp ?? null,
-    userAgent: tracking?.userAgent ?? null,
+    fbp: marketing ? context?.fbp ?? null : null,
+    fbc: marketing ? context?.fbc ?? null : null,
+    ttp: marketing ? context?.ttp ?? null : null,
+    clientIp: marketing ? tracking?.clientIp ?? null : null,
+    userAgent: marketing ? tracking?.userAgent ?? null : null,
   })
 }
 

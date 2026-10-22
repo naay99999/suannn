@@ -231,6 +231,30 @@ describe('order attribution and purchase tracking enqueue', () => {
     expect(rows.map((row) => row.destination)).toEqual(['posthog'])
   })
 
+  it('stores no identifiers or device data without consent, but keeps attribution', async () => {
+    const { result } = await placeCod({
+      posthogDistinctId: 'ph-visitor-1', lastTouch: touch(), fbp: 'fb.1.123.456', fbc: 'fb.1.123.abc', ttp: 'tt-cookie',
+    })
+
+    const [attribution] = await database.db.select().from(orderAttribution).where(eq(orderAttribution.orderId, result.order.id))
+    expect(attribution).toMatchObject({
+      posthogDistinctId: null, fbp: null, fbc: null, ttp: null, clientIp: null, userAgent: null,
+      utmSource: 'facebook', utmCampaign: 'spring', gclid: 'gclid-123', referrer: 'https://l.facebook.com/',
+    })
+    expect(attribution!.lastTouchAt).toBeInstanceOf(Date)
+  })
+
+  it('stores the distinct id for analytics-only consent but no ad identifiers', async () => {
+    const consentId = await insertConsent(false)
+    const { result } = await placeCod(
+      { consentId, posthogDistinctId: 'ph-visitor-1', lastTouch: touch(), fbp: 'fb.1.123.456', ttp: 'tt-cookie' },
+      { consentRecordId: consentId, analytics: true, marketing: false },
+    )
+
+    const [attribution] = await database.db.select().from(orderAttribution).where(eq(orderAttribution.orderId, result.order.id))
+    expect(attribution).toMatchObject({ posthogDistinctId: 'ph-visitor-1', fbp: null, ttp: null, clientIp: null, userAgent: null })
+  })
+
   it('writes an attribution row even when the client sent no tracking', async () => {
     const { result } = await placeCod(undefined)
 
