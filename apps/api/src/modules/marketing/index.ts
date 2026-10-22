@@ -12,7 +12,7 @@ import { rateLimitResponse } from '../rate-limit/service'
 import { parseRange } from './dates'
 import type { MarketingMetrics } from './metrics/service'
 import { marketingModels } from './model'
-import { assertMarketingSettingsInput, type MarketingSettingsService } from './settings'
+import type { MarketingSettingsService } from './settings'
 import type { AdSpendSync } from './spend/sync'
 import { UTM_TEMPLATES } from './templates'
 
@@ -71,9 +71,6 @@ export function createAdminMarketingModule(
         userAgent: requestContext.userAgent,
       },
     }), {
-      // Runs before schema validation so bad values (wrong types, extra keys) report the domain code
-      // instead of the generic VALIDATION_ERROR; the schema still documents the contract.
-      transform: ({ body }) => assertMarketingSettingsInput(body),
       browserMutation: 'admin',
       permission: { marketing: ['update'] },
       body: 'marketing.updateSettingsBody',

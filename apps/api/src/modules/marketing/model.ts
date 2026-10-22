@@ -59,10 +59,11 @@ export const marketingModels = {
     version: t.Integer({ minimum: 1 }),
     updatedAt: t.String(),
   }, { additionalProperties: false }),
-  // The service re-checks range and precision; a schema failure is remapped to INVALID_MARKETING_SETTINGS.
+  // Shape and type failures return VALIDATION_ERROR; the service rejects out-of-range or over-precise margins
+  // with INVALID_MARKETING_SETTINGS.
   'marketing.updateSettingsBody': t.Object({
     marginPercent: t.Number(),
-    version: t.Integer(),
+    version: t.Integer({ minimum: 1 }),
   }, { additionalProperties: false }),
   'marketing.syncResponse': t.Object({
     results: t.Array(t.Object({

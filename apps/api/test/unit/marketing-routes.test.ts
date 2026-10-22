@@ -137,18 +137,39 @@ describe('admin marketing routes', () => {
     expect(calls.find((call) => call.method === 'update')?.args[0]).toEqual({ marginPercent: 40, version: 1 })
   })
 
-  it('rejects invalid margins and extra keys with INVALID_MARKETING_SETTINGS', async () => {
-    // Input validation runs before the service touches the database.
+  it('rejects out-of-range and over-precise margins with INVALID_MARKETING_SETTINGS', async () => {
+    // Range and precision checks run before the service touches the database.
     const { app } = await createHarness('owner', true, new MarketingSettingsService(null as never, null as never))
-    for (const body of [
-      { marginPercent: 0, version: 1 }, { marginPercent: 100.5, version: 1 }, { marginPercent: -5, version: 1 },
-      { marginPercent: 'abc', version: 1 }, { marginPercent: 35.55, version: 1 }, { marginPercent: 40, version: 0 },
-      { marginPercent: 40, version: 1, extra: true }, { marginPercent: 40 },
-    ]) {
-      const response = await app.handle(put(body))
+    for (const marginPercent of [0, 0.9, 100.5, -5, 35.55]) {
+      const response = await app.handle(put({ marginPercent, version: 1 }))
       expect(response.status).toBe(422)
       expect(await response.json()).toMatchObject({ code: 'INVALID_MARKETING_SETTINGS' })
     }
+  })
+
+  it('rejects wrong shapes with VALIDATION_ERROR', async () => {
+    const { app, calls } = await createHarness()
+    for (const body of [
+      { marginPercent: 'abc', version: 1 }, { marginPercent: 40, version: 0 },
+      { marginPercent: 40 },
+    ]) {
+      const response = await app.handle(put(body))
+      expect(response.status).toBe(422)
+      expect(await response.json()).toMatchObject({ code: 'VALIDATION_ERROR' })
+    }
+    expect(calls).toEqual([])
+  })
+
+  it('checks authentication, permission and origin before the body', async () => {
+    // Elysia validates the body schema before auth guards, so use a schema-valid body that the service would reject.
+    const bad = { marginPercent: 0, version: 1 }
+    const owner = await createHarness()
+    const anonymous = await owner.app.handle(request('/api/v1/admin/marketing/settings', { method: 'PUT', body: JSON.stringify(bad) }, ''))
+    expect(anonymous.status).toBe(401)
+    const foreign = await owner.app.handle(put(bad, 'https://attacker.example'))
+    expect(foreign.status).toBe(403)
+    const support = await createHarness('support')
+    expect((await support.app.handle(put(bad))).status).toBe(403)
   })
 
   it('rejects settings updates from a foreign origin', async () => {
