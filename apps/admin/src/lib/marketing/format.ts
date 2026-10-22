@@ -20,6 +20,13 @@ export function formatRoas(value: number | null): string {
   return value === null ? '—' : `${value.toFixed(2)}x`
 }
 
+// 0.6 -> 60%; a decimal only below 10% (0.055 -> 5.5%).
+export function formatPercent(value: number | null): string {
+  if (value === null) return '—'
+  const percent = value * 100
+  return percent < 10 ? `${Number(percent.toFixed(1))}%` : `${Math.round(percent)}%`
+}
+
 // Eden parses date-like strings into Date objects at runtime, despite the string type.
 export function dateKey(value: string | Date): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10)
@@ -39,6 +46,7 @@ export function addDays(day: string, days: number): string {
 }
 
 export const MAX_RANGE_DAYS = 366
+export const funnelPlatforms = ['meta', 'tiktok', 'google'] as const
 
 // Inclusive day count of a YYYY-MM-DD range.
 export function rangeDays(range: DateRange): number {

@@ -30,6 +30,10 @@ const messages: Record<string, string> = {
   RECEIPT_NOT_ELIGIBLE: 'คำสั่งซื้อนี้ยังออกใบเสร็จไม่ได้ ตรวจสอบสถานะการชำระเงินและการจัดส่ง',
   INVALID_MARKETING_RANGE: 'ช่วงวันที่ไม่ถูกต้อง (ไม่เกิน 366 วัน และวันเริ่มต้องไม่เกินวันสิ้นสุด)',
   INVALID_MARKETING_SETTINGS: 'ค่า % กำไรต้องอยู่ระหว่าง 1 ถึง 100 และมีทศนิยมไม่เกิน 1 ตำแหน่ง',
+  INVALID_MARKETING_FILTER: 'ตัวกรองแพลตฟอร์มหรือแคมเปญไม่ถูกต้อง',
+  POSTHOG_READ_AUTH: 'PostHog ไม่ยอมรับคีย์สำหรับอ่านข้อมูล ตรวจสอบการตั้งค่าคีย์และสิทธิ์',
+  POSTHOG_READ_UNAVAILABLE: 'ดึงข้อมูลจาก PostHog ไม่สำเร็จ กรุณาลองอีกครั้ง',
+  POSTHOG_READ_REJECTED: 'ดึงข้อมูลจาก PostHog ไม่สำเร็จ กรุณาลองอีกครั้ง',
   MARKETING_SETTINGS_CONFLICT: 'มีคนแก้ไขค่านี้ไปแล้ว กรุณาลองอีกครั้ง',
   FORBIDDEN: 'คุณไม่มีสิทธิ์ดำเนินการนี้',
 }

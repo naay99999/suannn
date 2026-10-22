@@ -9,10 +9,12 @@ import { authSessionQuery } from '@/lib/auth-session'
 import { STALE_SYNC_MS } from '@/lib/integrations/health'
 import { trackingStatusQuery } from '@/lib/integrations/queries'
 import { hasPermission } from '@/lib/permissions'
-import { MAX_RANGE_DAYS, isDateKey, rangeDays, presetLabels, presetRange, warningText, type DateRange, type RangePreset } from '@/lib/marketing/format'
+import { MAX_RANGE_DAYS, funnelPlatforms, isDateKey, rangeDays, presetLabels, presetRange, warningText, type DateRange, type RangePreset } from '@/lib/marketing/format'
 import { marketingOverviewQuery } from '@/lib/marketing/queries'
 import { CampaignTable } from './_components/campaign-table'
 import { DateRangePicker } from './_components/date-range-picker'
+import { ExperimentsList } from './_components/experiments-list'
+import { FunnelSection } from './_components/funnel-chart'
 import { MarginSetting } from './_components/margin-setting'
 import { SummaryCards } from './_components/summary-cards'
 import { SyncButton } from './_components/sync-button'
@@ -57,6 +59,23 @@ function useMarketingRange() {
   return { preset, range, setPreset, setCustom }
 }
 
+// Platform and campaign filters live in the URL beside the range; a new platform clears the campaign.
+function useFunnelFilter() {
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('platform')
+  const platform = funnelPlatforms.find((value) => value === requested)
+  const campaign = params.get('campaign') ?? undefined
+  function setFilter(next: { platform?: string; campaign?: string }) {
+    const nextParams = new URLSearchParams(params)
+    if (next.platform) nextParams.set('platform', next.platform)
+    else nextParams.delete('platform')
+    if (next.campaign) nextParams.set('campaign', next.campaign)
+    else nextParams.delete('campaign')
+    setParams(nextParams, { replace: true })
+  }
+  return { platform, campaign, setFilter }
+}
+
 // Needs settings:read; staff without it never see the warning, and a failed request is ignored.
 function useStaleSpendWarning() {
   const session = useQuery(authSessionQuery)
@@ -77,6 +96,7 @@ export function Component() {
   const tooLong = rangeDays(range) > MAX_RANGE_DAYS
   const overview = useQuery({ ...marketingOverviewQuery(range), enabled: !tooLong })
   const stale = useStaleSpendWarning()
+  const { platform, campaign, setFilter } = useFunnelFilter()
 
   return (
     <>
@@ -110,6 +130,8 @@ export function Component() {
                 <CampaignTable campaigns={overview.data.campaigns} />
               </>
             )}
+        <FunnelSection campaign={campaign} campaigns={overview.data?.campaigns ?? []} enabled={!tooLong} onFilterChange={setFilter} platform={platform} range={range} />
+        <ExperimentsList />
         <MarginSetting canUpdate={canUpdate} />
         <UtmTemplates />
       </div>

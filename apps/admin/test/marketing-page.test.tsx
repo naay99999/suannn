@@ -63,6 +63,8 @@ beforeEach(() => {
     'GET /api/v1/admin/marketing/overview': () => Response.json(overview),
     'GET /api/v1/admin/marketing/settings': () => Response.json(settings),
     'GET /api/v1/admin/marketing/templates': () => Response.json(templates),
+    'GET /api/v1/admin/marketing/funnel': () => Response.json({ steps: [] }),
+    'GET /api/v1/admin/marketing/experiments': () => Response.json({ experiments: [] }),
     'GET /api/v1/admin/integrations/tracking': () => Response.json(freshTracking),
   }
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
