@@ -105,8 +105,17 @@ test('lists problems with reasons, badges and product links', async () => {
 test('renders feed-wide warnings as alerts', async () => {
   renderSection()
 
-  expect(await screen.findByText(/ยังไม่ได้ตั้งค่าค่าจัดส่ง/)).toBeTruthy()
+  expect(await screen.findByText(/ยังไม่ได้ตั้งค่าค่าจัดส่ง.*แสดงเป็นหมด/)).toBeTruthy()
   expect(screen.getByText(/ปิดการสั่งซื้ออยู่/)).toBeTruthy()
+})
+
+test('alerts when no product is in the feed', async () => {
+  routes['GET /api/v1/admin/marketing/catalog-feed'] = () => Response.json({
+    ...summary, problems: [], warnings: ['no_items_in_feed'], counts: { total: 3, inFeed: 0, inStock: 0, outOfStock: 0, excluded: 3 },
+  })
+  renderSection()
+
+  expect(await screen.findByText(/ไม่มีสินค้าในฟีดเลย/)).toBeTruthy()
 })
 
 test('says every product is ready when there are no problems', async () => {

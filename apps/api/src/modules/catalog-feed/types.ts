@@ -25,7 +25,7 @@ export interface CatalogFeedInput {
 }
 
 export type CatalogProblemCode = 'no_image' | 'title_truncated' | 'no_description' | 'image_missing_alt'
-export type CatalogWarningCode = 'shipping_fee_unset' | 'checkout_disabled'
+export type CatalogWarningCode = 'shipping_fee_unset' | 'checkout_disabled' | 'no_items_in_feed'
 
 export interface CatalogFeedItem {
   id: string

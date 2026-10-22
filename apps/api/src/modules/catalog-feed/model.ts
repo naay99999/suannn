@@ -3,7 +3,7 @@ import { t } from 'elysia'
 export const catalogFeedModels = {
   'catalogFeed.summary': t.Object({
     brandName: t.String(),
-    warnings: t.Array(t.Union([t.Literal('shipping_fee_unset'), t.Literal('checkout_disabled')])),
+    warnings: t.Array(t.Union([t.Literal('shipping_fee_unset'), t.Literal('checkout_disabled'), t.Literal('no_items_in_feed')])),
     counts: t.Object({
       total: t.Number(),
       inFeed: t.Number(),

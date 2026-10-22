@@ -69,7 +69,7 @@ export function buildCatalogFeed(input: CatalogFeedInput): CatalogFeed {
 
     if (cover.alt === null || cover.alt.trim() === '') problem('image_missing_alt', false)
 
-    const available = row.sellable && row.salesEnabled && input.checkoutEnabled
+    const available = row.sellable && row.salesEnabled && input.checkoutEnabled && input.shippingFeeSatang !== null
     if (available) inStock += 1
     else outOfStock += 1
 
@@ -91,6 +91,7 @@ export function buildCatalogFeed(input: CatalogFeedInput): CatalogFeed {
   const warnings: CatalogWarningCode[] = []
   if (input.shippingFeeSatang === null) warnings.push('shipping_fee_unset')
   if (!input.checkoutEnabled) warnings.push('checkout_disabled')
+  if (input.rows.length > 0 && items.length === 0) warnings.push('no_items_in_feed')
 
   return {
     items,

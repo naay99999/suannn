@@ -35,6 +35,7 @@ export function createStoreCatalogFeedModule(
       }
       const xml = await service.xml()
       set.headers['content-type'] = 'application/xml; charset=utf-8'
+      set.headers['cache-control'] = 'public, max-age=300'
       return xml
     }, {
       response: { 200: t.String(), 429: 'http.error', 503: 'http.error' },

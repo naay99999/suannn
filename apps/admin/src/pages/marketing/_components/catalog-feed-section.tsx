@@ -33,7 +33,7 @@ function CatalogFeed({ canUpdate }: { canUpdate: boolean }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <CopyRow label="คัดลอก" value={feedUrl}>
-          <code className="block break-all rounded-md bg-muted px-2 py-1.5 text-xs">{feedUrl}</code>
+          <code className="block break-all rounded-field bg-muted px-2 py-1.5 text-xs">{feedUrl}</code>
         </CopyRow>
         <CatalogBrandSetting canUpdate={canUpdate} />
         {summary.isPending
@@ -59,7 +59,7 @@ function FeedSummary({ summary }: { summary: CatalogFeedSummary }) {
     <div className="flex flex-col gap-4">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map((stat) => (
-          <div className="flex flex-col gap-1 rounded-lg border p-3" key={stat.label}>
+          <div className="flex flex-col gap-1 rounded-surface border p-3" key={stat.label}>
             <dt className="text-sm text-muted-foreground">{stat.label}</dt>
             <dd className="text-2xl font-semibold tabular-nums">{stat.value}</dd>
           </div>
@@ -74,7 +74,7 @@ function FeedSummary({ summary }: { summary: CatalogFeedSummary }) {
       {summary.problems.length === 0
         ? <p className="text-sm text-muted-foreground">สินค้าทุกชิ้นพร้อมลงโฆษณา</p>
         : (
-          <ul className="flex flex-col divide-y rounded-lg border">
+          <ul className="flex flex-col divide-y rounded-surface border">
             {summary.problems.map((problem) => (
               <li className="flex flex-wrap items-center justify-between gap-2 p-3" key={`${problem.variantId}-${problem.code}`}>
                 <div className="flex min-w-0 flex-col gap-0.5">

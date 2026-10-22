@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export type CatalogProblemCode = 'no_image' | 'title_truncated' | 'no_description' | 'image_missing_alt'
-export type CatalogWarningCode = 'shipping_fee_unset' | 'checkout_disabled'
+export type CatalogWarningCode = 'shipping_fee_unset' | 'checkout_disabled' | 'no_items_in_feed'
 
 export function catalogFeedUrl(apiUrl: string): string {
   return `${apiUrl}/api/v1/store/catalog/feed.xml`
@@ -15,8 +15,9 @@ export const catalogProblemLabels: Record<CatalogProblemCode, string> = {
 }
 
 export const catalogWarningLabels: Record<CatalogWarningCode, string> = {
-  shipping_fee_unset: 'ยังไม่ได้ตั้งค่าค่าจัดส่ง ฟีดจึงไม่มีค่าส่ง ลูกค้าอาจเห็นราคาไม่ตรงตอนจ่ายเงิน',
+  shipping_fee_unset: 'ยังไม่ได้ตั้งค่าค่าจัดส่ง สินค้าทุกชิ้นจะแสดงเป็นหมดในโฆษณาจนกว่าจะตั้งค่าค่าจัดส่ง',
   checkout_disabled: 'ปิดการสั่งซื้ออยู่ สินค้าทุกชิ้นจะแสดงเป็นหมดในโฆษณา',
+  no_items_in_feed: 'ไม่มีสินค้าในฟีดเลย แพลตฟอร์มโฆษณาอาจลบแคตตาล็อกทั้งหมด ตรวจสอบรูปสินค้าและการตั้งค่า R2',
 }
 
 export const catalogBrandSchema = z.object({

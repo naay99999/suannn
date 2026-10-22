@@ -49,6 +49,21 @@ describe('buildCatalogFeed', () => {
     expect(feed.warnings).toContain('checkout_disabled')
   })
 
+  it('marks every item out of stock when the shipping fee is unset', () => {
+    const feed = buildCatalogFeed(input([row(), row({ variantId: 'v2' })], { shippingFeeSatang: null }))
+    expect(feed.items.every((i) => i.availability === 'out_of_stock')).toBe(true)
+    expect(feed.counts.inStock).toBe(0)
+    expect(feed.warnings).toContain('shipping_fee_unset')
+  })
+
+  it('warns when no item is in the feed', () => {
+    const empty = buildCatalogFeed(input([row({ images: [] })]))
+    expect(empty.counts).toMatchObject({ total: 1, inFeed: 0 })
+    expect(empty.warnings).toContain('no_items_in_feed')
+    expect(buildCatalogFeed(input([])).warnings).not.toContain('no_items_in_feed')
+    expect(buildCatalogFeed(input([row()])).warnings).not.toContain('no_items_in_feed')
+  })
+
   it('handles shipping', () => {
     const none = buildCatalogFeed(input([row()], { shippingFeeSatang: null }))
     expect(none.shipping).toBeNull()
