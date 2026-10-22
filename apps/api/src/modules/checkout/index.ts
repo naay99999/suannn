@@ -4,6 +4,7 @@ import { createBrowserMutationPlugin } from '../../plugins/browser-mutation'
 import type { Auth } from '../../plugins/auth/auth'
 import { createRequestContextPlugin } from '../../plugins/request-context'
 import { httpModels } from '../../shared/http-model'
+import { logError } from '../../shared/logger'
 import { DomainError } from '../../shared/domain-error'
 import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
@@ -146,7 +147,17 @@ export function createStoreCheckoutModule(
       const { tracking: trackingContext, ...orderInput } = body
       const tracking: PlacementTracking = {
         context: trackingContext,
-        consent: await consent.resolve(trackingContext?.consentId).catch(() => ({ consentRecordId: null, analytics: false, marketing: false })),
+        // Fail closed: an unresolved consent snapshot means no consent, and the order still places.
+        consent: await consent.resolve(trackingContext?.consentId).catch((error: unknown) => {
+          logError({
+            level: 'error',
+            code: 'CONSENT_RESOLVE_FAILED',
+            message: 'Consent could not be resolved; placing order without consent',
+            requestId: requestContext.requestId,
+            errorCategory: error instanceof Error ? error.name : 'UnknownError',
+          })
+          return { consentRecordId: null, analytics: false, marketing: false }
+        }),
         clientIp: requestContext.clientIp ?? null,
         userAgent: requestContext.userAgent ?? null,
       }

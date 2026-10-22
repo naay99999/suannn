@@ -103,6 +103,7 @@ function createHarness(options: {
   denyRateLimit?: boolean
   quoteError?: string
   checkoutError?: string
+  consentError?: boolean
   stripeConfigured?: boolean
 } = {}) {
   const appConfig = options.stripeConfigured
@@ -228,6 +229,7 @@ function createHarness(options: {
     consent: {
       resolve: async (consentId: string | undefined) => {
         calls.push({ method: 'consent.resolve', args: [consentId] })
+        if (options.consentError) throw new Error('consent store down')
         return consentId
           ? { consentRecordId: consentId, analytics: true, marketing: true }
           : { consentRecordId: null, analytics: false, marketing: false }
@@ -325,6 +327,17 @@ describe('store checkout and order HTTP contracts', () => {
     expect(tracking.context.lastTouch.extra).toBeUndefined()
     expect(tracking.consent).toEqual({ consentRecordId: consentId, analytics: true, marketing: true })
     expect(typeof tracking.clientIp).toBe('string')
+  })
+
+  it('places the order without consent when consent resolution fails', async () => {
+    const { appPromise, calls } = createHarness({ consentError: true })
+    const app = await appPromise
+    const consentId = '22222222-2222-4222-8222-222222222222'
+    const response = await app.handle(checkoutRequest({ ...validCheckoutBody, tracking: { consentId } }, 'session=customer'))
+
+    expect(response.status).toBe(201)
+    const tracking = calls.find((call) => call.method === 'checkout.placeCod')!.args[3] as { consent: unknown }
+    expect(tracking.consent).toEqual({ consentRecordId: null, analytics: false, marketing: false })
   })
 
   it('treats a non-object tracking field as absent', async () => {
