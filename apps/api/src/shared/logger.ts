@@ -14,6 +14,7 @@ interface ErrorLog {
   requestId?: string
   errorCategory?: string
   destination?: string
+  platform?: string
   attemptCount?: number
 }
 

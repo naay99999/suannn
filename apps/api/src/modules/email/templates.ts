@@ -154,6 +154,15 @@ export function trackingAlertEmail(destinationLabel: string, lastErrorCode: stri
   )
 }
 
+export function adSpendAlertEmail(platformLabel: string, lastErrorCode: string | null, settingsUrl: string): EmailContent {
+  return linkEmail(
+    `[suannn] Ad spend sync failing: ${platformLabel}`,
+    `Ad spend has not synced from ${platformLabel} for over 6 hours. Latest error: ${lastErrorCode ?? 'none recorded'}. Open the admin settings to check the connection.`,
+    'Open settings',
+    settingsUrl,
+  )
+}
+
 export function receiptIssuedEmail(
   orderId: string,
   orderNumber: string,

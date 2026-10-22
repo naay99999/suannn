@@ -62,6 +62,13 @@ import { createPostHogAdapter } from './modules/tracking/adapters/posthog'
 import { createTikTokAdapter } from './modules/tracking/adapters/tiktok'
 import { TrackingOutbox } from './modules/tracking/outbox'
 import { TrackingAlerts } from './modules/tracking/alerts'
+import { createGoogleAdsAccessTokens } from './modules/google-ads/auth'
+import { AdSpendAlerts } from './modules/marketing/spend/alerts'
+import { createGoogleSpendSource } from './modules/marketing/spend/google'
+import { createMetaSpendSource } from './modules/marketing/spend/meta'
+import { AdSpendSync } from './modules/marketing/spend/sync'
+import { createTikTokSpendSource } from './modules/marketing/spend/tiktok'
+import { adPlatforms } from './modules/marketing/spend/types'
 import { TrackingStatusRepository } from './modules/tracking/status/repository'
 import { TrackingStatusService } from './modules/tracking/status/service'
 import { logError } from './shared/logger'
@@ -131,6 +138,19 @@ const trackingOutbox = new TrackingOutbox(database.db, {
   ...(config.tracking.googleAds ? { google_ads: createGoogleAdsAdapter(config.tracking.googleAds) } : {}),
 })
 const trackingAlerts = new TrackingAlerts(database.db, config.tracking, emailSender, config.adminUrl)
+// Spend sources exist only for configured platforms; Google spend sync follows the existing GOOGLE_ADS_* group.
+const marketingSync = new AdSpendSync(database.db, {
+  ...(config.marketing.metaAds ? { meta: createMetaSpendSource(config.marketing.metaAds) } : {}),
+  ...(config.marketing.tiktokAds ? { tiktok: createTikTokSpendSource(config.marketing.tiktokAds) } : {}),
+  ...(config.tracking.googleAds
+    ? { google: createGoogleSpendSource(config.tracking.googleAds, createGoogleAdsAccessTokens(config.tracking.googleAds)) }
+    : {}),
+})
+const configuredAdPlatforms = adPlatforms.filter(platform =>
+  platform === 'meta' ? config.marketing.metaAds
+    : platform === 'tiktok' ? config.marketing.tiktokAds
+      : config.tracking.googleAds)
+const adSpendAlerts = new AdSpendAlerts(database.db, configuredAdPlatforms, config.tracking.alertEmail, emailSender, config.adminUrl)
 const trackingStatus = new TrackingStatusService(new TrackingStatusRepository(database.db), config.tracking)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
@@ -260,6 +280,22 @@ const stopTrackingOutboxMaintenance = startCommerceMaintenanceLoop(
   })),
 )
 
+const stopAdSpendSync = startCommerceMaintenanceLoop(
+  async () => {
+    if (await marketingSync.due()) await marketingSync.run()
+    // An alert failure must never break the sync.
+    await adSpendAlerts.check().catch((error: unknown) => logError({
+      level: 'error', code: 'AD_SPEND_ALERT_CHECK_FAILED', message: 'Ad spend alert check failed',
+      errorCategory: error instanceof Error ? error.name : 'UnknownError',
+    }))
+    return 0
+  },
+  (error) => console.error(JSON.stringify({
+    level: 'error', code: 'AD_SPEND_SYNC_WORKER_FAILED',
+    errorCategory: error instanceof Error ? error.name : 'UnknownError',
+  })),
+)
+
 const stopGuestCartCleanup = startCommerceMaintenanceLoop(
   (limit) => cartRepository.cleanupExpiredGuestCarts(limit),
   (error) => console.error(JSON.stringify({
@@ -305,6 +341,7 @@ async function shutdown(signal: string) {
       { name: 'inventory', run: stopInventoryMaintenance },
       { name: 'order-outbox', run: stopOrderOutboxMaintenance },
       { name: 'tracking-outbox', run: stopTrackingOutboxMaintenance },
+      { name: 'ad-spend-sync', run: stopAdSpendSync },
       { name: 'guest-cart-cleanup', run: stopGuestCartCleanup },
       { name: 'stripe-attempts', run: stopStripeAttemptReconciliation },
       { name: 'stripe-refunds', run: stopStripeRefundReconciliation },
