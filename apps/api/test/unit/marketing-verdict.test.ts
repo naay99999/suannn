@@ -16,6 +16,19 @@ describe('marketing verdict', () => {
     expect(verdict({ ...base, spendSatang: 10000, revenueSatang: 25000 })).toBe('loss')
   })
 
+  it('classifies exactly on the band edges', () => {
+    const at = (marginPercent: number, spendSatang: number, revenueSatang: number) =>
+      verdict({ orders: 1, marginPercent, spendSatang, revenueSatang })
+    expect(at(1, 10000, 1100000)).toBe('profit')
+    expect(at(1, 10000, 1099999)).toBe('breakeven')
+    expect(at(1, 10000, 900000)).toBe('breakeven')
+    expect(at(1, 10000, 899999)).toBe('loss')
+    expect(at(50, 10000, 22000)).toBe('profit')
+    expect(at(50, 10000, 21999)).toBe('breakeven')
+    expect(at(35.5, 3550, 11000)).toBe('profit')
+    expect(at(35.5, 3550, 10999)).toBe('breakeven')
+  })
+
   it('reports no_sales with spend and no orders', () => {
     expect(verdict({ spendSatang: 10000, orders: 0, revenueSatang: 0, marginPercent: 35 })).toBe('no_sales')
   })

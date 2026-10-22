@@ -164,6 +164,20 @@ describe('marketing metrics overview', () => {
     ])
   })
 
+  it('merges aliases of one platform on the same campaign into a single row', async () => {
+    await insertSpend({ platform: 'meta', campaignId: '123', date: '2026-10-21', spendSatang: 10000 })
+    await insertOrder({ createdAt: '2026-10-21T05:00:00Z', subtotalSatang: 20000, utm: { source: 'fb', campaign: '123' } })
+    await insertOrder({ createdAt: '2026-10-21T06:00:00Z', subtotalSatang: 5000, utm: { source: 'Instagram', campaign: '123' } })
+    await insertOrder({ createdAt: '2026-10-21T07:00:00Z', subtotalSatang: 3000, utm: { source: 'fb', campaign: '123' } })
+
+    const overview = await metrics().overview(day, 35)
+
+    expect(overview.campaigns).toHaveLength(1)
+    expect(overview.campaigns[0]).toMatchObject({ platform: 'meta', campaignId: '123', orders: 3, revenueSatang: 28000, utmSource: 'fb' })
+    expect(overview.summary).toMatchObject({ orders: 3, revenueSatang: 28000, spendSatang: 10000 })
+    expect(overview.summary.unmatched).toEqual({ revenueSatang: 0, orders: 0 })
+  })
+
   it('does not match a campaign id on a different platform', async () => {
     await insertSpend({ platform: 'tiktok', campaignId: '123', date: '2026-10-21', spendSatang: 10000 })
     await insertOrder({ createdAt: '2026-10-21T05:00:00Z', subtotalSatang: 5000, utm: { source: 'facebook', campaign: '123' } })
