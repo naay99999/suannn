@@ -24,17 +24,30 @@ export function initPostHog(key: string, host: string): void {
   }
 }
 
+const ATTRIBUTION_KEYS = [
+  ['utm_source', 'utmSource'],
+  ['utm_medium', 'utmMedium'],
+  ['utm_campaign', 'utmCampaign'],
+  ['utm_content', 'utmContent'],
+] as const
+
 // Super-properties put the campaign on every PostHog event, including in memory persistence mode.
+// Keys absent from the touch are unregistered so a previous campaign never lingers.
 export function registerAttribution(touch: TrackingTouch | undefined): void {
-  if (!initialized || !touch) return
+  if (!initialized) return
   try {
     const properties: Record<string, string> = {}
-    if (touch.utmSource) properties.utm_source = touch.utmSource
-    if (touch.utmMedium) properties.utm_medium = touch.utmMedium
-    if (touch.utmCampaign) properties.utm_campaign = touch.utmCampaign
-    if (touch.utmContent) properties.utm_content = touch.utmContent
+    for (const [key, field] of ATTRIBUTION_KEYS) {
+      const value = touch?.[field]
+      if (value) properties[key] = value
+      else posthog.unregister(key)
+    }
     if (Object.keys(properties).length > 0) posthog.register(properties)
   } catch { /* ignore */ }
+}
+
+export function resetPostHogForTests(): void {
+  initialized = false
 }
 
 export function setAnalyticsConsent(granted: boolean): void {
@@ -43,13 +56,12 @@ export function setAnalyticsConsent(granted: boolean): void {
     if (granted) {
       posthog.set_config({ persistence: 'localStorage+cookie', person_profiles: 'identified_only', disable_session_recording: false })
       posthog.startSessionRecording()
-      registerAttribution(readAttribution().lastTouch)
     } else {
       posthog.stopSessionRecording()
       posthog.set_config({ persistence: 'memory', person_profiles: 'never', disable_session_recording: true })
       posthog.reset()
-      registerAttribution(readAttribution().lastTouch)
     }
+    registerAttribution(readAttribution().lastTouch)
   } catch { /* ignore */ }
 }
 

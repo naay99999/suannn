@@ -4,10 +4,12 @@ const captured: Array<[string, Record<string, unknown>]> = []
 let captureThrows = false
 const calls: string[] = []
 const registered: Array<Record<string, unknown>> = []
+const unregistered: string[] = []
 
 mock.module('posthog-js', () => ({
   default: {
     init: () => {},
+    unregister: (key: string) => { unregistered.push(key) },
     register: (properties: Record<string, unknown>) => { registered.push(properties) },
     capture: (name: string, properties: Record<string, unknown>) => {
       if (captureThrows) throw new Error('boom')
@@ -26,9 +28,8 @@ mock.module('posthog-js', () => ({
 
 const { toGoogle, toMeta, toPostHog, toTikTok } = await import('../src/lib/tracking/mappings')
 const { loadPixels } = await import('../src/lib/tracking/pixels')
-const { initPostHog, registerAttribution, setAnalyticsConsent } = await import('../src/lib/tracking/posthog')
+const { initPostHog, registerAttribution, resetPostHogForTests, setAnalyticsConsent } = await import('../src/lib/tracking/posthog')
 const { setTrackingConsent, track } = await import('../src/lib/tracking/tracker')
-const { recordLanding } = await import('../src/lib/tracking/attribution')
 type BrowserEvent = import('../src/lib/tracking/events').BrowserEvent
 
 const item = { productId: 'p1', variantId: 'v1', name: 'ทุเรียน', price: 250, quantity: 2 }
@@ -67,17 +68,33 @@ describe('mappings', () => {
 })
 
 describe('campaign attribution super-properties', () => {
-  test('init registers the stored last touch', async () => {
-    recordLanding({ href: 'https://shop.test/?utm_source=meta&utm_campaign=123' } as Location, '')
+  const stored = (lastTouch?: Record<string, string>) =>
+    localStorage.setItem('suannn.attribution', JSON.stringify(lastTouch ? { lastTouch: { capturedAt: new Date().toISOString(), ...lastTouch } } : {}))
+
+  beforeEach(() => {
+    resetPostHogForTests()
+    initPostHog('phc_test', 'https://example.test')
     registered.length = 0
-    // A fresh module instance, since other files may already have initialised the shared one.
-    const fresh = await import('../src/lib/tracking/posthog?fresh-init')
-    fresh.initPostHog('phc_test', 'https://example.test')
+    unregistered.length = 0
+  })
+
+  test('init registers the stored last touch', () => {
+    stored({ utmSource: 'meta', utmCampaign: '123' })
+    resetPostHogForTests()
+    registered.length = 0
+    initPostHog('phc_test', 'https://example.test')
     expect(registered).toEqual([{ utm_source: 'meta', utm_campaign: '123' }])
   })
 
-  test('registers only present values and nothing for no touch', () => {
+  test('init with no stored touch registers nothing', () => {
+    stored()
+    resetPostHogForTests()
     registered.length = 0
+    initPostHog('phc_test', 'https://example.test')
+    expect(registered).toEqual([])
+  })
+
+  test('registers only present values and nothing for no touch', () => {
     registerAttribution(undefined)
     registerAttribution({ capturedAt: '2026-10-22T00:00:00Z' })
     expect(registered).toEqual([])
@@ -85,8 +102,13 @@ describe('campaign attribution super-properties', () => {
     expect(registered).toEqual([{ utm_source: 'tiktok', utm_medium: 'paid', utm_content: 'ad1' }])
   })
 
-  test('re-registers after the persistence mode changes', () => {
-    registered.length = 0
+  test('unregisters keys absent from the new touch', () => {
+    registerAttribution({ utmSource: 'meta', capturedAt: '2026-10-22T00:00:00Z' })
+    expect(unregistered).toEqual(['utm_medium', 'utm_campaign', 'utm_content'])
+  })
+
+  test('re-registers once per persistence mode change', () => {
+    stored({ utmSource: 'meta', utmCampaign: '123' })
     setAnalyticsConsent(true)
     setAnalyticsConsent(false)
     expect(registered).toEqual([
