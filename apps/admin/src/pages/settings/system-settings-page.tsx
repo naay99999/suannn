@@ -5,6 +5,7 @@ import { CustomerAuthControls } from './_components/customer-auth-controls'
 import { CommerceSettings } from './_components/commerce-settings'
 import { ReceiptSettings } from './_components/receipt-settings'
 import { StoreAnnouncementSettings } from './_components/store-announcement-settings'
+import { TrackingStatus } from './_components/tracking-status'
 
 export function Component() {
   return (
@@ -17,6 +18,7 @@ export function Component() {
           <TabsTrigger value="commerce">Commerce</TabsTrigger>
           <TabsTrigger value="receipts">Receipts</TabsTrigger>
           <TabsTrigger value="promotion-bar">Promotion bar</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
         <TabsContent value="admin-users"><StaffManagement /></TabsContent>
         <TabsContent value="feature-controls">
@@ -28,6 +30,7 @@ export function Component() {
         <TabsContent value="commerce"><CommerceSettings /></TabsContent>
         <TabsContent value="receipts"><ReceiptSettings /></TabsContent>
         <TabsContent value="promotion-bar"><StoreAnnouncementSettings /></TabsContent>
+        <TabsContent value="integrations"><TrackingStatus /></TabsContent>
       </Tabs>
     </section>
   )
