@@ -13,12 +13,15 @@ import {
   orderEvent,
   orderItem,
   orderItemAllocation,
+  orderAttribution,
   orderOutbox,
   payment,
   product,
   productVariant,
   warehouse,
 } from '../../database/schema'
+import type { PlacementTracking } from '../tracking/context'
+import { enqueuePurchaseTracking } from '../tracking/purchase'
 import { assertAuditMetadata } from '../audit/model'
 import type { AuditEvent } from '../audit/model'
 import type { CartPrincipal } from '../cart/types'
@@ -423,6 +426,7 @@ export function createPlaceOrderInTransaction(
     principal: CartPrincipal,
     requestHash: string,
     paymentMethod: 'cod' | 'stripe',
+    tracking?: PlacementTracking,
   ): Promise<PlacedOrderRecord> {
     if (input.paymentMethod !== paymentMethod) throw new DomainError('INVALID_ORDER_INPUT')
     const now = nowOverride?.() ?? await transactionNow(tx)
@@ -674,6 +678,10 @@ export function createPlaceOrderInTransaction(
       })
     }
 
+    // Written in the order transaction; a replayed command never reaches here, so the first attribution stays.
+    await insertOrderAttribution(tx, orderId, tracking)
+    if (paymentMethod === 'cod') await enqueuePurchaseTracking(tx, orderId, now)
+
     await tx.delete(cartItem).where(eq(cartItem.cartId, ownerCart.id))
     await tx.update(cart).set({
       version: sql`${cart.version} + 1`,
@@ -693,6 +701,38 @@ export function createPlaceOrderInTransaction(
       guestAccessTokenVersion,
     }
   }
+}
+
+async function insertOrderAttribution(tx: DatabaseTransaction, orderId: string, tracking: PlacementTracking | undefined) {
+  const context = tracking?.context
+  const lastTouch = context?.lastTouch
+  const capturedAt = lastTouch ? new Date(lastTouch.capturedAt) : null
+  await tx.insert(orderAttribution).values({
+    orderId,
+    consentRecordId: tracking?.consent.consentRecordId ?? null,
+    analyticsConsent: tracking?.consent.analytics ?? false,
+    marketingConsent: tracking?.consent.marketing ?? false,
+    posthogDistinctId: context?.posthogDistinctId ?? null,
+    utmSource: lastTouch?.utmSource ?? null,
+    utmMedium: lastTouch?.utmMedium ?? null,
+    utmCampaign: lastTouch?.utmCampaign ?? null,
+    utmContent: lastTouch?.utmContent ?? null,
+    utmTerm: lastTouch?.utmTerm ?? null,
+    fbclid: lastTouch?.fbclid ?? null,
+    ttclid: lastTouch?.ttclid ?? null,
+    gclid: lastTouch?.gclid ?? null,
+    gbraid: lastTouch?.gbraid ?? null,
+    wbraid: lastTouch?.wbraid ?? null,
+    referrer: lastTouch?.referrer ?? null,
+    landingPath: lastTouch?.landingPath ?? null,
+    lastTouchAt: capturedAt && Number.isFinite(capturedAt.getTime()) ? capturedAt : null,
+    firstTouch: context?.firstTouch ?? null,
+    fbp: context?.fbp ?? null,
+    fbc: context?.fbc ?? null,
+    ttp: context?.ttp ?? null,
+    clientIp: tracking?.clientIp ?? null,
+    userAgent: tracking?.userAgent ?? null,
+  })
 }
 
 function scopeForInventory(principal: CartPrincipal) {

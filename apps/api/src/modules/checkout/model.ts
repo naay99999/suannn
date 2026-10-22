@@ -42,6 +42,34 @@ const address = t.Union([
   }, { additionalProperties: false }),
 ])
 
+const trackingString = t.String({ maxLength: 2000 })
+const trackingTouch = t.Object({
+  utmSource: t.Optional(trackingString),
+  utmMedium: t.Optional(trackingString),
+  utmCampaign: t.Optional(trackingString),
+  utmContent: t.Optional(trackingString),
+  utmTerm: t.Optional(trackingString),
+  fbclid: t.Optional(trackingString),
+  ttclid: t.Optional(trackingString),
+  gclid: t.Optional(trackingString),
+  gbraid: t.Optional(trackingString),
+  wbraid: t.Optional(trackingString),
+  referrer: t.Optional(trackingString),
+  landingPath: t.Optional(trackingString),
+  capturedAt: trackingString,
+}, { additionalProperties: false })
+
+// The parser sanitizes this before validation; the schema documents the shape.
+const trackingContext = t.Object({
+  consentId: t.Optional(trackingString),
+  posthogDistinctId: t.Optional(trackingString),
+  firstTouch: t.Optional(trackingTouch),
+  lastTouch: t.Optional(trackingTouch),
+  fbp: t.Optional(trackingString),
+  fbc: t.Optional(trackingString),
+  ttp: t.Optional(trackingString),
+}, { additionalProperties: false })
+
 const placeOrderBody = t.Object({
   quoteToken: t.String({ minLength: 1, maxLength: 8192 }),
   paymentMethod: t.Union([t.Literal('cod'), t.Literal('stripe')]),
@@ -51,6 +79,7 @@ const placeOrderBody = t.Object({
   }, { additionalProperties: false }),
   billingAddress: address,
   shippingAddress: t.Optional(address),
+  tracking: t.Optional(trackingContext),
 }, { additionalProperties: false })
 
 const idempotencyHeaders = t.Object({

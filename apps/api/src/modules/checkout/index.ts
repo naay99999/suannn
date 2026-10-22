@@ -12,6 +12,8 @@ import type { CartPrincipal } from '../cart/types'
 import type { CheckoutService } from './service'
 import type { QuoteService } from './quote'
 import type { StripeCheckoutService } from './stripe-service'
+import type { ConsentService } from '../tracking/consent/service'
+import { sanitizeTrackingContext, type PlacementTracking } from '../tracking/context'
 import type { PlaceCodInput, PlaceStripeInput } from '../orders/types'
 import { checkoutModels } from './model'
 import { ordersModels } from '../orders/model'
@@ -49,11 +51,15 @@ function assertStrictAddress(address: unknown) {
 }
 
 async function parseStrictPlaceOrderBody({ request }: { request: Request }) {
-  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'stripePaymentMethod', 'contact', 'billingAddress', 'shippingAddress'])({ request })
+  const body = await parseStrictBody(['quoteToken', 'paymentMethod', 'stripePaymentMethod', 'contact', 'billingAddress', 'shippingAddress', 'tracking'])({ request })
   const contact = body.contact
   if (!isRecord(contact) || Object.keys(contact).some((key) => key !== 'email')) {
     throw new DomainError('INVALID_ORDER_INPUT')
   }
+  // Tracking is best effort: sanitize in place and never reject the order over it.
+  const tracking = sanitizeTrackingContext(body.tracking)
+  if (tracking) body.tracking = tracking
+  else delete body.tracking
   assertStrictAddress(body.billingAddress)
   if (body.shippingAddress !== undefined) assertStrictAddress(body.shippingAddress)
   return body
@@ -105,6 +111,7 @@ export function createStoreCheckoutModule(
   checkout: Pick<CheckoutService, 'placeCod'>,
   stripeCheckout: Pick<StripeCheckoutService, 'place'> | undefined,
   limiter: Pick<RateLimiter, 'consume'>,
+  consent: Pick<ConsentService, 'resolve'>,
 ) {
   const errors = { 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error', 503: 'http.error' } as const
 
@@ -136,14 +143,21 @@ export function createStoreCheckoutModule(
       const { principal } = resolved
       const limited = await rateLimitGuestCheckout(principal, limiter, requestContext, set)
       if (limited) return limited
+      const { tracking: trackingContext, ...orderInput } = body
+      const tracking: PlacementTracking = {
+        context: trackingContext,
+        consent: await consent.resolve(trackingContext?.consentId).catch(() => ({ consentRecordId: null, analytics: false, marketing: false })),
+        clientIp: requestContext.clientIp ?? null,
+        userAgent: requestContext.userAgent ?? null,
+      }
       let result
       if (body.paymentMethod === 'cod') {
         if (principal.kind !== 'customer') throw new DomainError('AUTHENTICATION_REQUIRED')
         if (!('emailVerified' in resolved) || resolved.emailVerified !== true) throw new DomainError('EMAIL_VERIFICATION_REQUIRED')
-        result = await checkout.placeCod(body as PlaceCodInput, principal, headers['idempotency-key'])
+        result = await checkout.placeCod(orderInput as PlaceCodInput, principal, headers['idempotency-key'], tracking)
       } else {
         if (!config.stripe || !stripeCheckout) throw new DomainError('STRIPE_NOT_CONFIGURED')
-        result = await stripeCheckout.place(body as PlaceStripeInput, principal, headers['idempotency-key'])
+        result = await stripeCheckout.place(orderInput as PlaceStripeInput, principal, headers['idempotency-key'], tracking)
       }
       set.status = 201
       return result

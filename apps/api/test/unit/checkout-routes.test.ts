@@ -225,6 +225,14 @@ function createHarness(options: {
     orders: ordersService,
     staffMfaRequired: async () => true,
     identityReservations: { findState: async () => null },
+    consent: {
+      resolve: async (consentId: string | undefined) => {
+        calls.push({ method: 'consent.resolve', args: [consentId] })
+        return consentId
+          ? { consentRecordId: consentId, analytics: true, marketing: true }
+          : { consentRecordId: null, analytics: false, marketing: false }
+      },
+    },
     limiter,
   } as unknown as AppDependencies
   const appPromise = createApp(appConfig, dependencies)
@@ -287,6 +295,47 @@ describe('store checkout and order HTTP contracts', () => {
     expect(invalid.status).toBe(422)
     expect(calls.some((call) => call.method === 'checkout.placeStripe')).toBe(true)
     expect(calls.some((call) => call.method === 'checkout.placeCod')).toBe(true)
+  })
+
+  it('sanitizes garbage tracking input instead of rejecting the order', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const consentId = '22222222-2222-4222-8222-222222222222'
+    const response = await app.handle(checkoutRequest({
+      ...validCheckoutBody,
+      tracking: {
+        consentId,
+        evil: 'drop-me',
+        fbp: 'x'.repeat(10_000),
+        lastTouch: { utmCampaign: 'y'.repeat(10_000), landingPath: 'javascript:x', capturedAt: new Date().toISOString(), extra: 1 },
+        firstTouch: 'not-an-object',
+      },
+    }, 'session=customer'))
+
+    expect(response.status).toBe(201)
+    const placed = calls.find((call) => call.method === 'checkout.placeCod')!
+    expect(placed.args[0]).not.toHaveProperty('tracking')
+    const tracking = placed.args[3] as { context: Record<string, any>; consent: unknown; clientIp: unknown }
+    expect(tracking.context.consentId).toBe(consentId)
+    expect(tracking.context.fbp).toHaveLength(500)
+    expect(tracking.context.evil).toBeUndefined()
+    expect(tracking.context.firstTouch).toBeUndefined()
+    expect(tracking.context.lastTouch.utmCampaign).toHaveLength(500)
+    expect(tracking.context.lastTouch.landingPath).toBeUndefined()
+    expect(tracking.context.lastTouch.extra).toBeUndefined()
+    expect(tracking.consent).toEqual({ consentRecordId: consentId, analytics: true, marketing: true })
+    expect(typeof tracking.clientIp).toBe('string')
+  })
+
+  it('treats a non-object tracking field as absent', async () => {
+    const { appPromise, calls } = createHarness()
+    const app = await appPromise
+    const response = await app.handle(checkoutRequest({ ...validCheckoutBody, tracking: 'junk' }, 'session=customer'))
+
+    expect(response.status).toBe(201)
+    const tracking = calls.find((call) => call.method === 'checkout.placeCod')!.args[3] as { context: unknown; consent: unknown }
+    expect(tracking.context).toBeUndefined()
+    expect(tracking.consent).toEqual({ consentRecordId: null, analytics: false, marketing: false })
   })
 
   it('passes the chosen Stripe payment method to the service and rejects unknown methods', async () => {

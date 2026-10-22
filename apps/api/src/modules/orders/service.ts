@@ -22,6 +22,7 @@ import {
 } from './access'
 import { listOrderDetails, lockOrder, readOpenStripeCheckout, readOrderDetail } from './repository'
 import { enqueueOrderEmail } from './outbox'
+import { enqueuePurchaseTracking } from '../tracking/purchase'
 import { restoreOrderAllocations, releaseOrderAllocations } from '../inventory/reservation-repository'
 import { runOrderCommand, type OrderCommandResult, type OrderOperationRecord } from './operation'
 import { issueReceiptInTransaction } from '../receipts/issue'
@@ -179,6 +180,12 @@ function inventoryActorIdFor(principal: OrderPrincipal, orderId: string) {
   return principal.kind === 'guest' ? orderId : principal.userId
 }
 
+async function transactionNow(tx: DatabaseTransaction, orderId: string) {
+  const [row] = await tx.select({ now: sql<Date | string>`transaction_timestamp()` }).from(commerceOrder)
+    .where(eq(commerceOrder.id, orderId)).limit(1)
+  return row ? new Date(row.now) : new Date()
+}
+
 export async function settleStripeOrderInTransaction(tx: DatabaseTransaction, input: {
   order: typeof commerceOrder.$inferSelect
   payment: typeof payment.$inferSelect
@@ -230,6 +237,7 @@ export async function settleStripeOrderInTransaction(tx: DatabaseTransaction, in
     status: 'pending',
     attemptCount: 0,
   })
+  await enqueuePurchaseTracking(tx, input.order.id, await transactionNow(tx, input.order.id))
   const [lineCount] = await tx.select({ count: sql<number>`count(*)::int` }).from(orderItem)
     .where(eq(orderItem.orderId, input.order.id))
   await recordOrderAudit(tx, {

@@ -9,6 +9,7 @@ import {
   placementResultPayload,
   replayPlacedOrderRecord,
 } from './placement'
+import type { PlacementTracking } from '../tracking/context'
 import { StripePaymentRepository } from '../payments/stripe/repository'
 
 const commandName = 'checkout.place-cod'
@@ -28,7 +29,7 @@ export class CheckoutService {
     )
   }
 
-  async placeCod(input: PlaceCodInput, principal: CartPrincipal, idempotencyKey: string): Promise<CheckoutResult> {
+  async placeCod(input: PlaceCodInput, principal: CartPrincipal, idempotencyKey: string, tracking?: PlacementTracking): Promise<CheckoutResult> {
     if (principal.kind !== 'customer') throw new DomainError('AUTHENTICATION_REQUIRED')
     const normalized = normalizeCheckoutInput(input)
     const payload = {
@@ -52,7 +53,7 @@ export class CheckoutService {
         ? { order: record.order, guestAccessToken: record.guestAccessToken }
         : { order: record.order }
     }, async (tx, requestHash) => {
-      const record = await this.placeOrderInTransaction(tx, normalized, principal, requestHash, 'cod')
+      const record = await this.placeOrderInTransaction(tx, normalized, principal, requestHash, 'cod', tracking)
       const value = record.guestAccessToken
         ? { order: record.order, guestAccessToken: record.guestAccessToken }
         : { order: record.order }

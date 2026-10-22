@@ -156,7 +156,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
       .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
       .use(createAdminMediaModule(config, dependencies.auth, dependencies.media, dependencies.limiter)))
     .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
-    .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter))
+    .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter, dependencies.consent))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
     .use(new Elysia({ name: 'admin-orders-and-dashboard' })
       .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))

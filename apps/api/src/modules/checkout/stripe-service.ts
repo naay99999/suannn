@@ -13,6 +13,7 @@ import {
   type PlacedOrderRecord,
 } from './placement'
 import { principalScope } from './service'
+import type { PlacementTracking } from '../tracking/context'
 
 export interface StripeCheckoutResult {
   order: OrderSnapshot
@@ -36,7 +37,7 @@ export class StripeCheckoutService {
     this.placeOrderInTransaction = createPlaceOrderInTransaction(secret, this.stripePayments, this.now)
   }
 
-  async place(input: PlaceStripeInput, principal: CartPrincipal, idempotencyKey: string): Promise<StripeCheckoutResult> {
+  async place(input: PlaceStripeInput, principal: CartPrincipal, idempotencyKey: string, tracking?: PlacementTracking): Promise<StripeCheckoutResult> {
     if (!this.gateway) throw new DomainError('STRIPE_NOT_CONFIGURED')
     const normalized = normalizeCheckoutInput(input)
     const payload = {
@@ -61,7 +62,7 @@ export class StripeCheckoutService {
       }
       return replayed
     }, async (tx, requestHash) => {
-      const placed = await this.placeOrderInTransaction(tx, normalized, principal, requestHash, 'stripe')
+      const placed = await this.placeOrderInTransaction(tx, normalized, principal, requestHash, 'stripe', tracking)
       if (!placed.attemptId) throw new DomainError('INVALID_ORDER_COMMAND')
       return {
         orderId: placed.order.id,
