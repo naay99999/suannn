@@ -48,8 +48,9 @@ export const fakeTrackingStatus = {
 export const fakeMarketing = {
   metrics: { overview: async () => ({}) as never },
   settings: {
-    get: async () => ({ marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
-    update: async () => ({ marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
+    get: async () => ({ marginPercent: 35, catalogBrandName: 'suannn', version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
+    update: async () => ({ marginPercent: 35, catalogBrandName: 'suannn', version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
+    updateCatalogBrand: async () => ({ marginPercent: 35, catalogBrandName: 'suannn', version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }),
   },
   sync: { run: async () => [] },
   posthog: null,

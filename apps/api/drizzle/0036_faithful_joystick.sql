@@ -1,0 +1,2 @@
+ALTER TABLE "marketing_settings" ADD COLUMN "catalog_brand_name" text DEFAULT 'suannn' NOT NULL;--> statement-breakpoint
+ALTER TABLE "marketing_settings" ADD CONSTRAINT "marketing_settings_catalog_brand_check" CHECK (char_length("marketing_settings"."catalog_brand_name") between 1 and 70);

@@ -33,7 +33,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await database.db.delete(auditLog)
-  await database.db.update(marketingSettings).set({ marginPercent: '35.0', version: 1 }).where(eq(marketingSettings.id, 1))
+  await database.db.update(marketingSettings).set({ marginPercent: '35.0', catalogBrandName: 'suannn', version: 1 }).where(eq(marketingSettings.id, 1))
 })
 
 afterAll(async () => {
@@ -72,5 +72,29 @@ describe('marketing settings', () => {
         .rejects.toMatchObject({ code: 'INVALID_MARKETING_SETTINGS' })
     }
     expect(await service.get()).toMatchObject({ marginPercent: 35, version: 1 })
+  })
+
+  it('fresh database seeds catalogBrandName suannn', async () => {
+    expect(await service.get()).toMatchObject({ catalogBrandName: 'suannn' })
+  })
+
+  it('updateCatalogBrand stores a trimmed name, bumps version and audits', async () => {
+    const updated = await service.updateCatalogBrand({ catalogBrandName: '  สวนบ้านเรา  ', version: 1 }, actor)
+    expect(updated).toMatchObject({ catalogBrandName: 'สวนบ้านเรา', version: 2 })
+    const rows = await database.db.select().from(auditLog).where(eq(auditLog.action, 'marketing.catalog_brand.updated'))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.metadata).toEqual({ from: 'suannn', to: 'สวนบ้านเรา' })
+  })
+
+  it('updateCatalogBrand rejects a stale version', async () => {
+    await service.updateCatalogBrand({ catalogBrandName: 'one', version: 1 }, actor)
+    await expect(service.updateCatalogBrand({ catalogBrandName: 'two', version: 1 }, actor))
+      .rejects.toMatchObject({ code: 'MARKETING_SETTINGS_CONFLICT' })
+  })
+
+  it('updateCatalogBrand with an unchanged name returns current settings without a version bump or audit row', async () => {
+    const result = await service.updateCatalogBrand({ catalogBrandName: ' suannn ', version: 1 }, actor)
+    expect(result).toMatchObject({ catalogBrandName: 'suannn', version: 1 })
+    expect(await database.db.select().from(auditLog)).toHaveLength(0)
   })
 })

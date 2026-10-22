@@ -90,6 +90,7 @@ export const marketingModels = {
   }, { additionalProperties: false }),
   'marketing.settings': t.Object({
     marginPercent: t.Number(),
+    catalogBrandName: t.String(),
     version: t.Integer({ minimum: 1 }),
     updatedAt: t.String(),
   }, { additionalProperties: false }),
@@ -97,6 +98,11 @@ export const marketingModels = {
   // with INVALID_MARKETING_SETTINGS.
   'marketing.updateSettingsBody': t.Object({
     marginPercent: t.Number(),
+    version: t.Integer({ minimum: 1 }),
+  }, { additionalProperties: false }),
+  // The service trims and range-checks the name (INVALID_MARKETING_SETTINGS).
+  'marketing.catalogBrandBody': t.Object({
+    catalogBrandName: t.String(),
     version: t.Integer({ minimum: 1 }),
   }, { additionalProperties: false }),
   'marketing.syncResponse': t.Object({

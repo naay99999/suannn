@@ -42,10 +42,12 @@ export const marketingSyncRun = pgTable('marketing_sync_run', {
 export const marketingSettings = pgTable('marketing_settings', {
   id: smallint('id').primaryKey(),
   marginPercent: numeric('margin_percent', { precision: 4, scale: 1 }).notNull().default('35.0'),
+  catalogBrandName: text('catalog_brand_name').notNull().default('suannn'),
   version: integer('version').notNull().default(1),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
   updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
 }, (table) => [
   check('marketing_settings_singleton_check', sql`${table.id} = 1`),
+  check('marketing_settings_catalog_brand_check', sql`char_length(${table.catalogBrandName}) between 1 and 70`),
   check('marketing_settings_margin_check', sql`${table.marginPercent} between 1 and 100`),
 ])

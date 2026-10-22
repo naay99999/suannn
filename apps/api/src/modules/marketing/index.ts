@@ -20,7 +20,7 @@ import { UTM_TEMPLATES } from './templates'
 
 export interface MarketingDependencies {
   metrics: Pick<MarketingMetrics, 'overview'>
-  settings: Pick<MarketingSettingsService, 'get' | 'update'>
+  settings: Pick<MarketingSettingsService, 'get' | 'update' | 'updateCatalogBrand'>
   sync: Pick<AdSpendSync, 'run'>
   // null when POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID are not configured.
   posthog: MarketingPostHog | null
@@ -114,6 +114,24 @@ export function createAdminMarketingModule(
       detail: {
         summary: 'Update marketing settings',
         description: 'Sets the gross margin percentage (1 to 100, one decimal) with optimistic version check. Requires marketing:update permission and an admin-origin browser request.',
+        tags: ['Admin Marketing'], security,
+      },
+    })
+    .put('/settings/catalog-brand', ({ body, user, requestContext }) => deps.settings.updateCatalogBrand(body, {
+      userId: user.id,
+      auditContext: {
+        requestId: requestContext.requestId,
+        ipAddress: requestContext.clientIp,
+        userAgent: requestContext.userAgent,
+      },
+    }), {
+      browserMutation: 'admin',
+      permission: { marketing: ['update'] },
+      body: 'marketing.catalogBrandBody',
+      response: { 200: 'marketing.settings', ...readErrors, 409: 'http.error' },
+      detail: {
+        summary: 'Update catalog brand name',
+        description: 'Sets the brand name published as g:brand in the product catalog feed (1 to 70 characters) with optimistic version check. Requires marketing:update permission and an admin-origin browser request.',
         tags: ['Admin Marketing'], security,
       },
     })

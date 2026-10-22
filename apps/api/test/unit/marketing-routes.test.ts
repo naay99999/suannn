@@ -3,7 +3,7 @@ import { createApp, type AppDependencies } from '../../src/app'
 import { loadConfig } from '../../src/config/env'
 import { DomainError } from '../../src/shared/domain-error'
 import type { Auth } from '../../src/plugins/auth/auth'
-import { MarketingSettingsService } from '../../src/modules/marketing/settings'
+import { MarketingSettingsService, assertCatalogBrandInput } from '../../src/modules/marketing/settings'
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
@@ -23,7 +23,7 @@ const overview = {
   }],
   warnings: [{ code: 'NON_THB_CURRENCY' as const, platform: 'meta' as const }],
 }
-const settings = { marginPercent: 35, version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }
+const settings = { marginPercent: 35, catalogBrandName: 'suannn', version: 1, updatedAt: '2026-10-01T00:00:00.000Z' }
 
 async function createHarness(role = 'owner', allowSync = true, settingsOverride?: AppDependencies['marketing']['settings'], posthog: AppDependencies['marketing']['posthog'] = null) {
   const calls: Array<{ method: string, args: unknown[] }> = []
@@ -32,6 +32,7 @@ async function createHarness(role = 'owner', allowSync = true, settingsOverride?
     settings: settingsOverride ?? {
       get: async () => { calls.push({ method: 'get', args: [] }); return settings },
       update: async (...args: unknown[]) => { calls.push({ method: 'update', args }); return settings },
+      updateCatalogBrand: async (...args: unknown[]) => { calls.push({ method: 'updateCatalogBrand', args }); return settings },
     },
     posthog,
     sync: { run: async () => { calls.push({ method: 'run', args: [] }); return [{ platform: 'meta' as const, status: 'succeeded' as const }] } },
@@ -273,5 +274,50 @@ describe('admin marketing routes', () => {
         expect((await app.handle(request(`/api/v1/admin/marketing${path}`))).status).toBe(403)
       }
     })
+  })
+})
+
+const putBrand = (body: unknown, origin = config.adminUrl) =>
+  request('/api/v1/admin/marketing/settings/catalog-brand', { method: 'PUT', body: JSON.stringify(body) }, 'staff', origin)
+
+describe('catalog brand route', () => {
+  it('forbids support staff', async () => {
+    const { app, calls } = await createHarness('support')
+    expect((await app.handle(putBrand({ catalogBrandName: 'x', version: 1 }))).status).toBe(403)
+    expect(calls).toEqual([])
+  })
+
+  it('maps invalid names to INVALID_MARKETING_SETTINGS', async () => {
+    const { app } = await createHarness('owner', true, new MarketingSettingsService(null as never, null as never))
+    const response = await app.handle(putBrand({ catalogBrandName: '   ', version: 1 }))
+    expect(response.status).toBe(422)
+    expect(await response.json()).toMatchObject({ code: 'INVALID_MARKETING_SETTINGS' })
+  })
+
+  it('updates the brand name', async () => {
+    const { app, calls } = await createHarness()
+    const response = await app.handle(putBrand({ catalogBrandName: 'สวนบ้านเรา', version: 1 }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ catalogBrandName: 'suannn' })
+    expect(calls.find((call) => call.method === 'updateCatalogBrand')?.args[0]).toEqual({ catalogBrandName: 'สวนบ้านเรา', version: 1 })
+  })
+})
+
+describe('assertCatalogBrandInput', () => {
+  it('accepts 70 characters', () => {
+    expect(() => assertCatalogBrandInput({ catalogBrandName: 'x'.repeat(70), version: 1 })).not.toThrow()
+  })
+
+  it('rejects unusable input', () => {
+    for (const input of [
+      { catalogBrandName: '', version: 1 },
+      { catalogBrandName: '   ', version: 1 },
+      { catalogBrandName: 'x'.repeat(71), version: 1 },
+      { catalogBrandName: 'a\u0000b', version: 1 },
+      { catalogBrandName: 'ok', version: 1, extra: true },
+      { catalogBrandName: 'ok', version: 1.5 },
+    ]) {
+      expect(() => assertCatalogBrandInput(input)).toThrow(expect.objectContaining({ code: 'INVALID_MARKETING_SETTINGS' }))
+    }
   })
 })
