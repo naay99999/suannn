@@ -332,3 +332,33 @@ These are separate from the event-sending credentials above: the PostHog persona
 1. Project id: open the project in PostHog; the number in the URL (`/project/12345`) or under Project settings is `POSTHOG_PROJECT_ID`.
 2. Read-only personal key: open your user menu, "Personal API keys", "Create personal API key". Scope it to the project and give it read access only to `query` and `experiment`. Copy it to `POSTHOG_PERSONAL_API_KEY`.
 3. Host: reads go to `POSTHOG_HOST` (default `https://us.posthog.com`). If `POSTHOG_HOST` is already set for event sending it is usually the ingestion host (`https://us.i.posthog.com`); check that the query API is reachable on the host you configure.
+
+### Go-live checklist
+
+1. **Paste the UTM templates.** Each template below is exactly as in `UTM_TEMPLATES` (`src/modules/marketing/templates.ts`) and is shown on the Marketing page under `ตั้งค่า UTM ในแอดแต่ละแพลตฟอร์ม`.
+   - Meta, in the ad's "Tracking" section under "URL parameters": `utm_source=meta&utm_medium=paid&utm_campaign={{campaign.id}}&utm_content={{ad.id}}`
+   - TikTok, in the ad's destination "URL parameters / tracking": `utm_source=tiktok&utm_medium=paid&utm_campaign=__CAMPAIGN_ID__&utm_content=__CID__`
+   - Google Ads, in Account settings as the "Final URL suffix": `utm_source=google&utm_medium=paid&utm_campaign={campaignid}&utm_content={creative}`
+2. **Set each ad account's timezone to Asia/Bangkok** (see "Where to find each value").
+3. **Configure the env groups.** Each group is all-or-none (see the table above). `POSTHOG_API_KEY` must be set whenever `POSTHOG_HOST` is set, because the tracking group is all-or-none. The PostHog read host is derived from `POSTHOG_HOST` by mapping `<region>.i.posthog.com` to `<region>.posthog.com`. The spend-sync alert email goes to `TRACKING_ALERT_EMAIL`.
+4. **Migrate before deploying.** Run `bun --filter api db:migrate` to apply `0035` (`drizzle/0035_cooing_the_hunter.sql`) before deploying the API.
+5. **Sync.** Click `ซิงก์ตอนนี้` and confirm the Integrations tab shows `Healthy` for each configured platform.
+6. **Test order.** Place a test order through a tagged ad link and confirm it appears under its campaign.
+
+Permissions: the page needs `marketing:read` (owner and admin). The sync and margin controls need `marketing:update`. The stale-data warning also needs `settings:read`.
+
+### Pinned API versions
+
+Each platform version is a named constant and must be bumped before its sunset date:
+
+- Meta Graph `v23.0`: `META_GRAPH_API_VERSION` in `src/modules/tracking/adapters/meta.ts`.
+- TikTok `v1.3`. TikTok day reports are fetched in 30-day windows.
+- Google Ads `v25`: `GOOGLE_ADS_API_VERSION` in `src/modules/google-ads/auth.ts`. Sunset dates: https://developers.google.com/google-ads/api/docs/sunset-dates
+
+### Check live before relying on the page
+
+The integrations were built from fixtures and have never run against real accounts. The owner must confirm:
+
+- Meta Insights, TikTok reporting, and Google GAQL return data, using `ซิงก์ตอนนี้` and the Integrations tab.
+- The PostHog funnel query accepts the `+07:00` date boundaries and the `(?i)` regex filter.
+- PostHog experiment results arrive in a format the page can read. The legacy results format is assumed. If the page shows `ยังสรุปไม่ได้ — ดูใน PostHog` for every experiment, the format differs.
