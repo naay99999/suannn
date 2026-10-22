@@ -126,7 +126,7 @@ const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSec
 // Adapters exist only for configured destinations; rows for the others are marked skipped.
 const trackingOutbox = new TrackingOutbox(database.db, {
   ...(config.tracking.posthog ? { posthog: createPostHogAdapter(config.tracking.posthog) } : {}),
-  ...(config.tracking.meta ? { meta: createMetaAdapter(config.tracking.meta) } : {}),
+  ...(config.tracking.meta ? { meta: createMetaAdapter(config.tracking.meta, { eventSourceUrl: config.storefrontUrl }) } : {}),
   ...(config.tracking.tiktok ? { tiktok: createTikTokAdapter(config.tracking.tiktok) } : {}),
   ...(config.tracking.googleAds ? { google_ads: createGoogleAdsAdapter(config.tracking.googleAds) } : {}),
 })

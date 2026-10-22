@@ -90,10 +90,11 @@ describe('PostHog adapter', () => {
 
 describe('Meta adapter', () => {
   const config = { pixelId: '12345', accessToken: 'secret-token', testEventCode: null }
+  const options = { eventSourceUrl: 'https://shop.test' }
 
   test('posts a Purchase to the Conversions API', async () => {
     const { calls, impl } = fakeFetch()
-    const adapter = createMetaAdapter(config, impl)
+    const adapter = createMetaAdapter(config, options, impl)
     expect(adapter.destination).toBe('meta')
     expect(adapter.maxEventAgeMs).toBe(MAX_EVENT_AGE_MS.meta)
     await adapter.send(event())
@@ -104,7 +105,7 @@ describe('Meta adapter', () => {
     const [data] = calls[0]!.body.data
     expect(data).toMatchObject({
       event_name: 'Purchase', event_id: 'order-1', event_time: Math.floor(Date.parse('2026-10-21T03:04:05Z') / 1000),
-      action_source: 'website',
+      action_source: 'website', event_source_url: 'https://shop.test',
       user_data: {
         em: ['e'.repeat(64)], ph: ['f'.repeat(64)], client_ip_address: '203.0.113.9', client_user_agent: 'UA',
         fbp: 'fb.1.1.1', fbc: 'fb.1.1.2',
@@ -116,13 +117,13 @@ describe('Meta adapter', () => {
 
   test('omits null user fields and includes the test event code when configured', async () => {
     const { calls, impl } = fakeFetch()
-    await createMetaAdapter({ ...config, testEventCode: 'TEST1' }, impl).send(event({ user: blankUser }))
+    await createMetaAdapter({ ...config, testEventCode: 'TEST1' }, options, impl).send(event({ user: blankUser }))
     expect(calls[0]!.body.test_event_code).toBe('TEST1')
     expect(calls[0]!.body.data[0].user_data).toEqual({})
   })
 
   test('maps errors without leaking the token', async () => {
-    const adapter = (r: any) => createMetaAdapter(config, fakeFetch([r]).impl)
+    const adapter = (r: any) => createMetaAdapter(config, options, fakeFetch([r]).impl)
     const auth = await failure(adapter({ status: 401 }).send(event()))
     expect(auth).toBeInstanceOf(TrackingDeliveryError)
     expect(auth).toMatchObject({ code: 'META_AUTH', retryable: false })

@@ -6,6 +6,7 @@ const META_GRAPH_API_VERSION = 'v23.0'
 
 export function createMetaAdapter(
   config: TrackingConfigOf<'meta'>,
+  options: { eventSourceUrl: string },
   fetchImpl: typeof fetch = fetch,
 ): TrackingAdapter {
   // access_token travels as a query parameter; this URL is never logged or put in errors.
@@ -30,6 +31,7 @@ export function createMetaAdapter(
           event_id: event.eventId,
           event_time: Math.floor(event.occurredAt.getTime() / 1000),
           action_source: 'website',
+          event_source_url: options.eventSourceUrl,
           user_data: userData,
           custom_data: {
             currency: event.currency,
