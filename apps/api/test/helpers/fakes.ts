@@ -39,6 +39,9 @@ export const fakeTrackingStatus = {
     destinations: (['posthog', 'meta', 'tiktok', 'google_ads'] as const).map((destination) => ({
       destination, configured: false, lastSuccessAt: null, failures24h: 0, lastErrorCode: null,
     })),
+    adSpend: (['meta', 'tiktok', 'google'] as const).map((platform) => ({
+      platform, configured: false, lastSuccessAt: null, lastRunStatus: null, lastErrorCode: null, earliestDate: null,
+    })),
   }),
 }
 

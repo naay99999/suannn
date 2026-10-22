@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@work
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@workspace/ui/components/table'
 import { QueryState } from '@/components/query-state'
 import { formatTimestamp } from '@/lib/format'
-import type { TrackingDestinationStatus } from '@/lib/integrations/api'
+import type { AdSpendStatus, TrackingDestinationStatus } from '@/lib/integrations/api'
+import { adSpendHealth, formatDateOnly, formatRelative } from '@/lib/integrations/health'
 import { trackingStatusQuery } from '@/lib/integrations/queries'
 
 const labels: Record<TrackingDestinationStatus['destination'], string> = {
@@ -14,9 +15,13 @@ const labels: Record<TrackingDestinationStatus['destination'], string> = {
   google_ads: 'Google Ads',
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
-const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+const adSpendLabels: Record<AdSpendStatus['platform'], string> = {
+  meta: 'Meta',
+  tiktok: 'TikTok',
+  google: 'Google Ads',
+}
 
+const DAY_MS = 24 * 60 * 60 * 1000
 function health(row: TrackingDestinationStatus, now: number) {
   if (!row.configured) return { label: 'Not configured', variant: 'secondary' } as const
   if (row.failures24h > 0) {
@@ -27,58 +32,91 @@ function health(row: TrackingDestinationStatus, now: number) {
   return { label: 'Healthy', variant: 'success' } as const
 }
 
-function formatRelative(value: string, now: number) {
-  const seconds = Math.round((new Date(value).getTime() - now) / 1000)
-  const abs = Math.abs(seconds)
-  if (abs < 60) return relativeTime.format(seconds, 'second')
-  if (abs < 3600) return relativeTime.format(Math.round(seconds / 60), 'minute')
-  if (abs < 86_400) return relativeTime.format(Math.round(seconds / 3600), 'hour')
-  return relativeTime.format(Math.round(seconds / 86_400), 'day')
-}
-
 export function TrackingStatus() {
   const status = useQuery(trackingStatusQuery)
   const now = Date.now()
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Tracking delivery</CardTitle>
-        <CardDescription>Server-side purchase events sent to each destination.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {status.isPending ? <QueryState kind="loading" />
-          : !status.data ? <QueryState kind="error" message="โหลดสถานะการติดตามไม่สำเร็จ" onRetry={() => void status.refetch()} />
-            : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Destination</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last success</TableHead>
-                    <TableHead>Failures (24 h)</TableHead>
-                    <TableHead>Last error</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {status.data.destinations.map((row) => {
-                    const state = health(row, now)
-                    return (
-                      <TableRow key={row.destination}>
-                        <TableCell className="font-medium">{labels[row.destination]}</TableCell>
-                        <TableCell><Badge variant={state.variant}>{state.label}</Badge></TableCell>
-                        <TableCell title={row.lastSuccessAt ? formatTimestamp(row.lastSuccessAt) : undefined}>
-                          {row.lastSuccessAt ? formatRelative(row.lastSuccessAt, now) : 'Never'}
-                        </TableCell>
-                        <TableCell>{row.failures24h}</TableCell>
-                        <TableCell>{row.lastErrorCode ?? '-'}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Tracking delivery</CardTitle>
+          <CardDescription>Server-side purchase events sent to each destination.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {status.isPending ? <QueryState kind="loading" />
+            : !status.data ? <QueryState kind="error" message="โหลดสถานะการติดตามไม่สำเร็จ" onRetry={() => void status.refetch()} />
+              : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Destination</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last success</TableHead>
+                      <TableHead>Failures (24 h)</TableHead>
+                      <TableHead>Last error</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {status.data.destinations.map((row) => {
+                      const state = health(row, now)
+                      return (
+                        <TableRow key={row.destination}>
+                          <TableCell className="font-medium">{labels[row.destination]}</TableCell>
+                          <TableCell><Badge variant={state.variant}>{state.label}</Badge></TableCell>
+                          <TableCell title={row.lastSuccessAt ? formatTimestamp(row.lastSuccessAt) : undefined}>
+                            {row.lastSuccessAt ? formatRelative(row.lastSuccessAt, now) : 'Never'}
+                          </TableCell>
+                          <TableCell>{row.failures24h}</TableCell>
+                          <TableCell>{row.lastErrorCode ?? '-'}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ad spend sync</CardTitle>
+          <CardDescription>Hourly import of campaign spend from each ad platform.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {status.isPending ? <QueryState kind="loading" />
+            : !status.data ? <QueryState kind="error" message="โหลดสถานะการซิงก์ค่าโฆษณาไม่สำเร็จ" onRetry={() => void status.refetch()} />
+              : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Platform</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last success</TableHead>
+                      <TableHead>Earliest data</TableHead>
+                      <TableHead>Last error</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {status.data.adSpend.map((row) => {
+                      const state = adSpendHealth(row, now)
+                      return (
+                        <TableRow key={row.platform}>
+                          <TableCell className="font-medium">{adSpendLabels[row.platform]}</TableCell>
+                          <TableCell><Badge variant={state.variant}>{state.label}</Badge></TableCell>
+                          <TableCell title={row.lastSuccessAt ? formatTimestamp(row.lastSuccessAt) : undefined}>
+                            {row.lastSuccessAt ? formatRelative(row.lastSuccessAt, now) : 'Never'}
+                          </TableCell>
+                          <TableCell>{row.earliestDate ? formatDateOnly(row.earliestDate) : '-'}</TableCell>
+                          <TableCell>{row.lastErrorCode ?? '-'}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

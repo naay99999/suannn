@@ -7,6 +7,7 @@ type TrackingGet = Awaited<ReturnType<TrackingRoute['get']>>
 type Success<T> = Exclude<NonNullable<T>, { code: string; message: string }>
 export type TrackingStatus = Success<TrackingGet['data']>
 export type TrackingDestinationStatus = TrackingStatus['destinations'][number]
+export type AdSpendStatus = TrackingStatus['adSpend'][number]
 
 export function createIntegrationsApi(client: ApiClient = api) {
   return {

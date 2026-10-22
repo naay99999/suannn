@@ -15,7 +15,7 @@ export function createAdminTrackingStatusModule(auth: Auth, service: Pick<Tracki
       response: { 200: 'trackingStatus.response', 401: 'http.error', 403: 'http.error' },
       detail: {
         summary: 'Get purchase tracking delivery status',
-        description: 'Lists PostHog, Meta, TikTok, and Google Ads with whether each is configured, its last successful delivery, failures in the last 24 hours, and the latest error code. Requires settings:read permission.',
+        description: 'Lists PostHog, Meta, TikTok, and Google Ads with whether each is configured, its last successful delivery, failures in the last 24 hours, and the latest error code, plus ad-spend sync health per platform. Requires settings:read permission.',
         tags: ['Admin Tracking'],
         security: [{ sessionCookie: [] }],
       },

@@ -154,7 +154,7 @@ const configuredAdPlatforms = adPlatforms.filter(platform =>
     : platform === 'tiktok' ? config.marketing.tiktokAds
       : config.tracking.googleAds)
 const adSpendAlerts = new AdSpendAlerts(database.db, configuredAdPlatforms, config.tracking.alertEmail, emailSender, config.adminUrl)
-const trackingStatus = new TrackingStatusService(new TrackingStatusRepository(database.db), config.tracking)
+const trackingStatus = new TrackingStatusService(new TrackingStatusRepository(database.db), config.tracking, configuredAdPlatforms)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
 const auth = createAuth(config, database.db, {

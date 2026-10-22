@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { commerceOrder, inventoryReservation, trackingAlert, trackingOutbox, warehouse } from '../../src/database/schema'
+import { adSpendDaily, commerceOrder, marketingSyncRun, inventoryReservation, trackingAlert, trackingOutbox, warehouse } from '../../src/database/schema'
 import type { TrackingConfig } from '../../src/config/env'
 import { TrackingAlerts } from '../../src/modules/tracking/alerts'
 import { TrackingStatusRepository } from '../../src/modules/tracking/status/repository'
@@ -29,6 +29,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await database.db.delete(trackingOutbox)
   await database.db.delete(trackingAlert)
+  await database.db.delete(marketingSyncRun)
+  await database.db.delete(adSpendDaily)
 })
 
 afterAll(async () => {
@@ -121,6 +123,66 @@ describe('TrackingStatusService', () => {
     })
     expect(result.destinations[2]).toMatchObject({ destination: 'tiktok', configured: true, failures24h: 1, lastErrorCode: 'TIKTOK_HTTP_500' })
     expect(result.destinations[3]).toMatchObject({ destination: 'google_ads', configured: false, failures24h: 0 })
+  })
+})
+
+describe('TrackingStatusService ad spend', () => {
+  const run = (platform: 'meta' | 'tiktok' | 'google', hoursAgo: number, status: 'running' | 'succeeded' | 'failed', errorCode: string | null = null) => {
+    const startedAt = new Date(Date.now() - hoursAgo * hour)
+    return database.db.insert(marketingSyncRun).values({
+      platform, startedAt, status, errorCode, rangeFrom: '2026-10-01', rangeTo: '2026-10-03',
+      finishedAt: status === 'running' ? null : new Date(startedAt.getTime() + 60_000),
+    })
+  }
+
+  it('reports run health per platform in order', async () => {
+    await run('meta', 10, 'succeeded')
+    await run('meta', 8, 'failed', 'META_HTTP_500')
+    await run('meta', 7, 'succeeded')
+    await run('meta', 2, 'failed', 'META_HTTP_429')
+    await run('tiktok', 3, 'running')
+    await run('google', 5, 'succeeded')
+    await run('google', 3, 'running')
+    await run('google', 2, 'running')
+    await database.db.insert(adSpendDaily).values(['2026-10-02', '2026-09-20'].map((date) => ({
+      platform: 'meta' as const, accountId: 'a', campaignId: 'c', date, spendSatang: 1, currency: 'THB', syncedAt: new Date(),
+    })))
+
+    const service = new TrackingStatusService(new TrackingStatusRepository(database.db), metaConfig, ['meta', 'google'])
+    const { adSpend } = await service.get()
+
+    expect(adSpend.map(({ platform }) => platform)).toEqual(['meta', 'tiktok', 'google'])
+    expect(adSpend[0]).toEqual({
+      platform: 'meta',
+      configured: true,
+      lastSuccessAt: expect.any(String),
+      lastRunStatus: 'failed',
+      lastErrorCode: 'META_HTTP_429',
+      earliestDate: '2026-09-20',
+    })
+    const metaSuccess = Date.now() - 7 * hour + 60_000
+    expect(Math.abs(new Date(adSpend[0]!.lastSuccessAt!).getTime() - metaSuccess)).toBeLessThan(5_000)
+    // Running for 3 h is stuck, so it shows as failed with the stale code; the DB is untouched.
+    expect(adSpend[1]).toEqual({
+      platform: 'tiktok', configured: false, lastSuccessAt: null, lastRunStatus: 'failed',
+      lastErrorCode: 'SPEND_SYNC_STALE_RUN', earliestDate: null,
+    })
+    expect(adSpend[2]).toMatchObject({ platform: 'google', configured: true, lastRunStatus: 'failed', lastErrorCode: 'SPEND_SYNC_STALE_RUN' })
+    const [stored] = await database.db.select().from(marketingSyncRun).where(eq(marketingSyncRun.platform, 'tiktok'))
+    expect(stored!.status).toBe('running')
+  })
+
+  it('returns unconfigured empty rows when no platform has runs', async () => {
+    const { adSpend } = await new TrackingStatusService(new TrackingStatusRepository(database.db), metaConfig).get()
+    expect(adSpend).toEqual((['meta', 'tiktok', 'google'] as const).map((platform) => ({
+      platform, configured: false, lastSuccessAt: null, lastRunStatus: null, lastErrorCode: null, earliestDate: null,
+    })))
+  })
+
+  it('shows a fresh running run as running', async () => {
+    await run('meta', 0.1, 'running')
+    const { adSpend } = await new TrackingStatusService(new TrackingStatusRepository(database.db), metaConfig, ['meta']).get()
+    expect(adSpend[0]).toMatchObject({ lastRunStatus: 'running', lastErrorCode: null })
   })
 })
 

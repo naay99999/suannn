@@ -36,10 +36,26 @@ const repository = {
   summaries: async () => [
     { destination: 'meta', lastSuccessAt: new Date('2026-10-21T10:00:00.000Z'), failures24h: 2, lastErrorCode: 'META_HTTP_500' },
   ],
+  adSpendSummaries: async () => [
+    {
+      platform: 'meta',
+      latestRun: { status: 'running', startedAt: new Date('2026-10-21T22:00:00.000Z'), errorCode: null },
+      lastSuccessAt: new Date('2026-10-21T20:00:00.000Z'),
+      lastFailedErrorCode: 'META_HTTP_500',
+      earliestDate: '2026-07-24',
+    },
+    {
+      platform: 'tiktok',
+      latestRun: { status: 'running', startedAt: new Date('2026-10-21T23:30:00.000Z'), errorCode: null },
+      lastSuccessAt: null,
+      lastFailedErrorCode: null,
+      earliestDate: null,
+    },
+  ],
 } as unknown as TrackingStatusRepository
 
 const app = new Elysia().use(createErrorHandlingPlugin())
-  .use(createAdminTrackingStatusModule(auth, new TrackingStatusService(repository, config.tracking, () => now)))
+  .use(createAdminTrackingStatusModule(auth, new TrackingStatusService(repository, config.tracking, ['meta', 'tiktok'], () => now)))
 const get = (identity?: string) => app.handle(new Request('http://localhost/api/v1/admin/integrations/tracking', {
   headers: identity ? { cookie: `session=${identity}` } : {},
 }))
@@ -60,6 +76,14 @@ describe('admin tracking status route', () => {
         { destination: 'meta', configured: false, lastSuccessAt: '2026-10-21T10:00:00.000Z', failures24h: 2, lastErrorCode: 'META_HTTP_500' },
         { destination: 'tiktok', configured: false, lastSuccessAt: null, failures24h: 0, lastErrorCode: null },
         { destination: 'google_ads', configured: false, lastSuccessAt: null, failures24h: 0, lastErrorCode: null },
+      ],
+      adSpend: [
+        {
+          platform: 'meta', configured: true, lastSuccessAt: '2026-10-21T20:00:00.000Z', lastRunStatus: 'failed',
+          lastErrorCode: 'SPEND_SYNC_STALE_RUN', earliestDate: '2026-07-24',
+        },
+        { platform: 'tiktok', configured: true, lastSuccessAt: null, lastRunStatus: 'running', lastErrorCode: null, earliestDate: null },
+        { platform: 'google', configured: false, lastSuccessAt: null, lastRunStatus: null, lastErrorCode: null, earliestDate: null },
       ],
     })
   })
