@@ -1,15 +1,26 @@
 import { SpendSyncError } from './types'
 
+export const SPEND_REQUEST_TIMEOUT_MS = 30_000
+
 // Maps transport and status failures to codes; never leaks the URL or body.
+// A hung socket must not wedge the sync loop, so the request is aborted and
+// raced against the timeout (a fetch that ignores its signal still rejects).
 export async function requestJson(
   prefix: string,
   fetchImpl: typeof fetch,
   url: string,
   init?: RequestInit,
+  timeoutMs = SPEND_REQUEST_TIMEOUT_MS,
 ): Promise<unknown> {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+  const aborted = new Promise<never>((_, reject) => {
+    signal.addEventListener('abort', () => reject(new SpendSyncError(`${prefix}_ADS_UNAVAILABLE`)), { once: true })
+  })
+  aborted.catch(() => undefined)
   let response: Response
   try {
-    response = await fetchImpl(url, init)
+    response = await Promise.race([fetchImpl(url, { ...init, signal }), aborted])
   } catch {
     throw new SpendSyncError(`${prefix}_ADS_UNAVAILABLE`)
   }
@@ -20,7 +31,7 @@ export async function requestJson(
     throw new SpendSyncError(`${prefix}_ADS_REJECTED`)
   }
   try {
-    return await response.json()
+    return await Promise.race([response.json(), aborted])
   } catch {
     throw new SpendSyncError(`${prefix}_ADS_UNAVAILABLE`)
   }

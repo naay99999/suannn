@@ -6,7 +6,20 @@ import { SpendSyncError, type SpendRow, type SpendSource } from './types'
 
 const PAGE_LIMIT = 500
 const MAX_PAGES = 200
+const GRAPH_ORIGIN = 'https://graph.facebook.com'
 const INVALID = 'META_ADS_INVALID_AMOUNT'
+
+// The access token rides in the query string, so never follow a cursor to another host.
+function pinnedNext(next: string): string {
+  let origin: string
+  try {
+    origin = new URL(next).origin
+  } catch {
+    throw new SpendSyncError('META_ADS_INVALID_ROW')
+  }
+  if (origin !== GRAPH_ORIGIN) throw new SpendSyncError('META_ADS_INVALID_ROW')
+  return next
+}
 
 export function createMetaSpendSource(
   config: NonNullable<MarketingConfig['metaAds']>,
@@ -62,7 +75,7 @@ export function createMetaSpendSource(
           })
         }
         const next = asRecord(body.paging).next
-        url = typeof next === 'string' && next ? next : null
+        url = typeof next === 'string' && next ? pinnedNext(next) : null
       }
       return { rows, accountTimezone: await timezone() }
     },

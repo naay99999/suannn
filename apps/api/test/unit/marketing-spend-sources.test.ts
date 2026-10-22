@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { GoogleAdsAuthError } from '../../src/modules/google-ads/auth'
 import { createGoogleSpendSource } from '../../src/modules/marketing/spend/google'
 import { createMetaSpendSource } from '../../src/modules/marketing/spend/meta'
+import { requestJson } from '../../src/modules/marketing/spend/http'
 import { decimalToSatang, microsToSatang } from '../../src/modules/marketing/spend/money'
 import { createTikTokSpendSource } from '../../src/modules/marketing/spend/tiktok'
 import { SpendSyncError } from '../../src/modules/marketing/spend/types'
@@ -58,6 +59,13 @@ describe('money', () => {
   })
 })
 
+describe('requestJson', () => {
+  test('a fetch that never resolves rejects with the UNAVAILABLE code', async () => {
+    const hung = (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch
+    expect(await codeOf(requestJson('META', hung, 'https://example.test', undefined, 20))).toBe('META_ADS_UNAVAILABLE')
+  })
+})
+
 describe('meta spend source', () => {
   const config = { accountId: '123', accessToken: 'SECRET_TOKEN' }
   const page2 = 'https://graph.facebook.com/v23.0/act_123/insights?after=abc&access_token=SECRET_TOKEN'
@@ -87,6 +95,15 @@ describe('meta spend source', () => {
     expect(first.searchParams.get('limit')).toBe('500')
     expect(first.searchParams.get('access_token')).toBe('SECRET_TOKEN')
     expect(calls.length).toBe(3)
+  })
+
+  test('refuses a paging.next that leaves graph.facebook.com', async () => {
+    const { calls, impl } = fakeFetch(() => json({
+      data: [{ campaign_id: 'c1', spend: '1', account_currency: 'THB', date_start: '2026-10-01' }],
+      paging: { next: 'https://evil.example/v23.0/act_123/insights?access_token=SECRET_TOKEN' },
+    }))
+    expect(await codeOf(createMetaSpendSource(config, impl).fetch(range))).toBe('META_ADS_INVALID_ROW')
+    expect(calls.length).toBe(1)
   })
 
   test('keeps non-THB currency and treats missing counts as 0', async () => {

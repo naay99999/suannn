@@ -1,6 +1,7 @@
 export const GOOGLE_ADS_API_VERSION = 'v25'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const TOKEN_SAFETY_MARGIN_MS = 60_000
+export const TOKEN_REQUEST_TIMEOUT_MS = 30_000
 
 export type GoogleAdsAuthErrorCode = 'GOOGLE_ADS_AUTH' | 'GOOGLE_ADS_UNAVAILABLE'
 
@@ -33,14 +34,22 @@ export function createGoogleAdsAccessTokens(
   config: GoogleAdsOAuthConfig,
   fetchImpl: typeof fetch = fetch,
   now: () => Date = () => new Date(),
+  timeoutMs = TOKEN_REQUEST_TIMEOUT_MS,
 ): () => Promise<string> {
   let cached: { token: string, expiresAt: number } | null = null
 
   return async function accessToken() {
     if (cached && now().getTime() < cached.expiresAt) return cached.token
     let response: Response
+    const signal = AbortSignal.timeout(timeoutMs)
+    // A fetch that ignores its signal must still not hang the caller.
+    const aborted = new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true })
+    })
+    aborted.catch(() => undefined)
     try {
-      response = await fetchImpl(TOKEN_URL, {
+      response = await Promise.race([fetchImpl(TOKEN_URL, {
+        signal,
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -49,7 +58,7 @@ export function createGoogleAdsAccessTokens(
           client_id: config.clientId,
           client_secret: config.clientSecret,
         }).toString(),
-      })
+      }), aborted])
     } catch {
       throw new GoogleAdsAuthError('GOOGLE_ADS_UNAVAILABLE', true)
     }

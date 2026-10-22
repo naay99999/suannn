@@ -30,6 +30,14 @@ async function failure(promise: Promise<unknown>) {
 }
 
 describe('google ads access tokens', () => {
+  test('a token fetch that never resolves rejects as retryable UNAVAILABLE', async () => {
+    const hung = (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch
+    const token = createGoogleAdsAccessTokens(config, hung, () => new Date(), 20)
+    const error = await failure(token())
+    expect(error).toBeInstanceOf(GoogleAdsAuthError)
+    expect(error).toMatchObject({ code: 'GOOGLE_ADS_UNAVAILABLE', retryable: true })
+  })
+
   test('two calls make one token request', async () => {
     const { impl, count } = fakeFetch(ok)
     const token = createGoogleAdsAccessTokens(config, impl)
