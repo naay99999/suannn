@@ -56,8 +56,10 @@ import { StripeRefundService } from './modules/payments/stripe/refunds'
 import { StripeEventService } from './modules/payments/stripe/events'
 import { OrderService } from './modules/orders/service'
 import { OrderOutbox } from './modules/orders/outbox'
+import { createGoogleAdsAdapter } from './modules/tracking/adapters/google-ads'
 import { createMetaAdapter } from './modules/tracking/adapters/meta'
 import { createPostHogAdapter } from './modules/tracking/adapters/posthog'
+import { createTikTokAdapter } from './modules/tracking/adapters/tiktok'
 import { TrackingOutbox } from './modules/tracking/outbox'
 import { DashboardRepository, DashboardService } from './modules/dashboard'
 import { AdminCustomerRepository, AdminCustomerService } from './modules/customers'
@@ -121,6 +123,8 @@ const orderOutbox = new OrderOutbox(database.db, emailSender, config.commerceSec
 const trackingOutbox = new TrackingOutbox(database.db, {
   ...(config.tracking.posthog ? { posthog: createPostHogAdapter(config.tracking.posthog) } : {}),
   ...(config.tracking.meta ? { meta: createMetaAdapter(config.tracking.meta) } : {}),
+  ...(config.tracking.tiktok ? { tiktok: createTikTokAdapter(config.tracking.tiktok) } : {}),
+  ...(config.tracking.googleAds ? { google_ads: createGoogleAdsAdapter(config.tracking.googleAds) } : {}),
 })
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
