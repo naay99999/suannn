@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import { TtlCache } from '../../src/modules/marketing/posthog/cache'
+import { createCachedPostHog, TtlCache } from '../../src/modules/marketing/posthog/cache'
 import { createPostHogReadClient } from '../../src/modules/marketing/posthog/client'
 import { getExperiments } from '../../src/modules/marketing/posthog/experiments'
 import { getFunnel } from '../../src/modules/marketing/posthog/funnel'
-import { createCachedPostHog } from '../../src/modules/marketing/posthog/cache'
 
 const config = { personalApiKey: 'phx_secret', projectId: '42', host: 'https://us.posthog.com' }
 const range = { from: '2026-10-01', to: '2026-10-07' }
@@ -90,8 +89,8 @@ describe('getFunnel', () => {
     await getFunnel(createPostHogReadClient(config, impl), range, { platform: 'meta', campaign: 'c1' })
     const properties = JSON.parse(String(seen[0]?.init?.body)).query.properties
     const source = properties.find((property: { key: string }) => property.key === 'utm_source')
-    expect(source.value).toContain('facebook')
-    expect(source.value).toContain('ig')
+    expect(source).toMatchObject({ operator: 'regex' })
+    expect(source.value).toBe('(?i)^(meta|facebook|fb|instagram|ig)$')
     expect(properties.find((property: { key: string }) => property.key === 'utm_campaign')).toMatchObject({ operator: 'exact', value: ['c1'] })
   })
 
@@ -120,6 +119,45 @@ describe('TtlCache', () => {
     expect(await cache.get('a', load)).toBe(2)
     await expect(cache.get('b', async () => { throw new Error('x') })).rejects.toThrow('x')
     expect(await cache.get('b', load)).toBe(3)
+  })
+
+  it('caps entries, evicting the oldest', async () => {
+    const cache = new TtlCache<number>(600_000, () => 0, 2)
+    let loads = 0
+    const load = async () => ++loads
+    await cache.get('a', load)
+    await cache.get('b', load)
+    await cache.get('c', load)
+    expect(loads).toBe(3)
+    await cache.get('b', load)
+    await cache.get('c', load)
+    expect(loads).toBe(3)
+    await cache.get('a', load)
+    expect(loads).toBe(4)
+  })
+
+  it('drops expired entries when storing', async () => {
+    let now = 0
+    const cache = new TtlCache<number>(10, () => now, 2)
+    let loads = 0
+    const load = async () => ++loads
+    await cache.get('a', load)
+    await cache.get('b', load)
+    now = 20
+    await cache.get('c', load)
+    // Expired a and b were dropped, so c did not evict a live entry; d fits beside c.
+    await cache.get('d', load)
+    await cache.get('c', load)
+    expect(loads).toBe(4)
+  })
+
+  it('shares one load between concurrent gets', async () => {
+    const cache = new TtlCache<number>(600_000)
+    let loads = 0
+    const load = async () => { loads += 1; await Promise.resolve(); return loads }
+    const [first, second] = await Promise.all([cache.get('a', load), cache.get('a', load)])
+    expect(loads).toBe(1)
+    expect(first).toBe(second)
   })
 
   it('serves repeated funnel calls from one fetch for ten minutes', async () => {
@@ -178,11 +216,20 @@ describe('getExperiments', () => {
     expect(experiments[1]).toMatchObject({ status: 'complete', readable: false, variants: null, winner: null })
   })
 
-  it('has no winner when not significant, and tolerates a failing results call', async () => {
+  it('propagates transient results failures so nothing is cached', async () => {
+    for (const status of [500, 401, 429]) {
+      const { impl } = fakeFetch((url) => url.endsWith('/experiments/') ? json(experimentsList) : json({}, status))
+      await expect(getExperiments(createPostHogReadClient(config, impl))).rejects.toMatchObject({
+        code: status === 401 ? 'POSTHOG_READ_AUTH' : 'POSTHOG_READ_UNAVAILABLE',
+      })
+    }
+  })
+
+  it('has no winner when not significant, and degrades a rejected results call', async () => {
     const { impl } = fakeFetch((url) => {
       if (url.endsWith('/experiments/')) return json(experimentsList)
       if (url.endsWith('/experiments/1/results')) return json({ ...significantResults, significant: false })
-      return json({}, 500)
+      return json({}, 400)
     })
     const { experiments } = await getExperiments(createPostHogReadClient(config, impl))
     expect(experiments[0]).toMatchObject({ winner: null, readable: true })

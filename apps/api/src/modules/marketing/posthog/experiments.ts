@@ -1,3 +1,4 @@
+import { DomainError } from '../../../shared/domain-error'
 import type { PostHogReadClient } from './client'
 
 export interface ExperimentVariant {
@@ -75,7 +76,12 @@ export async function getExperiments(client: PostHogReadClient): Promise<{ exper
     const startDate = asString(item.start_date)
     if (typeof item.id !== 'number' || !startDate) continue
     const endDate = asString(item.end_date)
-    const mapped = await client.experimentResults(item.id).then(mapResults, () => null)
+    // Transient failures (unavailable, auth) propagate so nothing is cached; only a rejected request or an
+    // unknown response shape degrades to readable: false.
+    const mapped = await client.experimentResults(item.id).then(mapResults, (error: unknown) => {
+      if (error instanceof DomainError && error.code === 'POSTHOG_READ_REJECTED') return null
+      throw error
+    })
     experiments.push({
       id: item.id,
       name: asString(item.name) ?? `Experiment ${item.id}`,

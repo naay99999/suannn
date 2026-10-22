@@ -31,9 +31,11 @@ const STEPS = [
 // Timezone: dateRange boundaries carry an explicit +07:00 offset so the window is Bangkok days regardless
 // of the PostHog project's own timezone setting.
 function buildQuery(range: DateRange, filter: FunnelFilter) {
-  const properties: Array<{ type: 'event', key: string, operator: 'exact', value: string[] }> = []
+  const properties: Array<{ type: 'event', key: string, operator: 'exact' | 'regex', value: string[] | string }> = []
   if (filter.platform) {
-    properties.push({ type: 'event', key: 'utm_source', operator: 'exact', value: [...PLATFORM_SOURCE_ALIASES[filter.platform]] })
+    // Exact matching is case-sensitive in PostHog; attribution lowercases utm_source, so match case-insensitively.
+    const aliases = PLATFORM_SOURCE_ALIASES[filter.platform].map(alias => alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    properties.push({ type: 'event', key: 'utm_source', operator: 'regex', value: `(?i)^(${aliases.join('|')})$` })
   }
   if (filter.campaign) properties.push({ type: 'event', key: 'utm_campaign', operator: 'exact', value: [filter.campaign] })
   return {
