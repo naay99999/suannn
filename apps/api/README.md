@@ -363,6 +363,27 @@ The integrations were built from fixtures and have never run against real accoun
 - The PostHog funnel query accepts the `+07:00` date boundaries and the `(?i)` regex filter.
 - PostHog experiment results arrive in a format the page can read. The legacy results format is assumed. If the page shows `ยังสรุปไม่ได้ — ดูใน PostHog` for every experiment, the format differs.
 
+## Discount codes
+
+Staff manage codes on the admin page `โค้ดส่วนลด` (`/marketing/discounts`, gated by `marketing:read`; create, edit, pause, and delete need `marketing:update`). Customers enter a code in the side cart or at checkout. Routes: `/api/v1/admin/discounts` (list, detail with recent orders, create, `PUT` full replacement with `version`, delete), `/api/v1/store/cart/discount`, and the checkout quote and placement endpoints.
+
+- **Types.** One of percent off (1 to 100, optional cap), fixed amount off, or free shipping. Percent and fixed discounts apply to eligible items only, never to shipping. A code can never bring the total below 1 baht; the discount is reduced instead.
+- **Codes.** Case-insensitive, stored upper case, `A-Z 0-9 -`, 3 to 32 characters, unique. The admin `สุ่มโค้ด` button makes a 10 character code for private coupons.
+- **Uses.** A use is created in the placement transaction with the order, under a lock, so total and per-customer limits hold under concurrency. Only non-cancelled orders count toward limits and stats (`uses`). An unpaid Stripe order and a COD order not yet delivered both hold a use.
+- **Release on cancel.** A use is released when its order is cancelled for any reason (admin cancel, expired or failed Stripe payment, reconciliation). Release is idempotent. Refunded and delivered orders keep their use.
+- **Locked codes.** Once any order references a code, in any status (`locked: true` in the admin DTO), its code text and type cannot change and it cannot be deleted; pause it instead. Value, conditions, dates, limits, and emails stay editable and affect only future orders.
+- **Private codes.** A code with an allowed-email list answers every failure for a non-listed email with the same message as an unknown code, so its existence, expiry, and use count do not leak. Email conditions (allowed emails, per customer, first order only) match the trimmed, lower-cased email.
+- **Money.** The order stores the pre-discount subtotal, the item discount, the shipping charged, and the total (`subtotal - discount + shipping = total`), plus a snapshot of the code. Each line stores its own discount; receipt VAT uses each line's total after its discount.
+- **Stripe.** Stripe Checkout charges exactly the order total. The item discount is sent as a one-off coupon that is created per order (not a reusable catalog coupon), with line prices left undiscounted; free shipping simply removes the shipping charge. There is nothing to configure in the Stripe dashboard, but expect one coupon object per discounted Stripe order there.
+- **Migration.** `0037` (`drizzle/0037_discount_codes.sql`) creates the discount tables and adds the order and line discount columns. It backfills existing orders with a discount of 0 and no code, and extends the order snapshot immutability triggers to the new columns. Run `bun --filter api db:migrate` and verify it completes before deploying the API or either frontend.
+
+### Discount go-live checklist
+
+1. Apply migration `0037`, then deploy the API, then the storefront and admin.
+2. Confirm Stripe test mode: place an order with a percent code and check that the Checkout page shows the discount line and that `amount_total` matches the order total. Coupons are created per order, so they appear in the Stripe dashboard under Coupons without any prior setup.
+3. Create a private code (allowed emails) and confirm another email gets the unknown-code message.
+4. Cancel a test order and confirm the code's `uses` drops back.
+
 ## Product catalog feed
 
 `GET /api/v1/store/catalog/feed.xml` is a public Google Shopping style XML feed (`application/xml; charset=utf-8`) that Merchant Center, Meta Commerce Manager, and the TikTok catalog fetch on a schedule. It needs no new environment variables.

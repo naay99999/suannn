@@ -29,6 +29,10 @@ export function OrderDetailSummary({ order, customerHref, onViewReceipt, onDownl
   const refund = order.payment.refund
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const receiptHint = canIssueReceipt(order)
+  // Stored shipping is what was charged; add the shipping discount back so the rows add up to the total.
+  const discount = order.discount
+  const shippingDiscount = discount?.shippingDiscountSatang ?? 0
+  const grossShipping = order.shippingSatang + shippingDiscount
 
   return <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <Card>
@@ -42,11 +46,16 @@ export function OrderDetailSummary({ order, customerHref, onViewReceipt, onDownl
               <p className="text-sm text-muted-foreground">{item.variantName} · <span className="font-mono text-xs">{item.sku}</span></p>
               <p className="text-sm text-muted-foreground tabular-nums">{formatMoney(item.unitPriceSatang)} × {item.quantity} {item.unit}</p>
             </div>
-            <p className="shrink-0 font-medium tabular-nums">{formatMoney(item.lineTotalSatang)}</p>
+            <div className="shrink-0 text-right tabular-nums">
+              <p className="font-medium">{formatMoney(item.lineTotalSatang)}</p>
+              {!!item.discountSatang && <p className="text-sm text-muted-foreground">ส่วนลด -{formatMoney(item.discountSatang)}</p>}
+            </div>
           </li>)}</ul>}
         <dl className="flex flex-col gap-2 border-t pt-4 text-sm">
           <Row label="ค่าสินค้า">{formatMoney(order.subtotalSatang)}</Row>
-          <Row label="ค่าจัดส่ง">{order.shippingSatang === 0 ? 'ฟรี' : formatMoney(order.shippingSatang)}</Row>
+          {discount && discount.itemDiscountSatang > 0 && <Row label={`ส่วนลด (${discount.code})`}>-{formatMoney(discount.itemDiscountSatang)}</Row>}
+          <Row label="ค่าจัดส่ง">{grossShipping === 0 ? 'ฟรี' : formatMoney(grossShipping)}</Row>
+          {discount && shippingDiscount > 0 && <Row label={`ส่วนลดค่าจัดส่ง (${discount.code})`}>-{formatMoney(shippingDiscount)}</Row>}
           <div className="flex items-baseline justify-between gap-4 border-t pt-3 text-base font-semibold"><dt>ยอดรวม</dt><dd className="tabular-nums">{formatMoney(order.totalSatang)}</dd></div>
         </dl>
       </CardContent>

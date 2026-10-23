@@ -100,7 +100,12 @@ export const router = createBrowserRouter([
           {
             path: 'marketing',
             element: <PermissionGate permission="marketing:read" />,
-            children: [{ index: true, lazy: () => import('./pages/marketing/marketing-page') }],
+            children: [
+              { index: true, lazy: () => import('./pages/marketing/marketing-page') },
+              { path: 'discounts', lazy: () => import('./pages/marketing/discounts/discounts-page') },
+              { path: 'discounts/new', lazy: () => import('./pages/marketing/discounts/discount-editor-page') },
+              { path: 'discounts/:discountId', lazy: () => import('./pages/marketing/discounts/discount-editor-page') },
+            ],
           },
           {
             path: 'customers',

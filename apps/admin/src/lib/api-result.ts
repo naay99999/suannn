@@ -36,6 +36,12 @@ const messages: Record<string, string> = {
   POSTHOG_READ_REJECTED: 'ดึงข้อมูลจาก PostHog ไม่สำเร็จ กรุณาลองอีกครั้ง',
   MARKETING_SETTINGS_CONFLICT: 'มีคนแก้ไขค่านี้ไปแล้ว กรุณาลองอีกครั้ง',
   FORBIDDEN: 'คุณไม่มีสิทธิ์ดำเนินการนี้',
+  INVALID_DISCOUNT: 'ข้อมูลโค้ดส่วนลดไม่ถูกต้อง ตรวจสอบค่าและเงื่อนไขอีกครั้ง',
+  DISCOUNT_CODE_TAKEN: 'โค้ดนี้มีอยู่แล้ว',
+  DISCOUNT_NOT_FOUND: 'ไม่พบโค้ดส่วนลด',
+  DISCOUNT_VERSION_CONFLICT: 'มีคนแก้ไขโค้ดนี้ไปก่อนแล้ว กรุณาโหลดใหม่',
+  DISCOUNT_LOCKED_FIELD: 'โค้ดนี้ถูกใช้ในคำสั่งซื้อแล้ว จึงเปลี่ยนรหัสโค้ดหรือประเภทไม่ได้',
+  DISCOUNT_IN_USE: 'โค้ดนี้ถูกใช้แล้ว ลบไม่ได้ ให้ปิดใช้งานแทน',
 }
 
 const networkMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองอีกครั้ง'

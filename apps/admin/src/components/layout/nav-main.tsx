@@ -25,9 +25,9 @@ export function NavMain({ items }: { items: NavigationItem[] }) {
       <SidebarGroupContent>
         <SidebarMenu aria-label="เมนูหลัก">
           {items.map((item) => {
-            const isActive = item.url === '/'
-              ? pathname === '/'
-              : pathname === item.url || pathname.startsWith(`${item.url}/`)
+            const matches = (url: string) => (url === '/' ? pathname === '/' : pathname === url || pathname.startsWith(`${url}/`))
+            // A more specific sibling (/marketing/discounts under /marketing) owns the highlight.
+            const isActive = matches(item.url) && !items.some((other) => other.url.length > item.url.length && matches(other.url))
 
             return (
               <SidebarMenuItem key={item.url}>
