@@ -23,6 +23,8 @@ import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
 import { createAdminReceiptSettingsModule } from './modules/receipts'
 import { createAdminStoreAnnouncementModule, createStoreAnnouncementModule } from './modules/store-announcement'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
+import { createAdminDiscountsModule } from './modules/discounts'
+import type { DiscountService } from './modules/discounts/service'
 import { createAdminMediaModule } from './modules/media'
 import { createAdminDashboardModule } from './modules/dashboard'
 import { createAdminCustomersModule } from './modules/customers'
@@ -83,6 +85,7 @@ export interface AppDependencies {
   systemSettings: SystemSettingsService
   products: ProductService
   farms: FarmService
+  discounts: DiscountService
   media: MediaService
   inventory: InventoryService
   cart: CartService
@@ -179,7 +182,8 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
       .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
       .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus))
       .use(createAdminMarketingModule(config, dependencies.auth, dependencies.marketing, dependencies.limiter))
-      .use(createAdminCatalogFeedModule(dependencies.auth, dependencies.catalogFeed)))
+      .use(createAdminCatalogFeedModule(dependencies.auth, dependencies.catalogFeed))
+      .use(createAdminDiscountsModule(config, dependencies.auth, dependencies.discounts)))
     .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
     .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))

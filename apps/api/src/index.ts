@@ -29,6 +29,7 @@ import { SystemSettingsRepository } from './modules/settings/repository'
 import { SystemSettingsService } from './modules/settings/service'
 import { ProductRepository } from './modules/products/repository'
 import { FarmRepository, FarmService } from './modules/farms'
+import { DiscountRepository, DiscountService } from './modules/discounts'
 import { MediaRepository, MediaService } from './modules/media'
 import { R2MediaStorage } from './modules/media/storage'
 import { MediaUrls } from './modules/media/urls'
@@ -120,6 +121,7 @@ const media = new MediaService(new MediaRepository(database.db, audit, mediaUrls
 const cartRepository = new CartRepository(database.db, inventoryReadRepository, mediaUrls)
 const cart = new CartService(cartRepository)
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
+const discounts = new DiscountService(new DiscountRepository(database.db, audit), commerceSettings)
 const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
 const consent = new ConsentService(new ConsentRepository(database.db))
 const receiptSettings = new ReceiptSettingsService(new ReceiptSettingsRepository(database.db, audit))
@@ -217,6 +219,7 @@ const app = await createApp(config, {
   systemSettings,
   products,
   farms,
+  discounts,
   media,
   inventory,
   cart,

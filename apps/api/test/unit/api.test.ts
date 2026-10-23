@@ -101,6 +101,7 @@ const app = await createApp(config, {
   } as never,
   products: {} as ProductService,
   farms: {} as never,
+  discounts: {} as never,
   media: {} as never,
   inventory: new InventoryService(
     new InventoryStockRepository(database.db, audit),
@@ -247,6 +248,7 @@ describe('API routes', () => {
       'Admin Store Announcement',
       'Admin Tracking',
       'Admin Marketing',
+      'Admin Discounts',
       'Admin Products',
       'Admin Farms',
       'Admin Media',
@@ -397,7 +399,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(136)
+    expect(operations).toHaveLength(141)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

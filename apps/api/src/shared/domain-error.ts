@@ -79,6 +79,12 @@ export type DomainErrorCode =
   | 'MEDIA_IN_USE'
   | 'MEDIA_STATE_CONFLICT'
   | 'MEDIA_STORAGE_UNAVAILABLE'
+  | 'DISCOUNT_CODE_TAKEN'
+  | 'DISCOUNT_NOT_FOUND'
+  | 'DISCOUNT_VERSION_CONFLICT'
+  | 'DISCOUNT_LOCKED_FIELD'
+  | 'DISCOUNT_IN_USE'
+  | 'INVALID_DISCOUNT'
 
 const publicErrors: Record<DomainErrorCode, { status: number; message: string }> = {
   IDENTITY_UNAVAILABLE: { status: 503, message: 'Service temporarily unavailable' },
@@ -161,6 +167,12 @@ const publicErrors: Record<DomainErrorCode, { status: number; message: string }>
   MEDIA_IN_USE: { status: 409, message: 'Media is in use' },
   MEDIA_STATE_CONFLICT: { status: 409, message: 'Media state does not allow this action' },
   MEDIA_STORAGE_UNAVAILABLE: { status: 503, message: 'Media storage is unavailable' },
+  DISCOUNT_CODE_TAKEN: { status: 409, message: 'Discount code is already in use' },
+  DISCOUNT_NOT_FOUND: { status: 404, message: 'Discount code not found' },
+  DISCOUNT_VERSION_CONFLICT: { status: 409, message: 'Discount code changed; reload and try again' },
+  DISCOUNT_LOCKED_FIELD: { status: 409, message: 'Code and type cannot change once the discount has been used' },
+  DISCOUNT_IN_USE: { status: 409, message: 'A discount that has been used cannot be deleted; pause it instead' },
+  INVALID_DISCOUNT: { status: 400, message: 'Discount code is invalid' },
 }
 
 const legacyDomainErrors: Record<string, { status: number; message: string }> = {
