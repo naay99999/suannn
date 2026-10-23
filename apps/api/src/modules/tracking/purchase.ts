@@ -64,6 +64,8 @@ export async function loadPurchaseEvent(db: Database, orderId: string): Promise<
       contactEmail: commerceOrder.contactEmail,
       contactPhone: commerceOrder.contactPhone,
       subtotalSatang: commerceOrder.subtotalSatang,
+      discountSatang: commerceOrder.discountSatang,
+      discountCode: commerceOrder.discountCode,
       shippingSatang: commerceOrder.shippingSatang,
     })
     .from(commerceOrder)
@@ -105,8 +107,9 @@ export async function loadPurchaseEvent(db: Database, orderId: string): Promise<
     eventId: order.id,
     orderNumber: order.orderNumber,
     occurredAt: placed.createdAt,
-    value: order.subtotalSatang / 100,
+    value: (order.subtotalSatang - order.discountSatang) / 100,
     shipping: order.shippingSatang / 100,
+    coupon: order.discountCode,
     currency: 'THB',
     contents: items.map((item) => ({
       variantId: item.variantId,

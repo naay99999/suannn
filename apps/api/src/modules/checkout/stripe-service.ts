@@ -113,6 +113,8 @@ export class StripeCheckoutService {
             unitAmountSatang: item.unitPriceSatang,
           })),
           shippingSatang: record.order.shippingSatang,
+          discountSatang: record.order.discount?.itemDiscountSatang ?? 0,
+          discountName: record.order.discount ? `ส่วนลด ${record.order.discount.code}` : null,
           email: record.order.contactEmail,
           amountSatang: record.order.totalSatang,
           currency: 'thb',

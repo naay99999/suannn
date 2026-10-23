@@ -17,6 +17,9 @@ export interface CheckoutSessionInput {
   orderId: string
   lines: CheckoutOrderLine[]
   shippingSatang: number
+  // Item discount applied through a one-off coupon; line prices stay undiscounted.
+  discountSatang: number
+  discountName: string | null
   email: string
   amountSatang: number
   currency: 'thb'
@@ -147,14 +150,15 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
         assertSatang(line.quantity, 'Line quantity')
       }
       assertSatang(input.shippingSatang, 'Shipping amount', true)
+      assertSatang(input.discountSatang, 'Discount amount', true)
       assertSatang(input.amountSatang, 'Order amount')
 
       const expectedAmount = input.lines.reduce(
         (sum, line) => sum + line.quantity * line.unitAmountSatang,
         input.shippingSatang,
-      )
+      ) - input.discountSatang
       if (!Number.isSafeInteger(expectedAmount) || expectedAmount !== input.amountSatang) {
-        throw new Error('Checkout amount must equal the sum of order lines and shipping')
+        throw new Error('Checkout amount must equal the sum of order lines and shipping minus the discount')
       }
 
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = input.lines.map((line) => ({
@@ -177,6 +181,18 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
         })
       }
 
+      let discounts: Stripe.Checkout.SessionCreateParams['discounts']
+      if (input.discountSatang > 0) {
+        const coupon = await stripe.coupons.create({
+          amount_off: input.discountSatang,
+          currency: input.currency,
+          duration: 'once',
+          max_redemptions: 1,
+          name: input.discountName ?? undefined,
+        }, { idempotencyKey: `${input.idempotencyKey}:coupon` })
+        discounts = [{ coupon: coupon.id }]
+      }
+
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         payment_method_types: [input.paymentMethodType],
@@ -187,6 +203,7 @@ export function createStripeGateway(config: StripeConfig, client?: Stripe): Stri
         metadata: { orderId: input.orderId },
         payment_intent_data: { metadata: { orderId: input.orderId } },
         line_items: lineItems,
+        ...(discounts ? { discounts } : {}),
         expires_at: Math.floor(input.expiresAt.getTime() / 1000),
       }, { idempotencyKey: input.idempotencyKey })
 

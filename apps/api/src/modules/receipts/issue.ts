@@ -113,6 +113,7 @@ export async function issueReceiptInTransaction(
     quantity: item.quantity,
     unitPriceSatang: item.unitPriceSatang,
     lineTotalSatang: item.lineTotalSatang,
+    ...(item.discountSatang > 0 ? { discountSatang: item.discountSatang } : {}),
     vatTreatment: item.vatTreatment,
   }))
   const totals = computeReceiptTotals({
@@ -156,6 +157,15 @@ export async function issueReceiptInTransaction(
     paymentMethod: order.paymentMethod as ReceiptSnapshot['paymentMethod'],
     lines,
     shippingSatang: order.shippingSatang,
+    ...(order.discountCode && (order.discountSatang > 0 || order.shippingDiscountSatang > 0)
+      ? {
+          discount: {
+            code: order.discountCode,
+            itemDiscountSatang: order.discountSatang,
+            shippingDiscountSatang: order.shippingDiscountSatang,
+          },
+        }
+      : {}),
     totals,
   }
 

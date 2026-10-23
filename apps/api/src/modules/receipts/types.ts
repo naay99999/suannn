@@ -21,6 +21,8 @@ export interface ReceiptLine {
   quantity: number
   unitPriceSatang: number
   lineTotalSatang: number
+  // Share of the order's item discount allocated to this line. Absent on older snapshots.
+  discountSatang?: number
   vatTreatment: VatTreatment
 }
 
@@ -37,6 +39,7 @@ export interface ReceiptSnapshot {
   paymentMethod: 'cod' | 'stripe'
   lines: ReceiptLine[]
   shippingSatang: number
+  discount?: { code: string; itemDiscountSatang: number; shippingDiscountSatang: number }
   totals: ReceiptTotals
 }
 

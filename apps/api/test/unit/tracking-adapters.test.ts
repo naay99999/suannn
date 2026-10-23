@@ -29,6 +29,7 @@ function event(overrides: Partial<PurchaseEvent> = {}): PurchaseEvent {
     occurredAt: new Date('2026-10-21T03:04:05Z'),
     value: 450,
     shipping: 50,
+    coupon: null,
     currency: 'THB',
     contents: [{ variantId: 'v1', productId: 'p1', quantity: 2, unitPrice: 225 }],
     analyticsConsent: true,
@@ -65,6 +66,16 @@ describe('PostHog adapter', () => {
       properties: { order_id: 'order-1', revenue: 450, currency: 'THB' },
     })
     expect(calls[0]!.body.properties.$process_person_profile).toBeUndefined()
+  })
+
+  test('sends the coupon code only when the order used one', async () => {
+    const config = { apiKey: 'phc_key', host: 'https://eu.i.posthog.com' }
+    const plain = fakeFetch()
+    await createPostHogAdapter(config, plain.impl).send(event())
+    expect('coupon' in plain.calls[0]!.body.properties).toBe(false)
+    const coupon = fakeFetch()
+    await createPostHogAdapter(config, coupon.impl).send(event({ coupon: 'SAVE10' }))
+    expect(coupon.calls[0]!.body.properties.coupon).toBe('SAVE10')
   })
 
   test('falls back to order distinct id and disables person profiles without analytics consent', async () => {

@@ -65,7 +65,7 @@ export class MarketingMetricsRepository {
           where s.platform = ${platform} and s.campaign_id = ${campaign}
         ), false) as "matched",
         count(*) as "orders",
-        coalesce(sum(o.subtotal_satang), 0) as "revenue"
+        coalesce(sum(o.subtotal_satang - o.discount_satang), 0) as "revenue"
       from commerce_order o
       left join order_attribution a on a.order_id = o.id
       where o.status in ${validStatuses}

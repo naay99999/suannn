@@ -716,6 +716,8 @@ describe('pending Stripe order placement', () => {
       orderId: first.order.id,
       lines: [{ name: 'Checkout Fruit Box · Small box', quantity: 1, unitAmountSatang: 1200 }],
       shippingSatang: 725,
+      discountSatang: 0,
+      discountName: null,
       email: 'buyer@example.test',
       amountSatang: 1925,
       currency: 'thb',

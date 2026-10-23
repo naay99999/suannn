@@ -32,6 +32,7 @@ function metrics(platforms: AdPlatform[] = ['meta', 'tiktok', 'google']) {
 async function insertOrder(input: {
   createdAt: string
   subtotalSatang: number
+  discountSatang?: number
   status?: OrderStatus
   utm?: { source?: string | null, campaign?: string | null }
 }) {
@@ -73,8 +74,9 @@ async function insertOrder(input: {
     billingProvince: 'Bangkok',
     billingPostalCode: '10100',
     subtotalSatang: input.subtotalSatang,
+    discountSatang: input.discountSatang ?? 0,
     shippingSatang: 0,
-    totalSatang: input.subtotalSatang,
+    totalSatang: input.subtotalSatang - (input.discountSatang ?? 0),
     status: input.status ?? 'placed',
     reservationId,
     quoteFingerprint: 'b'.repeat(64),
@@ -112,6 +114,15 @@ function insertRun(platform: AdPlatform, status: string, accountTimezone: string
 }
 
 describe('marketing metrics overview', () => {
+  it('counts revenue net of the item discount', async () => {
+    const utm = { source: 'facebook', campaign: '123' }
+    await insertOrder({ createdAt: '2026-10-21T05:00:00Z', subtotalSatang: 20000, discountSatang: 5000, utm })
+    await insertSpend({ platform: 'meta', campaignId: '123', date: '2026-10-21', spendSatang: 10000 })
+
+    const overview = await metrics().overview(day, 35)
+    expect(overview.summary.revenueSatang).toBe(15000)
+  })
+
   it('filters orders by Bangkok day and valid status, and sums subtotal', async () => {
     await insertSpend({ platform: 'meta', campaignId: '123', date: '2026-10-21', spendSatang: 10000 })
     const utm = { source: 'facebook', campaign: '123' }

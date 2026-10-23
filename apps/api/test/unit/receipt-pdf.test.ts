@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
-import { renderReceiptPdf } from '../../src/modules/receipts/pdf'
+import { receiptTotalsRows, renderReceiptPdf } from '../../src/modules/receipts/pdf'
 import type { ReceiptSnapshot } from '../../src/modules/receipts/types'
 
 function snapshot(overrides: Partial<ReceiptSnapshot> = {}): ReceiptSnapshot {
@@ -83,5 +83,36 @@ describe('receipt pdf', () => {
     }))
     const bytes = await renderReceiptPdf(snapshot({ kind: 'receipt', lines }), 'issued')
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1)
+  })
+  it('receipt without discount fields renders as before', () => {
+    expect(receiptTotalsRows(snapshot(), true)).toEqual([
+      ['ราคาสินค้า', 34700],
+      ['ค่าจัดส่ง', 725],
+      ['สินค้ายกเว้นภาษีมูลค่าเพิ่ม', 24000],
+      ['มูลค่าก่อน VAT', 10678],
+      ['ภาษีมูลค่าเพิ่ม 7%', 747],
+      ['ยอดรวม', 35425, true],
+    ])
+  })
+
+  it('prints the item discount as a negative row and the shipping discount as information', () => {
+    const rows = receiptTotalsRows(snapshot({
+      discount: { code: 'SAVE10', itemDiscountSatang: 3470, shippingDiscountSatang: 4000 },
+      totals: { exemptSatang: 21600, vatableSatang: 10335, vatSatang: 676, preVatSatang: 9659, totalSatang: 31935, vatRateBasisPoints: 700 },
+    }), true)
+    expect(rows.slice(0, 4)).toEqual([
+      ['ราคาสินค้า', 34700],
+      ['ส่วนลด (SAVE10)', -3470],
+      ['ค่าจัดส่ง', 725],
+      ['ส่วนลดค่าจัดส่ง (SAVE10)', 4000],
+    ])
+    expect(rows.at(-1)).toEqual(['ยอดรวม', 31935, true])
+  })
+
+  it('renders a discounted receipt', async () => {
+    const bytes = await renderReceiptPdf(snapshot({
+      discount: { code: 'SAVE10', itemDiscountSatang: 3470, shippingDiscountSatang: 0 },
+    }), 'issued')
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1)
   })
 })

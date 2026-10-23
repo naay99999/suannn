@@ -30,6 +30,29 @@ const black = rgb(0.1, 0.1, 0.1)
 const grey = rgb(0.45, 0.45, 0.45)
 const rule = rgb(0.75, 0.75, 0.75)
 
+export function receiptTotalsRows(snapshot: ReceiptSnapshot, vat: boolean): Array<[string, number, boolean?]> {
+  const totals = snapshot.totals
+  const subtotal = snapshot.lines.reduce((sum, line) => sum + line.lineTotalSatang, 0)
+  const discount = snapshot.discount
+  const rows: Array<[string, number, boolean?]> = [['ราคาสินค้า', subtotal]]
+  if (discount && discount.itemDiscountSatang > 0) {
+    rows.push([`ส่วนลด (${discount.code})`, -discount.itemDiscountSatang])
+  }
+  rows.push(['ค่าจัดส่ง', snapshot.shippingSatang])
+  if (discount && discount.shippingDiscountSatang > 0) {
+    rows.push([`ส่วนลดค่าจัดส่ง (${discount.code})`, discount.shippingDiscountSatang])
+  }
+  if (vat) {
+    rows.push(
+      ['สินค้ายกเว้นภาษีมูลค่าเพิ่ม', totals.exemptSatang],
+      ['มูลค่าก่อน VAT', totals.preVatSatang],
+      [`ภาษีมูลค่าเพิ่ม ${totals.vatRateBasisPoints / 100}%`, totals.vatSatang],
+    )
+  }
+  rows.push(['ยอดรวม', totals.totalSatang, true])
+  return rows
+}
+
 export function formatBaht(satang: number) {
   const sign = satang < 0 ? '-' : ''
   const absolute = Math.abs(Math.trunc(satang))
@@ -240,20 +263,7 @@ export async function renderReceiptPdf(snapshot: ReceiptSnapshot, status: 'issue
   writer.y -= 8
 
   // Totals.
-  const totals = snapshot.totals
-  const subtotal = snapshot.lines.reduce((sum, line) => sum + line.lineTotalSatang, 0)
-  const rows: Array<[string, number, boolean?]> = [
-    ['ราคาสินค้า', subtotal],
-    ['ค่าจัดส่ง', snapshot.shippingSatang],
-  ]
-  if (vat) {
-    rows.push(
-      ['สินค้ายกเว้นภาษีมูลค่าเพิ่ม', totals.exemptSatang],
-      ['มูลค่าก่อน VAT', totals.preVatSatang],
-      [`ภาษีมูลค่าเพิ่ม ${totals.vatRateBasisPoints / 100}%`, totals.vatSatang],
-    )
-  }
-  rows.push(['ยอดรวม', totals.totalSatang, true])
+  const rows = receiptTotalsRows(snapshot, vat)
   writer.ensure(rows.length * (leading + 2) + 60)
   for (const [label, amount, emphasised] of rows) {
     writer.text(label, margin + contentWidth * 0.45, { bold: emphasised, size: emphasised ? 12 : bodySize })

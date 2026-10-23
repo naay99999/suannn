@@ -11,7 +11,14 @@ const config = {
 
 function createClientStub() {
   const requests: Array<{ params: Stripe.Checkout.SessionCreateParams; options?: Stripe.RequestOptions }> = []
+  const coupons: Array<{ params: Stripe.CouponCreateParams; options?: Stripe.RequestOptions }> = []
   const client = {
+    coupons: {
+      create: async (params: Stripe.CouponCreateParams, options?: Stripe.RequestOptions) => {
+        coupons.push({ params, options })
+        return { id: 'coupon_test_1' }
+      },
+    },
     checkout: {
       sessions: {
         create: async (params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions) => {
@@ -26,13 +33,15 @@ function createClientStub() {
     },
   } as unknown as Stripe
 
-  return { client, requests }
+  return { client, requests, coupons }
 }
 
 const checkoutInput = {
   orderId: 'order_123',
   lines: [{ name: 'Canvas Tote', quantity: 1, unitAmountSatang: 2_500 }],
   shippingSatang: 0,
+  discountSatang: 0,
+  discountName: null as string | null,
   email: 'shopper@example.com',
   amountSatang: 2_500,
   currency: 'thb' as const,
@@ -120,5 +129,43 @@ describe('Stripe gateway', () => {
     const event = await gateway.constructEvent(payload, signature)
 
     expect(event.id).toBe('evt_test_signed')
+  })
+  it('applies the item discount through a one-off coupon and keeps line prices undiscounted', async () => {
+    const { client, requests, coupons } = createClientStub()
+    const gateway = createStripeGateway(config, client)
+
+    await gateway.createCheckout({
+      ...checkoutInput,
+      shippingSatang: 500,
+      discountSatang: 1_000,
+      discountName: 'ส่วนลด SAVE',
+      amountSatang: 2_000,
+    })
+
+    expect(coupons).toHaveLength(1)
+    expect(coupons[0]!.params).toEqual({
+      amount_off: 1_000, currency: 'thb', duration: 'once', max_redemptions: 1, name: 'ส่วนลด SAVE',
+    })
+    expect(coupons[0]!.options).toEqual({ idempotencyKey: `${checkoutInput.idempotencyKey}:coupon` })
+    const params = requests[0]!.params
+    expect(params.discounts).toEqual([{ coupon: 'coupon_test_1' }])
+    expect(params.line_items?.map((item) => item.price_data?.unit_amount)).toEqual([2_500, 500])
+  })
+
+  it('creates no coupon without a discount', async () => {
+    const { client, requests, coupons } = createClientStub()
+    await createStripeGateway(config, client).createCheckout(checkoutInput)
+    expect(coupons).toHaveLength(0)
+    expect(requests[0]!.params.discounts).toBeUndefined()
+  })
+
+  it('rejects an amount that does not equal lines plus shipping minus discount', async () => {
+    const { client, coupons } = createClientStub()
+    const gateway = createStripeGateway(config, client)
+
+    await expect(gateway.createCheckout({
+      ...checkoutInput, discountSatang: 1_000, discountName: 'x', amountSatang: 2_500,
+    })).rejects.toThrow('Checkout amount must equal')
+    expect(coupons).toHaveLength(0)
   })
 })

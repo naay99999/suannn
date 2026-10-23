@@ -7,7 +7,7 @@ function assertSatang(value: number) {
 // Prices include VAT. Exempt lines are summed apart; standard lines plus shipping form one
 // VAT-able base, and VAT is extracted from that base once with half-up integer rounding.
 export function computeReceiptTotals(input: {
-  lines: Array<{ lineTotalSatang: number; vatTreatment: VatTreatment }>
+  lines: Array<{ lineTotalSatang: number; discountSatang?: number; vatTreatment: VatTreatment }>
   shippingSatang: number
   vatRateBasisPoints: number
 }): ReceiptTotals {
@@ -18,8 +18,12 @@ export function computeReceiptTotals(input: {
   let vatable = BigInt(input.shippingSatang)
   for (const line of input.lines) {
     assertSatang(line.lineTotalSatang)
-    if (line.vatTreatment === 'exempt') exempt += BigInt(line.lineTotalSatang)
-    else if (line.vatTreatment === 'standard') vatable += BigInt(line.lineTotalSatang)
+    const discount = line.discountSatang ?? 0
+    assertSatang(discount)
+    const net = line.lineTotalSatang - discount
+    assertSatang(net)
+    if (line.vatTreatment === 'exempt') exempt += BigInt(net)
+    else if (line.vatTreatment === 'standard') vatable += BigInt(net)
     else throw new Error('INVALID_VAT_TREATMENT')
   }
   const divisor = 10000n + BigInt(rate)

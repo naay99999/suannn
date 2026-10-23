@@ -72,4 +72,32 @@ describe('computeReceiptTotals', () => {
     expect(totals.totalSatang).toBe(4321 + 9999 + 1 + 725)
     expect(totals.vatableSatang).toBe(totals.preVatSatang + totals.vatSatang)
   })
+  it('subtracts per-line discounts before extracting VAT', () => {
+    const totals = computeReceiptTotals({
+      lines: [{ lineTotalSatang: 10700, discountSatang: 1070, vatTreatment: 'standard' }],
+      shippingSatang: 0,
+      vatRateBasisPoints: rate,
+    })
+    expect(totals).toMatchObject({ vatableSatang: 9630, vatSatang: 630, totalSatang: 9630 })
+  })
+
+  it('keeps exempt lines exempt after the discount', () => {
+    const totals = computeReceiptTotals({
+      lines: [
+        { lineTotalSatang: 5000, discountSatang: 500, vatTreatment: 'exempt' },
+        { lineTotalSatang: 10700, discountSatang: 0, vatTreatment: 'standard' },
+      ],
+      shippingSatang: 0,
+      vatRateBasisPoints: rate,
+    })
+    expect(totals).toMatchObject({ exemptSatang: 4500, vatableSatang: 10700, vatSatang: 700 })
+  })
+
+  it('rejects a discount larger than the line', () => {
+    expect(() => computeReceiptTotals({
+      lines: [{ lineTotalSatang: 1000, discountSatang: 1001, vatTreatment: 'standard' }],
+      shippingSatang: 0,
+      vatRateBasisPoints: rate,
+    })).toThrow('INVALID_RECEIPT_AMOUNT')
+  })
 })

@@ -249,6 +249,8 @@ export class StripeEventService {
             unitAmountSatang: item.unitPriceSatang,
           })),
           shippingSatang: snapshot.shippingSatang,
+          discountSatang: snapshot.discount?.itemDiscountSatang ?? 0,
+          discountName: snapshot.discount ? `ส่วนลด ${snapshot.discount.code}` : null,
           email: snapshot.contactEmail,
           amountSatang: snapshot.totalSatang,
           currency: 'thb' as const,

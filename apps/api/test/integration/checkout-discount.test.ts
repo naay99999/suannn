@@ -241,6 +241,30 @@ describe('checkout with discount codes', () => {
         .rejects.toThrow('QUOTE_STALE')
     })
 
+    it('lets a guest with an allowed email place a Stripe order and passes the discount to the gateway', async () => {
+      const codeId = await createCode({ code: 'VIPOK', allowedEmails: ['vip@example.test'] })
+      const principal = guestPrincipal()
+      const quote = await quoted(codeId, principal, 'vip@example.test')
+      const received: Array<Parameters<StripeGateway['createCheckout']>[0]> = []
+      const gateway = stripeGateway()
+      const stripe = new StripeCheckoutService(database.db, commerceSecret, {
+        ...gateway,
+        createCheckout: async (input) => { received.push(input); return gateway.createCheckout(input) },
+      })
+
+      const result = await stripe.place({ ...codInput(quote.quoteToken, 'VIP@example.test'), paymentMethod: 'stripe' }, principal, 'key-guest-ok')
+
+      expect(result.order.discount).toMatchObject({ code: 'VIPOK', itemDiscountSatang: 500 })
+      const [saved] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, result.order.id))
+      expect(saved).toMatchObject({ discountCode: 'VIPOK', discountSatang: 500 })
+      expect(received).toHaveLength(1)
+      expect(received[0]).toMatchObject({
+        discountSatang: 500,
+        discountName: 'ส่วนลด VIPOK',
+        amountSatang: result.order.totalSatang,
+      })
+    })
+
     it('when a guest quoted without an email and the code now applies', async () => {
       const codeId = await createCode({ code: 'PUBLIC' })
       const principal = guestPrincipal()

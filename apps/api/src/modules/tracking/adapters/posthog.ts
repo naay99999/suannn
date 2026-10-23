@@ -25,6 +25,7 @@ export function createPostHogAdapter(
           value: event.value,
           shipping: event.shipping,
           currency: event.currency,
+          ...(event.coupon ? { coupon: event.coupon } : {}),
           products: event.contents.map((item) => ({
             product_id: item.productId, variant_id: item.variantId, quantity: item.quantity, price: item.unitPrice,
           })),

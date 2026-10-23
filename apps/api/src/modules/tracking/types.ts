@@ -27,6 +27,8 @@ export interface PurchaseEvent {
   occurredAt: Date
   value: number
   shipping: number
+  // Discount code used on the order, sent only to PostHog.
+  coupon: string | null
   currency: 'THB'
   contents: Array<{ variantId: string, productId: string, quantity: number, unitPrice: number }>
   analyticsConsent: boolean

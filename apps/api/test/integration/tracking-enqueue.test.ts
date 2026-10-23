@@ -12,6 +12,7 @@ import {
   trackingOutbox,
   user,
   warehouse,
+  discountCode,
 } from '../../src/database/schema'
 import { CartRepository } from '../../src/modules/cart/repository'
 import { CartService } from '../../src/modules/cart/service'
@@ -333,5 +334,33 @@ describe('order attribution and purchase tracking enqueue', () => {
     expect(plainEvent!.marketingConsent).toBe(false)
     expect(Object.values(plainEvent!.user).every((value) => value === null)).toBe(true)
     expect(plainEvent!.attribution.utmCampaign).toBe('spring')
+  })
+  it('reports purchase value net of the item discount and carries the coupon', async () => {
+    const discounted = await placeCod({ lastTouch: touch() })
+    const plain = await placeCod({ lastTouch: touch() })
+    const [order] = await database.db.select().from(commerceOrder).where(eq(commerceOrder.id, discounted.result.order.id))
+    const discountSatang = Math.floor(order!.subtotalSatang / 10)
+    // The snapshot guard blocks updates, so lift it for this fixture edit only.
+    await database.client.unsafe('alter table commerce_order disable trigger user')
+    try {
+      const [code] = await database.db.insert(discountCode).values({ code: 'SAVE10', name: 'SAVE10', kind: 'percent', percentOff: 10 })
+        .returning({ id: discountCode.id })
+      await database.db.update(commerceOrder).set({
+        discountCodeId: code!.id,
+        discountCode: 'SAVE10',
+        discountKind: 'percent',
+        discountEmail: order!.contactEmail,
+        discountSatang,
+        // Keep the total (and the payment FK) unchanged by moving the discount into shipping.
+        shippingSatang: order!.shippingSatang + discountSatang,
+      }).where(eq(commerceOrder.id, order!.id))
+    } finally {
+      await database.client.unsafe('alter table commerce_order enable trigger user')
+    }
+
+    const event = await loadPurchaseEvent(database.db, order!.id)
+    expect(event!.value).toBe((order!.subtotalSatang - discountSatang) / 100)
+    expect(event!.coupon).toBe('SAVE10')
+    expect((await loadPurchaseEvent(database.db, plain.result.order.id))!.coupon).toBeNull()
   })
 })
