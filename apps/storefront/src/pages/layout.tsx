@@ -29,7 +29,7 @@ const navigation = [
 
 function HeaderOrderAction({ className, onNavigate }: { className: string, onNavigate?: () => void }) {
   const { cart, setOpen } = useCart()
-  const { lines, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
+  const { lines, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [], discount: null })
 
   if (lines.length === 0) {
     return (

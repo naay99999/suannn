@@ -21,7 +21,8 @@ import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
 const variantId = '00000000-0000-4000-8000-000000000002'
-const cart: CartDetail = { cartVersion: 0, lines: [] }
+const cart: CartDetail = { cartVersion: 0, lines: [], discountCodeId: null }
+const cartBody = { cartVersion: 0, lines: [], discount: null }
 
 async function createHarness(options: { denyRateLimit?: boolean; secureCookies?: boolean } = {}) {
   const principals: CartPrincipal[] = []
@@ -82,6 +83,7 @@ async function createHarness(options: { denyRateLimit?: boolean; secureCookies?:
     products: {} as ProductService,
     inventory: {} as InventoryService,
     cart: service as unknown as CartService,
+    discounts: { describeForCart: async () => null },
     staffMfaRequired: async () => true,
     identityReservations: { findState: async () => null },
     limiter,
@@ -108,7 +110,7 @@ describe('store cart HTTP contract', () => {
     const response = await harness.app.handle(request('/api/v1/store/cart'))
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual(cart)
+    expect(await response.json()).toEqual(cartBody)
     expect(response.headers.get('set-cookie')).toBeNull()
     expect(harness.principals[0]).toMatchObject({ kind: 'guest' })
     expect(harness.mutations).toEqual([])

@@ -120,6 +120,11 @@ export class DiscountRepository {
     return { total: counts?.total ?? 0, byEmail: counts?.byEmail ?? 0, hasPriorOrder }
   }
 
+  // Same as usageFor, bound to the repository's own connection for callers outside a transaction.
+  currentUsage(ruleId: string, email: string | null, customerId: string | null): Promise<DiscountUsage> {
+    return this.usageFor(this.db, ruleId, email, customerId)
+  }
+
   async accountEmail(userId: string): Promise<string | null> {
     const [row] = await this.db.select({ email: user.email }).from(user).where(eq(user.id, userId)).limit(1)
     return row ? normalizeDiscountEmail(row.email) : null

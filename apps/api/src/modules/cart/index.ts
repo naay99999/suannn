@@ -7,9 +7,20 @@ import type { RateLimiter } from '../rate-limit/service'
 import { rateLimitResponse } from '../rate-limit/service'
 import { httpModels } from '../../shared/http-model'
 import { DomainError } from '../../shared/domain-error'
+import type { DiscountService } from '../discounts/service'
 import type { CartService } from './service'
+import type { CartDetail, CartPrincipal } from './types'
 import { cartModels } from './model'
 import { expireGuestCartCookie, readGuestCartTokenHash, resolveCartPrincipal } from './principal'
+
+export async function toCartResponse(
+  discounts: Pick<DiscountService, 'describeForCart'>,
+  principal: CartPrincipal,
+  detail: CartDetail,
+) {
+  const { discountCodeId: _discountCodeId, ...visible } = detail
+  return { ...visible, discount: await discounts.describeForCart(principal, detail) }
+}
 
 const guestMutationLimit = { limit: 30, windowSeconds: 60 }
 
@@ -66,6 +77,7 @@ export function createStoreCartModule(
   auth: Auth,
   service: CartService,
   limiter: Pick<RateLimiter, 'consume'>,
+  discounts: Pick<DiscountService, 'describeForCart'>,
 ) {
   const errors = { 401: 'http.error', 403: 'http.error', 409: 'http.error', 422: 'http.error' } as const
   const cookieSecurity = [{ sessionCookie: [] }]
@@ -77,7 +89,7 @@ export function createStoreCartModule(
     .model(cartModels)
     .get('/', async ({ request }) => {
       const { principal } = await resolveCartPrincipal(auth, request, config.secureCookies)
-      return service.get(principal)
+      return toCartResponse(discounts, principal, await service.get(principal))
     }, {
       response: { 200: 'cart.detail', 403: 'http.error', 422: 'http.error' },
       detail: {
@@ -94,7 +106,7 @@ export function createStoreCartModule(
 
       const result = await service.setItem(resolved.principal, params.variantId, body.quantity)
       if (resolved.setCookie) set.headers['set-cookie'] = resolved.setCookie
-      return result
+      return toCartResponse(discounts, resolved.principal, result)
     }, {
       browserMutation: 'storefront',
       parse: [parseSetItemBody, 'json'],
@@ -115,7 +127,7 @@ export function createStoreCartModule(
 
       const result = await service.removeItem(resolved.principal, params.variantId)
       if (resolved.setCookie) set.headers['set-cookie'] = resolved.setCookie
-      return result
+      return toCartResponse(discounts, resolved.principal, result)
     }, {
       browserMutation: 'storefront',
       params: 'cart.variantParams',
@@ -135,14 +147,16 @@ export function createStoreCartModule(
       }
 
       const guestTokenHash = readGuestCartTokenHash(request)
-      if (!guestTokenHash) return { cart: await service.get(principal), skipped: [] }
+      if (!guestTokenHash) {
+        return { cart: await toCartResponse(discounts, principal, await service.get(principal)), skipped: [] }
+      }
 
       const limited = await rateLimitGuestMutation('guest', limiter, requestContext, set)
       if (limited) return limited
 
       const result = await service.mergeGuest(principal.userId, guestTokenHash)
       set.headers['set-cookie'] = expireGuestCartCookie(config.secureCookies)
-      return result
+      return { ...result, cart: await toCartResponse(discounts, principal, result.cart) }
     }, {
       browserMutation: 'storefront',
       parse: [parseMergeBody, 'json'],

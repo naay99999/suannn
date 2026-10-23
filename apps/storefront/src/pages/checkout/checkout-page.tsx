@@ -53,7 +53,7 @@ export function Component() {
   const sessionResolved = !session.isPending && !session.isError
   const userId = customerSession?.user.id ?? ''
   const addresses = useQuery({ ...addressesQuery(userId), enabled: Boolean(userId) })
-  const serverCart = cart ?? { cartVersion: 0, lines: [] }
+  const serverCart = cart ?? { cartVersion: 0, lines: [], discount: null }
   const { lines, hasUnavailable } = getCartSummary(serverCart)
   const quoteKey = checkoutQuoteQueryKey(serverCart.cartVersion)
   const quote = useQuery({

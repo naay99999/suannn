@@ -224,7 +224,7 @@ describe('persistent cart ownership and edits', () => {
 
     await database.db.update(cart).set({ expiresAt: new Date(Date.now() - 1) })
       .where(eq(cart.guestTokenHash, guest.tokenHash))
-    expect(await service.get(guest)).toEqual({ cartVersion: 0, lines: [] })
+    expect(await service.get(guest)).toEqual({ cartVersion: 0, lines: [], discountCodeId: null })
     const renewed = await service.setItem(guest, variantIds[1]!, 2)
     expect(renewed.lines).toHaveLength(1)
     expect(renewed.lines[0]?.variantId).toBe(variantIds[1])

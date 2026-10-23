@@ -399,7 +399,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(141)
+    expect(operations).toHaveLength(143)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

@@ -1,6 +1,7 @@
 import { DomainError } from '../../shared/domain-error'
 import type { CommerceSettingsService } from '../commerce-settings/service'
-import { normalizeDiscountCode, normalizeDiscountEmail } from './evaluate'
+import type { CartDetail, CartPrincipal } from '../cart/types'
+import { evaluateDiscount, normalizeDiscountCode, normalizeDiscountEmail } from './evaluate'
 import type {
   DiscountActor,
   DiscountDetailRow,
@@ -9,7 +10,7 @@ import type {
   DiscountRow,
   DiscountValues,
 } from './repository'
-import type { DiscountKind } from './types'
+import type { CartDiscount, DiscountEvaluation, DiscountKind, DiscountReason, DiscountRule } from './types'
 
 export type { DiscountActor } from './repository'
 
@@ -80,6 +81,8 @@ const MAX_SATANG = 1_000_000_000_000
 const MAX_INT = 2_147_483_647
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const CART_REJECTIONS: ReadonlySet<DiscountReason> = new Set(['unknown', 'not_started', 'expired', 'used_up'])
 
 const invalid = () => new DomainError('INVALID_DISCOUNT')
 
@@ -200,10 +203,93 @@ function toDetail(detail: DiscountDetailRow): DiscountAdminDetail {
 
 export class DiscountService {
   constructor(
-    private readonly repository: Pick<DiscountRepository, 'list' | 'detail' | 'create' | 'update' | 'remove'>,
-    // Used by the storefront preview in a later task; not read by the admin methods.
+    private readonly repository: Pick<DiscountRepository, 'list' | 'detail' | 'create' | 'update' | 'remove'>
+      & Partial<Pick<DiscountRepository, 'getRuleById' | 'getRuleByCode' | 'currentUsage' | 'accountEmail'>>,
+    // Supplies the shipping fee for the storefront cart preview.
     readonly commerceSettings?: Pick<CommerceSettingsService, 'get'>,
   ) {}
+
+  // Resolves a typed code for the cart. Reasons that mean the code can never work for this
+  // shopper are rejected; shortfall-style reasons attach and show as not_applicable.
+  async resolveForApply(
+    principal: CartPrincipal,
+    cart: CartDetail,
+    rawCode: string,
+  ): Promise<{ ok: true; ruleId: string } | { ok: false; reason: DiscountReason }> {
+    const code = normalizeDiscountCode(rawCode)
+    const rule = code === null ? null : await this.reads().getRuleByCode(code)
+    if (!rule) return { ok: false, reason: 'unknown' }
+    const evaluation = await this.evaluateForCart(principal, cart, rule)
+    if (evaluation.status === 'rejected' && CART_REJECTIONS.has(evaluation.reason)) {
+      return { ok: false, reason: evaluation.reason }
+    }
+    return { ok: true, ruleId: rule.id }
+  }
+
+  async describeForCart(principal: CartPrincipal, cart: CartDetail): Promise<CartDiscount | null> {
+    if (!cart.discountCodeId) return null
+    const rule = await this.reads().getRuleById(cart.discountCodeId)
+    if (!rule) return null
+    const evaluation = await this.evaluateForCart(principal, cart, rule)
+    const base = { code: rule.code, reason: null, shortfallSatang: null, itemDiscountSatang: 0, freeShipping: false }
+    if (evaluation.status === 'applied') {
+      return {
+        ...base,
+        status: 'applied',
+        itemDiscountSatang: evaluation.itemDiscountSatang,
+        freeShipping: rule.kind === 'free_shipping',
+      }
+    }
+    if (evaluation.status === 'pending_email') return { ...base, status: 'pending_email' }
+    return {
+      ...base,
+      status: 'not_applicable',
+      reason: evaluation.reason,
+      shortfallSatang: evaluation.shortfallSatang,
+    }
+  }
+
+  private reads() {
+    const { getRuleById, getRuleByCode, currentUsage, accountEmail } = this.repository
+    if (!getRuleById || !getRuleByCode || !currentUsage || !accountEmail) {
+      throw new Error('DISCOUNT_READS_UNAVAILABLE')
+    }
+    return {
+      getRuleById: getRuleById.bind(this.repository),
+      getRuleByCode: getRuleByCode.bind(this.repository),
+      currentUsage: currentUsage.bind(this.repository),
+      accountEmail: accountEmail.bind(this.repository),
+    }
+  }
+
+  private async evaluateForCart(
+    principal: CartPrincipal,
+    cart: CartDetail,
+    rule: DiscountRule,
+  ): Promise<DiscountEvaluation> {
+    const reads = this.reads()
+    const email = principal.kind === 'customer' ? await reads.accountEmail(principal.userId) : null
+    const customerId = principal.kind === 'customer' ? principal.userId : null
+    // evaluateDiscount treats null usage as zeros, so real usage is always fetched.
+    const usage = await reads.currentUsage(rule.id, email, customerId)
+    const settings = await this.commerceSettings?.get()
+    return evaluateDiscount({
+      rule,
+      lines: cart.lines
+        .filter((line) => line.canPurchase && line.priceSatang !== null)
+        .map((line) => ({
+          variantId: line.variantId,
+          productId: line.productId,
+          category: line.productCategory,
+          quantity: line.quantity,
+          lineTotalSatang: line.priceSatang! * line.quantity,
+        })),
+      shippingSatang: settings?.shippingFeeSatang ?? 0,
+      email,
+      usage,
+      now: new Date(),
+    })
+  }
 
   async list() {
     return (await this.repository.list()).map((entry) => toAdmin(entry.row, entry))

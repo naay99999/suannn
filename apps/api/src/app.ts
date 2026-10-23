@@ -23,7 +23,7 @@ import { createAdminCommerceSettingsModule } from './modules/commerce-settings'
 import { createAdminReceiptSettingsModule } from './modules/receipts'
 import { createAdminStoreAnnouncementModule, createStoreAnnouncementModule } from './modules/store-announcement'
 import { createAdminFarmsModule, createStoreFarmsModule } from './modules/farms'
-import { createAdminDiscountsModule } from './modules/discounts'
+import { createAdminDiscountsModule, createStoreCartDiscountModule } from './modules/discounts'
 import type { DiscountService } from './modules/discounts/service'
 import { createAdminMediaModule } from './modules/media'
 import { createAdminDashboardModule } from './modules/dashboard'
@@ -168,7 +168,9 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(new Elysia({ name: 'admin-farms-and-media' })
       .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
       .use(createAdminMediaModule(config, dependencies.auth, dependencies.media, dependencies.limiter)))
-    .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter))
+    .use(new Elysia({ name: 'store-cart-and-discount' })
+      .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter, dependencies.discounts))
+      .use(createStoreCartDiscountModule(config, dependencies.auth, dependencies.cart, dependencies.discounts, dependencies.limiter)))
     .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter, dependencies.consent))
     .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
     .use(new Elysia({ name: 'admin-orders-and-dashboard' })

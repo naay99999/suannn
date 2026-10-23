@@ -28,6 +28,12 @@ export class CartService {
     return this.repository.get(principal)
   }
 
+  async setDiscountCode(principal: CartPrincipal, codeId: string | null): Promise<CartDetail> {
+    this.assertPrincipal(principal)
+    await this.repository.setDiscountCode(principal, codeId)
+    return this.repository.get(principal)
+  }
+
   async mergeGuest(
     userId: string,
     guestTokenHash: string,

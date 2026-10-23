@@ -28,8 +28,10 @@ function sampleCart(): CartDetail {
         priceSatang: 999,
         canPurchase: true,
         issues: [],
+        productCategory: 'fresh',
       },
     ],
+    discountCodeId: null,
   }
 }
 

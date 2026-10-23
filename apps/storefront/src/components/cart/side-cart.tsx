@@ -13,7 +13,7 @@ import { Spinner } from '@workspace/ui/components/spinner'
 
 export function CartTrigger() {
   const { cart, open, setOpen, triggerRef } = useCart()
-  const { count } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
+  const { count } = getCartSummary(cart ?? { cartVersion: 0, lines: [], discount: null })
   return (
     <Button ref={triggerRef} variant="outline" size="icon-lg" className="relative" aria-label={`เปิดตะกร้า ${count} ชิ้น`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <HugeiconsIcon icon={ShoppingBag01Icon} />
@@ -24,7 +24,7 @@ export function CartTrigger() {
 
 export function SideCart() {
   const { cart, pending, error, setItem, removeItem, mergeNotice, open, setOpen, triggerRef } = useCart()
-  const { lines, count, subtotalSatang, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [] })
+  const { lines, count, subtotalSatang, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [], discount: null })
   const canCheckout = lines.length > 0 && !hasUnavailable && !pending
 
   return (

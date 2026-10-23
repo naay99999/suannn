@@ -55,3 +55,12 @@ export type DiscountEvaluation =
     }
   | { status: 'pending_email' }
   | { status: 'rejected'; reason: DiscountReason; shortfallSatang: number | null }
+
+export interface CartDiscount {
+  code: string
+  status: 'applied' | 'pending_email' | 'not_applicable'
+  reason: DiscountReason | null
+  shortfallSatang: number | null
+  itemDiscountSatang: number
+  freeShipping: boolean
+}

@@ -23,6 +23,7 @@ type CatalogRow = {
   priceSatang: number | null
   salesEnabled: boolean | null
   variantArchivedAt: Date | null
+  productCategory: 'fresh' | 'processed' | null
 }
 
 const cover = mediaImageColumns(mediaAsset)
@@ -66,11 +67,11 @@ export class CartRepository {
   ) {}
 
   async get(principal: CartPrincipal): Promise<CartDetail> {
-    const [ownerCart] = await this.db.select({ id: cart.id, version: cart.version })
+    const [ownerCart] = await this.db.select({ id: cart.id, version: cart.version, discountCodeId: cart.discountCodeId })
       .from(cart)
       .where(principalCondition(principal))
       .limit(1)
-    if (!ownerCart) return { cartVersion: 0, lines: [] }
+    if (!ownerCart) return { cartVersion: 0, lines: [], discountCodeId: null }
 
     const storedLines = await this.db.select({ variantId: cartItem.variantId, quantity: cartItem.quantity })
       .from(cartItem)
@@ -82,6 +83,7 @@ export class CartRepository {
     )
     return {
       cartVersion: ownerCart.version,
+      discountCodeId: ownerCart.discountCodeId,
       lines: storedLines.map((line) => this.projectLine(line, catalog.get(line.variantId), sellableVariantIds)),
     }
   }
@@ -148,6 +150,22 @@ export class CartRepository {
     })
   }
 
+  async setDiscountCode(principal: CartPrincipal, codeId: string | null): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      let ownerCart: { id: string } | undefined
+      if (codeId === null) {
+        if (principal.kind === 'guest') await this.deleteExpiredGuestCart(tx, principal.tokenHash)
+        ;[ownerCart] = await tx.select({ id: cart.id }).from(cart)
+          .where(principalCondition(principal)).for('update').limit(1)
+        if (!ownerCart) return
+      } else {
+        ownerCart = await this.lockOrCreateCart(tx, principal)
+      }
+      await tx.update(cart).set({ discountCodeId: codeId }).where(eq(cart.id, ownerCart.id))
+      await this.touchCart(tx, ownerCart.id, principal.kind === 'guest')
+    })
+  }
+
   async mergeGuest(userId: string, guestTokenHash: string): Promise<MergeSkippedLine[]> {
     return this.db.transaction(async (tx) => {
       await tx.insert(cart).values({ customerId: userId, guestTokenHash: null, expiresAt: null })
@@ -159,6 +177,7 @@ export class CartRepository {
         customerId: cart.customerId,
         guestTokenHash: cart.guestTokenHash,
         expiresAt: cart.expiresAt,
+        discountCodeId: cart.discountCodeId,
       }).from(cart)
         .where(or(eq(cart.customerId, userId), eq(cart.guestTokenHash, guestTokenHash)))
         .orderBy(asc(cart.id))
@@ -224,6 +243,10 @@ export class CartRepository {
         }
       }
 
+      // A code the customer already holds wins; the guest's code only fills an empty slot.
+      if (!guestExpired && customerCart.discountCodeId === null && guestCart.discountCodeId !== null) {
+        await tx.update(cart).set({ discountCodeId: guestCart.discountCodeId }).where(eq(cart.id, customerCart.id))
+      }
       await tx.delete(cart).where(eq(cart.id, guestCart.id))
       await this.touchCart(tx, customerCart.id, false)
       return skipped
@@ -280,6 +303,7 @@ export class CartRepository {
       priceSatang: productVariant.priceSatang,
       salesEnabled: productVariant.salesEnabled,
       variantArchivedAt: productVariant.archivedAt,
+      productCategory: product.category,
     }).from(productVariant)
       .innerJoin(product, eq(productVariant.productId, product.id))
       .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
@@ -307,6 +331,7 @@ export class CartRepository {
       priceSatang: productVariant.priceSatang,
       salesEnabled: productVariant.salesEnabled,
       variantArchivedAt: productVariant.archivedAt,
+      productCategory: product.category,
     }).from(productVariant)
       .leftJoin(product, eq(productVariant.productId, product.id))
       .leftJoin(productImage, and(eq(productImage.productId, product.id), eq(productImage.displayOrder, 0)))
@@ -337,6 +362,7 @@ export class CartRepository {
       priceSatang: catalog?.priceSatang ?? null,
       canPurchase: issues.length === 0,
       issues,
+      productCategory: catalog?.productCategory ?? null,
     }
   }
 

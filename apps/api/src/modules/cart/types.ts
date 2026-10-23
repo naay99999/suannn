@@ -17,11 +17,14 @@ export interface CartLine {
   priceSatang: number | null
   canPurchase: boolean
   issues: CartIssueCode[]
+  productCategory: 'fresh' | 'processed' | null
 }
 
 export interface CartDetail {
   cartVersion: number
   lines: CartLine[]
+  // Internal: the attached discount rule id. Routes expose a computed `discount` instead.
+  discountCodeId: string | null
 }
 
 export type MergeSkippedCode = CartIssueCode | 'CART_LINE_LIMIT_REACHED'

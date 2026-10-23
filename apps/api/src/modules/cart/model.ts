@@ -22,11 +22,28 @@ const line = t.Object({
   priceSatang: t.Union([t.Integer({ minimum: 1, maximum: 1_000_000_000 }), t.Null()]),
   canPurchase: t.Boolean(),
   issues: t.Array(issue),
+  productCategory: t.Union([t.Literal('fresh'), t.Literal('processed'), t.Null()]),
+}, { additionalProperties: false })
+
+const discountReason = t.Union([
+  t.Literal('unknown'), t.Literal('not_started'), t.Literal('expired'), t.Literal('used_up'),
+  t.Literal('already_used'), t.Literal('min_subtotal'), t.Literal('min_quantity'),
+  t.Literal('no_eligible_items'), t.Literal('first_order_only'),
+])
+
+const discount = t.Object({
+  code: t.String(),
+  status: t.Union([t.Literal('applied'), t.Literal('pending_email'), t.Literal('not_applicable')]),
+  reason: t.Union([discountReason, t.Null()]),
+  shortfallSatang: t.Union([t.Integer({ minimum: 0 }), t.Null()]),
+  itemDiscountSatang: t.Integer({ minimum: 0 }),
+  freeShipping: t.Boolean(),
 }, { additionalProperties: false })
 
 const detail = t.Object({
   cartVersion: t.Integer({ minimum: 0 }),
   lines: t.Array(line),
+  discount: t.Union([discount, t.Null()]),
 }, { additionalProperties: false })
 
 const setItemBody = t.Object({
@@ -48,6 +65,14 @@ const mergeResponse = t.Object({
   }, { additionalProperties: false })),
 }, { additionalProperties: false })
 
+const discountBody = t.Object({ code: t.String({ maxLength: 64 }) }, { additionalProperties: false })
+
+const discountRejected = t.Object({
+  code: t.Literal('DISCOUNT_CODE_REJECTED'),
+  message: t.String(),
+  reason: discountReason,
+}, { additionalProperties: false })
+
 const emptyBody = t.Object({}, { additionalProperties: false })
 
 export const cartModels = {
@@ -55,5 +80,7 @@ export const cartModels = {
   'cart.setItemBody': setItemBody,
   'cart.variantParams': variantParams,
   'cart.mergeBody': emptyBody,
+  'cart.discountBody': discountBody,
+  'cart.discountRejected': discountRejected,
   'cart.mergeResponse': mergeResponse,
 }
