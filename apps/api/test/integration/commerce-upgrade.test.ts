@@ -8,6 +8,7 @@ import { createTestDatabase, lockTestDatabase, migrateTestDatabase, resetTestDat
 const database = createTestDatabase()
 let unlock: (() => Promise<void>) | undefined
 let oldMigrations = ''
+let migrationCount = 0
 
 beforeAll(async () => {
   unlock = await lockTestDatabase(database)
@@ -18,6 +19,7 @@ beforeAll(async () => {
   const journal = JSON.parse(await readFile(join(source, 'meta/_journal.json'), 'utf8')) as {
     entries: Array<{ tag: string }>
   }
+  migrationCount = journal.entries.length
   journal.entries = journal.entries.filter((entry) => Number(entry.tag.slice(0, 4)) <= 9)
   await writeFile(join(oldMigrations, 'meta/_journal.json'), JSON.stringify(journal))
   for (const entry of journal.entries) {
@@ -32,7 +34,7 @@ afterAll(async () => {
   if (oldMigrations) await rm(oldMigrations, { recursive: true, force: true })
 })
 
-it('upgrades populated 0009 user, product, and lot data through 0020', async () => {
+it('upgrades populated 0009 user, product, and lot data through the latest migration', async () => {
   await migrate(database.db, { migrationsFolder: oldMigrations })
   const userId = 'upgrade-customer'
   const productId = crypto.randomUUID()
@@ -74,5 +76,5 @@ it('upgrades populated 0009 user, product, and lot data through 0020', async () 
   const migrations = await database.client.unsafe<Array<{ count: number }>>(
     'select count(*)::int as count from drizzle.__drizzle_migrations',
   )
-  expect(migrations[0]?.count).toBe(21)
+  expect(migrations[0]?.count).toBe(migrationCount)
 })

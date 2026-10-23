@@ -118,6 +118,8 @@ describe('staff order sorting', () => {
   it('pages through orders created within the same millisecond in both directions', async () => {
     await resetTestDatabase(database)
     await migrateTestDatabase(database)
+    // Order snapshots are immutable, so lift the guard triggers to set microsecond timestamps.
+    await database.db.execute(sql`alter table commerce_order disable trigger user`)
     for (const [index, number] of ['SN-1001', 'SN-1002', 'SN-1003'].entries()) {
       await insertOrder(number, 'Same Millisecond', 1_000, '2026-10-01T00:00:00.000Z')
       await database.db.execute(sql`
@@ -125,6 +127,7 @@ describe('staff order sorting', () => {
         where order_number = ${number}
       `)
     }
+    await database.db.execute(sql`alter table commerce_order enable trigger user`)
     expect(await readAll({ field: 'createdAt', direction: 'asc' }, 1)).toEqual(['SN-1001', 'SN-1002', 'SN-1003'])
     expect(await readAll(undefined, 1)).toEqual(['SN-1003', 'SN-1002', 'SN-1001'])
   })

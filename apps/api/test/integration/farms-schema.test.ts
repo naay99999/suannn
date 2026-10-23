@@ -29,11 +29,11 @@ describe('farm schema constraints', () => {
     await database.db.insert(product).values({ id: productId, slug: 'multi-farm-product', name: 'ส้ม', category: 'fresh', vatTreatment: 'exempt' })
     await database.db.insert(farm).values(farmIds.map((id, index) => ({ id, slug: `farm-${index}`, name: `สวน ${index}` })))
     await database.db.insert(productFarm).values(farmIds.map((farmId, displayOrder) => ({ productId, farmId, displayOrder })))
-    await expect(database.db.insert(productFarm).values({ productId, farmId: farmIds[0]!, displayOrder: 0 })).rejects.toThrow()
-    await expect(database.db.delete(farm).where(eq(farm.id, farmIds[0]!))).rejects.toThrow()
-    await expect(database.db.delete(product).where(eq(product.id, productId))).rejects.toThrow()
-    await expect(database.db.insert(productFarm).values({ productId, farmId: '00000000-0000-4000-8000-000000000013', displayOrder: 0 })).rejects.toThrow()
-    await expect(database.db.insert(productFarm).values({ productId, farmId: farmIds[0]!, displayOrder: 20 })).rejects.toThrow()
+    await expect(database.db.insert(productFarm).values({ productId, farmId: farmIds[0]!, displayOrder: 0 }).execute()).rejects.toThrow()
+    await expect(database.db.delete(farm).where(eq(farm.id, farmIds[0]!)).execute()).rejects.toThrow()
+    await expect(database.db.delete(product).where(eq(product.id, productId)).execute()).rejects.toThrow()
+    await expect(database.db.insert(productFarm).values({ productId, farmId: '00000000-0000-4000-8000-000000000013', displayOrder: 0 }).execute()).rejects.toThrow()
+    await expect(database.db.insert(productFarm).values({ productId, farmId: farmIds[0]!, displayOrder: 20 }).execute()).rejects.toThrow()
   })
 
   it('drops the legacy farm image URL columns and restricts media deletion', async () => {

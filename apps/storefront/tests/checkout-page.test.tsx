@@ -228,7 +228,8 @@ test('switching the billing address switches its phone', async () => {
   const user = userEvent.setup()
 
   await screen.findByText('1 Main Road Suthep Mueang Chiang Mai 50200')
-  await user.selectOptions(screen.getByLabelText('เลือกที่อยู่ออกใบเสร็จ'), officeAddressId)
+  await user.click(screen.getByRole('combobox', { name: 'เลือกที่อยู่ออกใบเสร็จ' }))
+  await user.click(await screen.findByRole('option', { name: 'Office · Mali Office' }))
   await user.click(await screen.findByRole('button', { name: 'แก้ไขที่อยู่ Office' }))
   expect((await screen.findByLabelText('เบอร์โทรศัพท์') as HTMLInputElement).value).toBe('0898765432')
 })
