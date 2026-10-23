@@ -50,6 +50,14 @@ function orderSnapshotOf(order: OrderRow, itemRows: OrderItemRow[]): OrderSnapsh
     subtotalSatang: order.subtotalSatang,
     shippingSatang: order.shippingSatang,
     totalSatang: order.totalSatang,
+    discount: order.discountCode && order.discountKind
+      ? {
+        code: order.discountCode,
+        kind: order.discountKind,
+        itemDiscountSatang: order.discountSatang,
+        shippingDiscountSatang: order.shippingDiscountSatang,
+      }
+      : null,
     currency: 'THB',
     paymentMethod: order.paymentMethod as OrderSnapshot['paymentMethod'],
     createdAt: order.createdAt.toISOString(),
@@ -64,6 +72,7 @@ function orderSnapshotOf(order: OrderRow, itemRows: OrderItemRow[]): OrderSnapsh
       unitPriceSatang: item.unitPriceSatang,
       quantity: item.quantity,
       lineTotalSatang: item.lineTotalSatang,
+      discountSatang: item.discountSatang,
       vatTreatment: item.vatTreatment,
     })),
   }

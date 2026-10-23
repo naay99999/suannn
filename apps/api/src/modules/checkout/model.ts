@@ -3,7 +3,29 @@ import { t } from 'elysia'
 const uuid = t.String({ format: 'uuid' })
 const nullableUuid = t.Union([uuid, t.Null()])
 const nullableString = t.Union([t.String(), t.Null()])
-const emptyBody = t.Object({}, { additionalProperties: false })
+const quoteBody = t.Object({
+  email: t.Optional(t.String({ format: 'email', minLength: 3, maxLength: 254 })),
+}, { additionalProperties: false })
+
+const quoteDiscount = t.Object({
+  code: t.String(),
+  status: t.Union([t.Literal('applied'), t.Literal('pending_email'), t.Literal('not_applicable')]),
+  reason: t.Union([
+    t.Literal('unknown'),
+    t.Literal('not_started'),
+    t.Literal('expired'),
+    t.Literal('used_up'),
+    t.Literal('already_used'),
+    t.Literal('min_subtotal'),
+    t.Literal('min_quantity'),
+    t.Literal('no_eligible_items'),
+    t.Literal('first_order_only'),
+    t.Null(),
+  ]),
+  shortfallSatang: t.Union([t.Integer({ minimum: 0 }), t.Null()]),
+  itemDiscountSatang: t.Integer({ minimum: 0 }),
+  freeShipping: t.Boolean(),
+}, { additionalProperties: false })
 
 const quoteLine = t.Object({
   variantId: uuid,
@@ -14,6 +36,7 @@ const quoteLine = t.Object({
   quantity: t.Integer({ minimum: 1, maximum: 99 }),
   unitPriceSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   lineTotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  discountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 }, { additionalProperties: false })
 
 const quote = t.Object({
@@ -22,7 +45,10 @@ const quote = t.Object({
   currency: t.Literal('THB'),
   lines: t.Array(quoteLine),
   subtotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  discountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  shippingDiscountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   shippingSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  discount: t.Union([quoteDiscount, t.Null()]),
   totalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   expiresAt: t.String({ format: 'date-time' }),
   quoteToken: t.String({ minLength: 1, maxLength: 8192 }),
@@ -87,7 +113,7 @@ const idempotencyHeaders = t.Object({
 })
 
 export const checkoutModels = {
-  'checkout.emptyBody': emptyBody,
+  'checkout.quoteBody': quoteBody,
   'checkout.quoteLine': quoteLine,
   'checkout.quote': quote,
   'checkout.placeOrderBody': placeOrderBody,

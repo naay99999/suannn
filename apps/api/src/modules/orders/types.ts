@@ -1,4 +1,5 @@
 import type { AuditContext } from '../audit/model'
+import type { DiscountKind } from '../discounts/types'
 
 export type OrderPrincipal =
   | { kind: 'customer'; userId: string }
@@ -67,6 +68,8 @@ export interface OrderItemSnapshot {
   unitPriceSatang: number
   quantity: number
   lineTotalSatang: number
+  // Optional so replayed command results stored before discounts existed still validate.
+  discountSatang?: number
   // Optional so replayed command results stored before VAT snapshots existed still validate.
   vatTreatment?: 'standard' | 'exempt'
 }
@@ -80,6 +83,13 @@ export interface OrderBillingSnapshot {
   district: string
   province: string
   postalCode: string
+}
+
+export interface OrderDiscountSnapshot {
+  code: string
+  kind: DiscountKind
+  itemDiscountSatang: number
+  shippingDiscountSatang: number
 }
 
 export interface OrderSnapshot {
@@ -101,6 +111,8 @@ export interface OrderSnapshot {
   subtotalSatang: number
   shippingSatang: number
   totalSatang: number
+  // Optional so replayed command results stored before discounts existed still validate; null when no code was used.
+  discount?: OrderDiscountSnapshot | null
   currency: 'THB'
   paymentMethod: 'cod' | 'stripe'
   createdAt: string

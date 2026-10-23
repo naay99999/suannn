@@ -107,6 +107,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
     subtotalSatang: order.subtotalSatang,
     shippingSatang: order.shippingSatang,
     totalSatang: order.totalSatang,
+    ...(order.discount !== undefined ? { discount: order.discount } : {}),
     currency: order.currency,
     paymentMethod: order.paymentMethod,
     createdAt: order.createdAt,
@@ -121,6 +122,7 @@ function staffOrderProjection(order: OrderDetail): OrderDetail {
       unitPriceSatang: item.unitPriceSatang,
       quantity: item.quantity,
       lineTotalSatang: item.lineTotalSatang,
+      ...(item.discountSatang !== undefined ? { discountSatang: item.discountSatang } : {}),
     })),
     payment: {
       id: order.payment.id,

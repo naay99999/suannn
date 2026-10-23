@@ -16,6 +16,7 @@ import type { StripeCheckoutService } from './stripe-service'
 import type { ConsentService } from '../tracking/consent/service'
 import { sanitizeTrackingContext, type PlacementTracking } from '../tracking/context'
 import type { PlaceCodInput, PlaceStripeInput } from '../orders/types'
+import { normalizeDiscountEmail } from '../discounts/evaluate'
 import { checkoutModels } from './model'
 import { ordersModels } from '../orders/model'
 
@@ -122,19 +123,19 @@ export function createStoreCheckoutModule(
     .model(httpModels)
     .model(checkoutModels)
     .model(ordersModels)
-    .post('/quote', async ({ request, requestContext, set }) => {
+    .post('/quote', async ({ request, body, requestContext, set }) => {
       const { principal } = await resolveCheckoutPrincipal(auth, request, config.secureCookies)
       const limited = await rateLimitGuestCheckout(principal, limiter, requestContext, set)
       if (limited) return limited
-      return quotes.create(principal, new Date())
+      return quotes.create(principal, new Date(), { email: body.email ? normalizeDiscountEmail(body.email) : null })
     }, {
-      parse: [parseStrictBody([]), 'json'],
+      parse: [parseStrictBody(['email']), 'json'],
       browserMutation: 'storefront',
-      body: 'checkout.emptyBody',
+      body: 'checkout.quoteBody',
       response: { 200: 'checkout.quote', ...errors, 429: 'http.error' },
       detail: {
         summary: 'Create a store checkout quote',
-        description: 'Returns current cart prices and shipping with a short-lived signed quote. The quote does not reserve inventory.',
+        description: 'Returns current cart prices, any applied discount and shipping with a short-lived signed quote. The optional email only evaluates a guest discount and is never stored. The quote does not reserve inventory.',
         tags: ['Store Checkout'],
         security: [],
       },

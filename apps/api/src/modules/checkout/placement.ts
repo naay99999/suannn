@@ -25,6 +25,7 @@ import { enqueuePurchaseTracking } from '../tracking/purchase'
 import { assertAuditMetadata } from '../audit/model'
 import type { AuditEvent } from '../audit/model'
 import type { CartPrincipal } from '../cart/types'
+import { resolvePlacementDiscount } from './placement-discount'
 import { checkoutQuoteOwner, canonicalizeCheckoutQuote, decodeSignedCheckoutQuote } from './quote'
 import { CodPaymentProvider } from '../payments/cod'
 import { DomainError } from '../../shared/domain-error'
@@ -67,11 +68,13 @@ export interface PlacedOrderRecord {
 interface LockedCart {
   id: string
   version: number
+  discountCodeId: string | null
   lines: Array<{ variantId: string; quantity: number }>
 }
 
 interface CatalogSnapshot {
   productId: string
+  productCategory: 'fresh' | 'processed' | null
   variantId: string
   sku: string
   productName: string
@@ -330,7 +333,7 @@ async function lockedCart(tx: DatabaseTransaction, principal: CartPrincipal): Pr
   const ownerCondition = principal.kind === 'customer'
     ? eq(cart.customerId, principal.userId)
     : and(eq(cart.guestTokenHash, principal.tokenHash), gt(cart.expiresAt, sql`transaction_timestamp()`))
-  const [row] = await tx.select({ id: cart.id, version: cart.version }).from(cart)
+  const [row] = await tx.select({ id: cart.id, version: cart.version, discountCodeId: cart.discountCodeId }).from(cart)
     .where(ownerCondition).for('update').limit(1)
   if (!row) throw new DomainError('QUOTE_STALE')
   const lines = await tx.select({ variantId: cartItem.variantId, quantity: cartItem.quantity })
@@ -343,6 +346,7 @@ async function readLockedCatalog(tx: DatabaseTransaction, lines: LockedCart['lin
   const variantIds = lines.map(({ variantId }) => variantId).sort()
   const rows = await tx.select({
     productId: product.id,
+    productCategory: product.category,
     variantId: productVariant.id,
     sku: productVariant.sku,
     productName: product.name,
@@ -454,6 +458,29 @@ export function createPlaceOrderInTransaction(
       throw new DomainError('QUOTE_STALE')
     }
 
+    // Lock order: cart, settings, discount rule, then the reservation flow below.
+    const quotedPrices = new Map(quotePayload.lines.map((line) => [line.variantId, line.unitPriceSatang]))
+    const discountCatalog = await readLockedCatalog(tx, ownerCart.lines)
+    const discountLines = ownerCart.lines.map((line) => {
+      const item = discountCatalog.get(line.variantId)!
+      return {
+        variantId: line.variantId,
+        productId: item.productId,
+        category: item.productCategory,
+        quantity: line.quantity,
+        lineTotalSatang: safeLineTotal(quotedPrices.get(line.variantId) ?? 0, line.quantity),
+      }
+    })
+    const placementDiscount = await resolvePlacementDiscount(tx, {
+      codeId: ownerCart.discountCodeId,
+      principal,
+      contactEmail: input.contact.email,
+      shippingSatang: currentShippingSatang,
+      lines: discountLines,
+      quoted: quotePayload.discount,
+      now,
+    })
+
     const billing = await normalizeAddress(tx, principal, input.billingAddress)
     const address = input.shippingAddress
       ? await normalizeAddress(tx, principal, input.shippingAddress)
@@ -491,14 +518,17 @@ export function createPlaceOrderInTransaction(
         if (!item || item.productStatus !== 'published' || item.productArchivedAt
           || !item.salesEnabled || item.variantArchivedAt) throw new DomainError('QUOTE_STALE')
         const unitPriceSatang = safeMoney(item.priceSatang)
+        const earlier = discountCatalog.get(line.variantId)
+        if (earlier?.productCategory !== item.productCategory) throw new DomainError('QUOTE_STALE')
         return { variantId: line.variantId, quantity: line.quantity, unitPriceSatang }
       }).sort((left, right) => left.variantId.localeCompare(right.variantId))
       const currentPayload = {
-        version: 1 as const,
+        version: 2 as const,
         owner: expectedOwner,
         cartVersion: ownerCart.version,
         settingsVersion: settings.version,
         shippingSatang: currentShippingSatang,
+        discount: quotePayload.discount,
         lines: verifiedQuote.lines,
         expiresAt: quotePayload.expiresAt,
       }
@@ -517,8 +547,15 @@ export function createPlaceOrderInTransaction(
       return { ...line, ...item, lineTotalSatang }
     })
     const subtotalSatang = lineSnapshots.reduce((sum, line) => safeAdd(sum, line.lineTotalSatang), 0)
-    const shippingSatang = currentShippingSatang
-    const totalSatang = safeAdd(subtotalSatang, shippingSatang)
+    const discountSatang = placementDiscount?.itemDiscountSatang ?? 0
+    const shippingDiscountSatang = placementDiscount?.shippingDiscountSatang ?? 0
+    const lineDiscounts = lineSnapshots.map((line) => placementDiscount?.lineDiscounts.get(line.variantId) ?? 0)
+    if (discountSatang > subtotalSatang || shippingDiscountSatang > currentShippingSatang
+      || lineDiscounts.reduce((sum, value) => sum + value, 0) !== discountSatang) {
+      throw new DomainError('INVALID_ORDER_COMMAND')
+    }
+    const shippingSatang = currentShippingSatang - shippingDiscountSatang
+    const totalSatang = safeAdd(subtotalSatang - discountSatang, shippingSatang)
 
     const isGuest = principal.kind === 'guest'
     const guestAccessTokenNonce = isGuest ? randomBytes(32).toString('base64url') : null
@@ -557,13 +594,19 @@ export function createPlaceOrderInTransaction(
       subtotalSatang,
       shippingSatang,
       totalSatang,
+      discountCodeId: placementDiscount?.ruleId ?? null,
+      discountCode: placementDiscount?.code ?? null,
+      discountKind: placementDiscount?.kind ?? null,
+      discountSatang,
+      shippingDiscountSatang,
+      discountEmail: placementDiscount?.email ?? null,
       currency: 'THB',
       paymentMethod,
       status: paymentMethod === 'cod' ? 'placed' : 'pending_payment',
       reservationId: reservation.id,
       quoteFingerprint: quoteFingerprint(quoteCanonical),
     })
-    const orderItems = await tx.insert(orderItem).values(lineSnapshots.map((line) => ({
+    const orderItems = await tx.insert(orderItem).values(lineSnapshots.map((line, index) => ({
       id: crypto.randomUUID(),
       orderId,
       productId: line.productId,
@@ -575,6 +618,7 @@ export function createPlaceOrderInTransaction(
       unitPriceSatang: line.unitPriceSatang,
       quantity: line.quantity,
       lineTotalSatang: line.lineTotalSatang,
+      discountSatang: lineDiscounts[index]!,
       vatTreatment: line.vatTreatment,
     }))).returning({ id: orderItem.id, variantId: orderItem.variantId, quantity: orderItem.quantity })
     const itemByVariant = new Map(orderItems.map((item) => [item.variantId, item]))
@@ -643,7 +687,7 @@ export function createPlaceOrderInTransaction(
       toStatus: orderStatus,
       actorType: principal.kind,
       actorId: principal.kind === 'customer' ? principal.userId : orderId,
-      metadata: { totalSatang, shippingSatang, reservationId: reservation.id, lineCount: lineSnapshots.length },
+      metadata: { totalSatang, shippingSatang, discountSatang, shippingDiscountSatang, reservationId: reservation.id, lineCount: lineSnapshots.length },
     })
     await recordOrderAudit(tx, {
       id: crypto.randomUUID(),

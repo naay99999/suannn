@@ -23,7 +23,15 @@ const item = t.Object({
   unitPriceSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   quantity: t.Integer({ minimum: 1, maximum: 99 }),
   lineTotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  discountSatang: t.Optional(t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
   vatTreatment: t.Optional(t.Union([t.Literal('standard'), t.Literal('exempt')])),
+}, { additionalProperties: false })
+
+const orderDiscount = t.Object({
+  code: t.String(),
+  kind: t.Union([t.Literal('percent'), t.Literal('fixed'), t.Literal('free_shipping')]),
+  itemDiscountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  shippingDiscountSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 }, { additionalProperties: false })
 
 const billing = t.Object({
@@ -55,6 +63,7 @@ const snapshot = t.Object({
   subtotalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   shippingSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
   totalSatang: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  discount: t.Optional(t.Union([orderDiscount, t.Null()])),
   currency: t.Literal('THB'),
   paymentMethod: t.Union([t.Literal('cod'), t.Literal('stripe')]),
   createdAt: t.String({ format: 'date-time' }),

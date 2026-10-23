@@ -201,6 +201,25 @@ function toDetail(detail: DiscountDetailRow): DiscountAdminDetail {
   }
 }
 
+function toCartDiscount(rule: DiscountRule, evaluation: DiscountEvaluation): CartDiscount {
+  const base = { code: rule.code, reason: null, shortfallSatang: null, itemDiscountSatang: 0, freeShipping: false }
+  if (evaluation.status === 'applied') {
+    return {
+      ...base,
+      status: 'applied',
+      itemDiscountSatang: evaluation.itemDiscountSatang,
+      freeShipping: rule.kind === 'free_shipping',
+    }
+  }
+  if (evaluation.status === 'pending_email') return { ...base, status: 'pending_email' }
+  return {
+    ...base,
+    status: 'not_applicable',
+    reason: evaluation.reason,
+    shortfallSatang: evaluation.shortfallSatang,
+  }
+}
+
 export class DiscountService {
   constructor(
     private readonly repository: Pick<DiscountRepository, 'list' | 'detail' | 'create' | 'update' | 'remove'>
@@ -230,23 +249,27 @@ export class DiscountService {
     if (!cart.discountCodeId) return null
     const rule = await this.reads().getRuleById(cart.discountCodeId)
     if (!rule) return null
-    const evaluation = await this.evaluateForCart(principal, cart, rule)
-    const base = { code: rule.code, reason: null, shortfallSatang: null, itemDiscountSatang: 0, freeShipping: false }
-    if (evaluation.status === 'applied') {
-      return {
-        ...base,
-        status: 'applied',
-        itemDiscountSatang: evaluation.itemDiscountSatang,
-        freeShipping: rule.kind === 'free_shipping',
-      }
-    }
-    if (evaluation.status === 'pending_email') return { ...base, status: 'pending_email' }
-    return {
-      ...base,
-      status: 'not_applicable',
-      reason: evaluation.reason,
-      shortfallSatang: evaluation.shortfallSatang,
-    }
+    return toCartDiscount(rule, await this.evaluateForCart(principal, cart, rule))
+  }
+
+  // Evaluates the cart's attached code for a checkout quote. A customer always uses the account
+  // email; a guest uses the supplied email, or none (which leaves email-bound codes pending).
+  async quoteDiscount(
+    principal: CartPrincipal,
+    cart: CartDetail,
+    shippingSatang: number,
+    email: string | null,
+    now: Date = new Date(),
+  ): Promise<{ rule: DiscountRule; evaluation: DiscountEvaluation; view: CartDiscount } | null> {
+    if (!cart.discountCodeId) return null
+    const rule = await this.reads().getRuleById(cart.discountCodeId)
+    if (!rule) return null
+    const evaluation = await this.evaluateForCart(principal, cart, rule, {
+      shippingSatang,
+      email: email === null ? null : normalizeDiscountEmail(email),
+      now,
+    })
+    return { rule, evaluation, view: toCartDiscount(rule, evaluation) }
   }
 
   private reads() {
@@ -266,13 +289,16 @@ export class DiscountService {
     principal: CartPrincipal,
     cart: CartDetail,
     rule: DiscountRule,
+    override?: { shippingSatang: number; email: string | null; now: Date },
   ): Promise<DiscountEvaluation> {
     const reads = this.reads()
-    const email = principal.kind === 'customer' ? await reads.accountEmail(principal.userId) : null
+    const email = principal.kind === 'customer'
+      ? await reads.accountEmail(principal.userId)
+      : override?.email ?? null
     const customerId = principal.kind === 'customer' ? principal.userId : null
     // evaluateDiscount treats null usage as zeros, so real usage is always fetched.
     const usage = await reads.currentUsage(rule.id, email, customerId)
-    const settings = await this.commerceSettings?.get()
+    const settings = override ? undefined : await this.commerceSettings?.get()
     return evaluateDiscount({
       rule,
       lines: cart.lines
@@ -284,10 +310,10 @@ export class DiscountService {
           quantity: line.quantity,
           lineTotalSatang: line.priceSatang! * line.quantity,
         })),
-      shippingSatang: settings?.shippingFeeSatang ?? 0,
+      shippingSatang: override?.shippingSatang ?? settings?.shippingFeeSatang ?? 0,
       email,
       usage,
-      now: new Date(),
+      now: override?.now ?? new Date(),
     })
   }
 

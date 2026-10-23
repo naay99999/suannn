@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { CartDetail, CartPrincipal } from '../cart/types'
 import type { CartService } from '../cart/service'
+import type { DiscountService } from '../discounts/service'
 import type { CommerceSettingsService } from '../commerce-settings/service'
 import { DomainError } from '../../shared/domain-error'
 import type { CheckoutQuote, CheckoutQuoteLine, SignedCheckoutQuotePayload } from './types'
@@ -9,7 +10,7 @@ import type { CheckoutQuote, CheckoutQuoteLine, SignedCheckoutQuotePayload } fro
 const quoteLifetimeMs = 15 * 60 * 1000
 const maximumSatang = Number.MAX_SAFE_INTEGER
 const quotePurpose = 'suannn:checkout-quote:v1'
-const quoteVersion = 1 as const
+const quoteVersion = 2 as const
 
 export function checkoutQuoteOwner(principal: CartPrincipal, secret: Uint8Array): SignedCheckoutQuotePayload['owner'] {
   if (principal?.kind === 'customer' && typeof principal.userId === 'string' && principal.userId.trim()) {
@@ -34,6 +35,14 @@ function asPayload(value: unknown): SignedCheckoutQuotePayload | null {
     || !Number.isSafeInteger(payload.shippingSatang) || (payload.shippingSatang ?? -1) < 0
     || typeof payload.expiresAt !== 'string' || !Number.isFinite(Date.parse(payload.expiresAt))
     || !Array.isArray(payload.lines)) return null
+  const discount = payload.discount
+  if (discount !== null) {
+    if (!discount || typeof discount !== 'object' || Array.isArray(discount)
+      || typeof discount.codeId !== 'string' || !discount.codeId
+      || !Number.isSafeInteger(discount.codeVersion) || discount.codeVersion < 1
+      || !Number.isSafeInteger(discount.itemDiscountSatang) || discount.itemDiscountSatang < 0
+      || !Number.isSafeInteger(discount.shippingDiscountSatang) || discount.shippingDiscountSatang < 0) return null
+  }
   for (const line of payload.lines) {
     if (!line || typeof line.variantId !== 'string' || !line.variantId
       || !Number.isSafeInteger(line.quantity) || line.quantity < 1
@@ -67,6 +76,12 @@ export function canonicalizeCheckoutQuote(payload: SignedCheckoutQuotePayload) {
     cartVersion: payload.cartVersion,
     settingsVersion: payload.settingsVersion,
     shippingSatang: payload.shippingSatang,
+    discount: payload.discount === null ? null : {
+      codeId: payload.discount.codeId,
+      codeVersion: payload.discount.codeVersion,
+      itemDiscountSatang: payload.discount.itemDiscountSatang,
+      shippingDiscountSatang: payload.discount.shippingDiscountSatang,
+    },
     lines: [...payload.lines]
       .sort((left, right) => left.variantId.localeCompare(right.variantId))
       .map(({ variantId, quantity, unitPriceSatang }) => ({ variantId, quantity, unitPriceSatang })),
@@ -104,13 +119,15 @@ export class QuoteService {
     private readonly cart: Pick<CartService, 'get'>,
     private readonly settings: Pick<CommerceSettingsService, 'get'>,
     private readonly secret: Uint8Array,
+    private readonly discounts?: Pick<DiscountService, 'quoteDiscount'>,
   ) {
     if (!(secret instanceof Uint8Array) || secret.byteLength < 32) {
       throw new Error('COMMERCE_SECRET must decode to at least 32 bytes')
     }
   }
 
-  async create(principal: CartPrincipal, now: Date): Promise<CheckoutQuote> {
+  // `options.email` is used only to evaluate the discount for a guest; it is never signed.
+  async create(principal: CartPrincipal, now: Date, options: { email?: string | null } = {}): Promise<CheckoutQuote> {
     const owner = checkoutQuoteOwner(principal, this.secret)
     if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new DomainError('QUOTE_STALE')
 
@@ -121,7 +138,17 @@ export class QuoteService {
     const lines = this.assertPurchasable(cart)
     const shippingSatang = this.assertMoney(settings.shippingFeeSatang)
     const subtotalSatang = lines.reduce((sum, line) => safeAdd(sum, line.lineTotalSatang), 0)
-    const totalSatang = safeAdd(subtotalSatang, shippingSatang)
+    const quoted = await this.discounts?.quoteDiscount(principal, cart, shippingSatang, options.email ?? null, now) ?? null
+    const evaluation = quoted?.evaluation.status === 'applied' ? quoted.evaluation : null
+    const discountSatang = evaluation?.itemDiscountSatang ?? 0
+    const shippingDiscountSatang = evaluation?.shippingDiscountSatang ?? 0
+    if (discountSatang > subtotalSatang || shippingDiscountSatang > shippingSatang) {
+      throw new DomainError('CHECKOUT_TOTAL_OUT_OF_RANGE')
+    }
+    const lineDiscounts = new Map(evaluation?.lineDiscounts.map((entry) => [entry.variantId, entry.discountSatang]))
+    const quotedLines = lines.map((line) => ({ ...line, discountSatang: lineDiscounts.get(line.variantId) ?? 0 }))
+    const chargedShippingSatang = shippingSatang - shippingDiscountSatang
+    const totalSatang = safeAdd(subtotalSatang - discountSatang, chargedShippingSatang)
     const expiresAt = new Date(now.getTime() + quoteLifetimeMs).toISOString()
     const payload: SignedCheckoutQuotePayload = {
       version: quoteVersion,
@@ -129,6 +156,14 @@ export class QuoteService {
       cartVersion: cart.cartVersion,
       settingsVersion: settings.version,
       shippingSatang,
+      discount: quoted && evaluation
+        ? {
+          codeId: quoted.rule.id,
+          codeVersion: quoted.rule.version,
+          itemDiscountSatang: discountSatang,
+          shippingDiscountSatang,
+        }
+        : null,
       lines: lines.map(({ variantId, quantity, unitPriceSatang }) => ({
         variantId,
         quantity,
@@ -141,16 +176,19 @@ export class QuoteService {
       cartVersion: cart.cartVersion,
       settingsVersion: settings.version,
       currency: 'THB',
-      lines,
+      lines: quotedLines,
       subtotalSatang,
-      shippingSatang,
+      discountSatang,
+      shippingDiscountSatang,
+      shippingSatang: chargedShippingSatang,
+      discount: quoted?.view ?? null,
       totalSatang,
       expiresAt,
       quoteToken: this.encodeToken(payload),
     }
   }
 
-  async verify(inputToken: string, principal: CartPrincipal, now: Date): Promise<CheckoutQuote> {
+  async verify(inputToken: string, principal: CartPrincipal, now: Date, options: { email?: string | null } = {}): Promise<CheckoutQuote> {
     const owner = checkoutQuoteOwner(principal, this.secret)
     if (typeof inputToken !== 'string' || !(now instanceof Date) || !Number.isFinite(now.getTime())) {
       throw new DomainError('QUOTE_STALE')
@@ -164,7 +202,7 @@ export class QuoteService {
     let current: CheckoutQuote
     try {
       const originalCreatedAt = new Date(Date.parse(payload.expiresAt) - quoteLifetimeMs)
-      current = await this.create(principal, originalCreatedAt)
+      current = await this.create(principal, originalCreatedAt, options)
     } catch (error) {
       if (error instanceof DomainError) {
         if (error.code === 'CHECKOUT_TOTAL_OUT_OF_RANGE') throw error
@@ -204,6 +242,7 @@ export class QuoteService {
         quantity: line.quantity,
         unitPriceSatang,
         lineTotalSatang,
+        discountSatang: 0,
       }
     }).sort((left, right) => left.variantId.localeCompare(right.variantId))
   }
