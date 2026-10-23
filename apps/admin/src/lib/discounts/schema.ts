@@ -4,7 +4,7 @@ import { bangkokInputToIso } from '../inventory/forms'
 import type { Discount, DiscountInput, DiscountUpdateInput } from './api'
 
 export type DiscountKind = Discount['kind']
-export type Eligibility = 'all' | 'categories' | 'products'
+export type Eligibility = 'all' | 'selected'
 
 // Numeric inputs stay as text so an empty box means "no limit" and never becomes 0.
 export interface DiscountFormValues {
@@ -104,7 +104,7 @@ export const discountFormSchema = z.object({
   maxDiscountBaht: z.string(),
   minSubtotalBaht: z.string(),
   minQuantity: z.string(),
-  eligibility: z.enum(['all', 'categories', 'products']),
+  eligibility: z.enum(['all', 'selected']),
   categories: z.array(z.string()),
   productIds: z.array(z.string()),
   startsAt: z.string(),
@@ -133,8 +133,7 @@ export const discountFormSchema = z.object({
     if (!blank(values[field]) && !POSITIVE_INTEGER.test(values[field].trim())) fail(field, 'ระบุจำนวนเต็มตั้งแต่ 1 ขึ้นไป หรือเว้นว่างถ้าไม่จำกัด')
   }
 
-  if (values.eligibility === 'categories' && values.categories.length === 0) fail('categories', 'เลือกอย่างน้อยหนึ่งหมวด')
-  if (values.eligibility === 'products' && values.productIds.length === 0) fail('productIds', 'เลือกอย่างน้อยหนึ่งสินค้า')
+  if (values.eligibility === 'selected' && values.categories.length === 0 && values.productIds.length === 0) fail('categories', 'เลือกอย่างน้อยหนึ่งหมวดหมู่หรือหนึ่งสินค้า')
 
   const start = blank(values.startsAt) ? null : validInstant(values.startsAt)
   const end = blank(values.endsAt) ? null : validInstant(values.endsAt)
@@ -162,8 +161,8 @@ export function toDiscountInput(values: DiscountFormValues): DiscountInput {
     maxDiscountSatang: percent ? satangOrNull(values.maxDiscountBaht) : null,
     minSubtotalSatang: satangOrNull(values.minSubtotalBaht),
     minQuantity: intOrNull(values.minQuantity),
-    eligibleCategories: values.eligibility === 'categories' ? values.categories : [],
-    eligibleProductIds: values.eligibility === 'products' ? values.productIds : [],
+    eligibleCategories: values.eligibility === 'selected' ? values.categories : [],
+    eligibleProductIds: values.eligibility === 'selected' ? values.productIds : [],
     startsAt: blank(values.startsAt) ? null : bangkokInputToIso(values.startsAt),
     endsAt: blank(values.endsAt) ? null : bangkokInputToIso(values.endsAt),
     usageLimit: intOrNull(values.usageLimit),
@@ -191,7 +190,7 @@ export function discountToFormValues(discount: Discount): DiscountFormValues {
     maxDiscountBaht: bahtText(discount.maxDiscountSatang),
     minSubtotalBaht: bahtText(discount.minSubtotalSatang),
     minQuantity: numberText(discount.minQuantity),
-    eligibility: discount.eligibleProductIds.length > 0 ? 'products' : discount.eligibleCategories.length > 0 ? 'categories' : 'all',
+    eligibility: discount.eligibleProductIds.length > 0 || discount.eligibleCategories.length > 0 ? 'selected' : 'all',
     categories: discount.eligibleCategories,
     productIds: discount.eligibleProductIds,
     startsAt: bangkokIsoToInput(discount.startsAt),

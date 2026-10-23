@@ -38,9 +38,10 @@ export function receiptTotalsRows(snapshot: ReceiptSnapshot, vat: boolean): Arra
   if (discount && discount.itemDiscountSatang > 0) {
     rows.push([`ส่วนลด (${discount.code})`, -discount.itemDiscountSatang])
   }
-  rows.push(['ค่าจัดส่ง', snapshot.shippingSatang])
-  if (discount && discount.shippingDiscountSatang > 0) {
-    rows.push([`ส่วนลดค่าจัดส่ง (${discount.code})`, discount.shippingDiscountSatang])
+  const shippingDiscount = discount?.shippingDiscountSatang ?? 0
+  rows.push(['ค่าจัดส่ง', snapshot.shippingSatang + shippingDiscount])
+  if (discount && shippingDiscount > 0) {
+    rows.push([`ส่วนลดค่าจัดส่ง (${discount.code})`, -shippingDiscount])
   }
   if (vat) {
     rows.push(

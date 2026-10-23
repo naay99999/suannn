@@ -68,8 +68,7 @@ function RadioOption({ label, disabled, ...props }: { label: string } & InputHTM
 const kinds: DiscountKind[] = ['percent', 'fixed', 'free_shipping']
 const eligibilityOptions: { value: Eligibility; label: string }[] = [
   { value: 'all', label: 'ทุกสินค้า' },
-  { value: 'categories', label: 'เฉพาะหมวดหมู่ที่เลือก' },
-  { value: 'products', label: 'เฉพาะสินค้าที่เลือก' },
+  { value: 'selected', label: 'เลือกเฉพาะ' },
 ]
 
 export function DiscountForm({ discount, canUpdate, onReload }: {
@@ -107,7 +106,10 @@ export function DiscountForm({ discount, canUpdate, onReload }: {
       }
     } catch (error) {
       const code = error instanceof ApiRequestError ? error.code : ''
-      if (code === 'DISCOUNT_CODE_TAKEN') form.setError('code', { message: apiErrorMessage(error) }, { shouldFocus: true })
+      if (code === 'DISCOUNT_CODE_TAKEN') {
+        form.setError('code', { message: apiErrorMessage(error) }, { shouldFocus: true })
+        return
+      }
       setServerError({ message: apiErrorMessage(error), conflict: code === 'DISCOUNT_VERSION_CONFLICT' })
     }
   })
@@ -168,7 +170,7 @@ export function DiscountForm({ discount, canUpdate, onReload }: {
           <div aria-labelledby="discount-eligibility-label" className="flex flex-wrap gap-x-6 gap-y-2" role="radiogroup">
             {eligibilityOptions.map((option) => <RadioOption disabled={readOnly} key={option.value} label={option.label} value={option.value} {...form.register('eligibility')} />)}
           </div>
-          {eligibility === 'categories' && <Controller control={form.control} name="categories" render={({ field }) => (
+          {eligibility === 'selected' && <Controller control={form.control} name="categories" render={({ field }) => (
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               {Object.entries(categoryLabels).map(([value, label]) => (
                 <label className="flex items-center gap-2 text-sm" key={value}>
@@ -178,10 +180,10 @@ export function DiscountForm({ discount, canUpdate, onReload }: {
               ))}
             </div>
           )} />}
-          {eligibility === 'products' && <Controller control={form.control} name="productIds" render={({ field }) => (
+          {eligibility === 'selected' && <Controller control={form.control} name="productIds" render={({ field }) => (
             <ProductPicker disabled={readOnly} invalid={Boolean(errors.productIds)} onChange={field.onChange} value={field.value} />
           )} />}
-          <FieldDescription>ส่วนลดคิดจากสินค้าที่ร่วมรายการเท่านั้น</FieldDescription>
+          <FieldDescription>{eligibility === 'selected' ? 'สินค้าที่อยู่ในหมวดหมู่ที่เลือก หรือเป็นสินค้าที่เลือก ร่วมรายการ ส่วนลดคิดจากสินค้าที่ร่วมรายการเท่านั้น' : 'ส่วนลดคิดจากสินค้าที่ร่วมรายการเท่านั้น'}</FieldDescription>
           <FieldError>{errors.categories?.message ?? errors.productIds?.message}</FieldError>
         </Field>
       </Section>
@@ -199,7 +201,7 @@ export function DiscountForm({ discount, canUpdate, onReload }: {
         <Field data-invalid={Boolean(errors.allowedEmails)}>
           <FieldLabel htmlFor="discount-emails">อีเมลที่ใช้ได้</FieldLabel>
           <Textarea aria-describedby="discount-emails-description discount-emails-error" aria-invalid={Boolean(errors.allowedEmails)} className="min-h-24 font-mono" disabled={readOnly} id="discount-emails" {...form.register('allowedEmails')} />
-          <FieldDescription id="discount-emails-description">หนึ่งอีเมลต่อบรรทัด เว้นว่างถ้าทุกคนใช้ได้ ถ้ากรอก โค้ดนี้จะเป็นโค้ดส่วนตัวที่ไม่บอกใบ้ว่ามีอยู่จริงกับคนอื่น</FieldDescription>
+          <FieldDescription id="discount-emails-description">หนึ่งอีเมลต่อบรรทัด เว้นว่างถ้าทุกคนใช้ได้ ถ้ากรอก โค้ดนี้จะเป็นโค้ดส่วนตัวที่ไม่บอกใบ้ว่ามีอยู่จริงกับคนอื่น โค้ดเฉพาะลูกค้า ควรใช้ปุ่ม สุ่มโค้ด เพื่อไม่ให้เดาได้</FieldDescription>
           <FieldError id="discount-emails-error">{errors.allowedEmails?.message}</FieldError>
         </Field>
         <Controller control={form.control} name="firstOrderOnly" render={({ field }) => (

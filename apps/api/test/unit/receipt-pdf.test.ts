@@ -95,7 +95,7 @@ describe('receipt pdf', () => {
     ])
   })
 
-  it('prints the item discount as a negative row and the shipping discount as information', () => {
+  it('prints the item and shipping discounts as negative rows', () => {
     const rows = receiptTotalsRows(snapshot({
       discount: { code: 'SAVE10', itemDiscountSatang: 3470, shippingDiscountSatang: 4000 },
       totals: { exemptSatang: 21600, vatableSatang: 10335, vatSatang: 676, preVatSatang: 9659, totalSatang: 31935, vatRateBasisPoints: 700 },
@@ -103,10 +103,25 @@ describe('receipt pdf', () => {
     expect(rows.slice(0, 4)).toEqual([
       ['ราคาสินค้า', 34700],
       ['ส่วนลด (SAVE10)', -3470],
-      ['ค่าจัดส่ง', 725],
-      ['ส่วนลดค่าจัดส่ง (SAVE10)', 4000],
+      ['ค่าจัดส่ง', 4725],
+      ['ส่วนลดค่าจัดส่ง (SAVE10)', -4000],
     ])
     expect(rows.at(-1)).toEqual(['ยอดรวม', 31935, true])
+  })
+
+  it('free-shipping receipt rows add up to the total', () => {
+    const rows = receiptTotalsRows(snapshot({
+      shippingSatang: 0,
+      discount: { code: 'SHIPFREE', itemDiscountSatang: 0, shippingDiscountSatang: 4000 },
+      totals: { exemptSatang: 24000, vatableSatang: 10700, vatSatang: 747, preVatSatang: 9953, totalSatang: 34700, vatRateBasisPoints: 700 },
+    }), false)
+    expect(rows).toEqual([
+      ['ราคาสินค้า', 34700],
+      ['ค่าจัดส่ง', 4000],
+      ['ส่วนลดค่าจัดส่ง (SHIPFREE)', -4000],
+      ['ยอดรวม', 34700, true],
+    ])
+    expect(rows.slice(0, -1).reduce((sum, [, amount]) => sum + amount, 0)).toBe(34700)
   })
 
   it('renders a discounted receipt', async () => {

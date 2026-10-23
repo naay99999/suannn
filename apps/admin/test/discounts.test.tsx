@@ -256,10 +256,76 @@ test('products eligibility lists only non-archived products', async () => {
   const user = userEvent.setup()
   renderAt('/marketing/discounts/new')
 
-  await user.click(await screen.findByRole('radio', { name: 'เฉพาะสินค้าที่เลือก' }))
+  await user.click(await screen.findByRole('radio', { name: 'เลือกเฉพาะ' }))
 
   expect(await screen.findByRole('checkbox', { name: 'ทุเรียนหมอนทอง' })).toBeTruthy()
   expect(screen.queryByRole('checkbox', { name: 'มังคุดเก่า' })).toBeNull()
+})
+
+test('a code with both categories and products round-trips through open and save unchanged', async () => {
+  const mixed = { ...base, eligibleCategories: ['fresh'], eligibleProductIds: ['44444444-4444-4444-8444-444444444444'] }
+  routes[`GET /api/v1/admin/discounts/${base.id}`] = () => Response.json(detail(mixed))
+  routes[`PUT /api/v1/admin/discounts/${base.id}`] = () => Response.json(detail(mixed))
+  const user = userEvent.setup()
+  renderAt(`/marketing/discounts/${base.id}`)
+
+  const name = (await screen.findByLabelText('ชื่อโค้ด')) as HTMLInputElement
+  await waitFor(() => expect(name.value).toBe('ลดหน้าร้อน'))
+  expect((screen.getByRole('radio', { name: 'เลือกเฉพาะ' }) as HTMLInputElement).checked).toBe(true)
+  await user.click(screen.getByRole('button', { name: 'บันทึกโค้ด' }))
+
+  await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+  const body = calls.find((call) => call.method === 'PUT')!.body as Record<string, unknown>
+  expect(body.eligibleCategories).toEqual(['fresh'])
+  expect(body.eligibleProductIds).toEqual(['44444444-4444-4444-8444-444444444444'])
+})
+
+test('a categories-only code submits its categories and no products', async () => {
+  const only = { ...base, eligibleCategories: ['fresh'], eligibleProductIds: [] }
+  routes[`GET /api/v1/admin/discounts/${base.id}`] = () => Response.json(detail(only))
+  routes[`PUT /api/v1/admin/discounts/${base.id}`] = () => Response.json(detail(only))
+  const user = userEvent.setup()
+  renderAt(`/marketing/discounts/${base.id}`)
+
+  const name = (await screen.findByLabelText('ชื่อโค้ด')) as HTMLInputElement
+  await waitFor(() => expect(name.value).toBe('ลดหน้าร้อน'))
+  await user.click(screen.getByRole('button', { name: 'บันทึกโค้ด' }))
+
+  await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+  const body = calls.find((call) => call.method === 'PUT')!.body as Record<string, unknown>
+  expect(body.eligibleCategories).toEqual(['fresh'])
+  expect(body.eligibleProductIds).toEqual([])
+})
+
+test('selecting specific products requires a category or a product', async () => {
+  const user = userEvent.setup()
+  renderAt('/marketing/discounts/new')
+
+  await user.type(await screen.findByLabelText('รหัสโค้ด'), 'PICK')
+  await user.type(screen.getByLabelText('ชื่อโค้ด'), 'ทดสอบ')
+  await user.type(screen.getByLabelText('ลดกี่เปอร์เซ็นต์'), '5')
+  await user.click(screen.getByRole('radio', { name: 'เลือกเฉพาะ' }))
+  await user.click(screen.getByRole('button', { name: 'บันทึกโค้ด' }))
+
+  expect(await screen.findByText('เลือกอย่างน้อยหนึ่งหมวดหมู่หรือหนึ่งสินค้า')).toBeTruthy()
+  expect(calls.some((call) => call.method === 'POST')).toBe(false)
+})
+
+test('a taken code shows its message once, on the code field only', async () => {
+  routes['POST /api/v1/admin/discounts'] = () => Response.json({ code: 'DISCOUNT_CODE_TAKEN', message: 'x' }, { status: 409 })
+  const user = userEvent.setup()
+  renderAt('/marketing/discounts/new')
+
+  await user.type(await screen.findByLabelText('รหัสโค้ด'), 'DUP')
+  await user.type(screen.getByLabelText('ชื่อโค้ด'), 'ซ้ำ')
+  await user.type(screen.getByLabelText('ลดกี่เปอร์เซ็นต์'), '5')
+  await user.click(screen.getByRole('button', { name: 'บันทึกโค้ด' }))
+
+  await waitFor(() => expect(calls.some((call) => call.method === 'POST')).toBe(true))
+  await waitFor(() => expect(document.getElementById('discount-code-error')?.textContent ?? '').not.toBe(''))
+  const message = document.getElementById('discount-code-error')!.textContent!
+  expect(screen.getAllByText(message)).toHaveLength(1)
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 test('bangkokIsoToInput renders UTC instants as Bangkok wall time', () => {
