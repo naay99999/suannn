@@ -16,12 +16,14 @@ import {
 } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 import { inventoryLot, inventoryReservation, inventoryReservationAllocation } from './inventory'
+import { discountCode } from './marketing'
 import { product, productVariant } from './products'
 
 export const cart = pgTable('cart', {
   id: uuid('id').defaultRandom().primaryKey(),
   customerId: text('customer_id').references(() => user.id, { onDelete: 'cascade' }),
   guestTokenHash: text('guest_token_hash'),
+  discountCodeId: uuid('discount_code_id').references(() => discountCode.id, { onDelete: 'set null' }),
   version: integer('version').notNull().default(1),
   lastMutationAt: timestamp('last_mutation_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -113,6 +115,12 @@ export const commerceOrder = pgTable('commerce_order', {
   subtotalSatang: bigint('subtotal_satang', { mode: 'number' }).notNull(),
   shippingSatang: bigint('shipping_satang', { mode: 'number' }).notNull(),
   totalSatang: bigint('total_satang', { mode: 'number' }).notNull(),
+  discountCodeId: uuid('discount_code_id').references(() => discountCode.id, { onDelete: 'restrict' }),
+  discountCode: text('discount_code'),
+  discountKind: text('discount_kind', { enum: ['percent', 'fixed', 'free_shipping'] }),
+  discountSatang: bigint('discount_satang', { mode: 'number' }).notNull().default(0),
+  shippingDiscountSatang: bigint('shipping_discount_satang', { mode: 'number' }).notNull().default(0),
+  discountEmail: text('discount_email'),
   currency: text('currency').notNull().default('THB'),
   paymentMethod: text('payment_method').notNull().default('cod'),
   status: text('status', { enum: ['pending_payment', 'placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled'] })
@@ -138,6 +146,9 @@ export const commerceOrder = pgTable('commerce_order', {
   index('commerce_order_total_id_idx').on(table.totalSatang, table.id),
   index('commerce_order_recipient_id_idx').on(table.recipientName, table.id),
   index('commerce_order_status_id_idx').on(table.status, table.id),
+  // Usage counting per code, and per normalised buyer email.
+  index('commerce_order_discount_code_email_idx').on(table.discountCodeId, table.discountEmail),
+  index('commerce_order_contact_email_normalised_idx').on(sql`lower(btrim(${table.contactEmail}))`),
   check('commerce_order_number_nonblank_check', sql`length(btrim(${table.orderNumber})) between 1 and 80`),
   check('commerce_order_owner_shape_check', sql`
     (${table.customerId} is not null
@@ -182,8 +193,18 @@ export const commerceOrder = pgTable('commerce_order', {
     and ${table.totalSatang} between 0 and ${maxSafeSatangSql}
   `),
   check('commerce_order_total_matches_parts_check', sql`
-    ${table.subtotalSatang} + ${table.shippingSatang} = ${table.totalSatang}
+    ${table.subtotalSatang} - ${table.discountSatang} + ${table.shippingSatang} = ${table.totalSatang}
     and ${table.subtotalSatang} + ${table.shippingSatang} <= ${maxSafeSatangSql}
+  `),
+  check('commerce_order_discount_range_check', sql`
+    ${table.discountSatang} between 0 and ${table.subtotalSatang}
+    and ${table.shippingDiscountSatang} >= 0
+  `),
+  check('commerce_order_discount_snapshot_shape_check', sql`
+    (${table.discountCodeId} is null and ${table.discountCode} is null
+      and ${table.discountKind} is null and ${table.discountEmail} is null)
+    or (${table.discountCodeId} is not null and ${table.discountCode} is not null
+      and ${table.discountKind} is not null and ${table.discountEmail} is not null)
   `),
   check('commerce_order_currency_check', sql`${table.currency} = 'THB'`),
   check('commerce_order_payment_method_nonblank_check', sql`length(btrim(${table.paymentMethod})) between 1 and 80`),
@@ -215,6 +236,7 @@ export const orderItem = pgTable('order_item', {
   unitPriceSatang: bigint('unit_price_satang', { mode: 'number' }).notNull(),
   quantity: integer('quantity').notNull(),
   lineTotalSatang: bigint('line_total_satang', { mode: 'number' }).notNull(),
+  discountSatang: bigint('discount_satang', { mode: 'number' }).notNull().default(0),
   vatTreatment: text('vat_treatment', { enum: ['standard', 'exempt'] }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -229,6 +251,7 @@ export const orderItem = pgTable('order_item', {
     and length(btrim(${table.unit})) between 1 and 80
   `),
   check('order_item_vat_treatment_check', sql`${table.vatTreatment} in ('standard', 'exempt')`),
+  check('order_item_discount_range_check', sql`${table.discountSatang} between 0 and ${table.lineTotalSatang}`),
   check('order_item_quantity_range_check', sql`${table.quantity} between 1 and 99`),
   check('order_item_unit_price_safe_range_check', sql`${table.unitPriceSatang} between 1 and ${maxSafeSatangSql}`),
   check('order_item_line_total_safe_range_check', sql`${table.lineTotalSatang} between 1 and ${maxSafeSatangSql}`),
