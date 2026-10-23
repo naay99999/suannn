@@ -35,7 +35,8 @@ export function Component() {
         </ul>
         <dl className="mt-4 flex flex-col gap-3 border-t pt-5 text-sm">
           <div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatStorePrice(snapshot.subtotalSatang)}</dd></div>
-          <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatStorePrice(snapshot.shippingSatang)}</dd></div>
+          {snapshot.discount && snapshot.discount.itemDiscountSatang > 0 && <div className="flex justify-between gap-4"><dt>ส่วนลด ({snapshot.discount.code})</dt><dd className="text-success">−{formatStorePrice(snapshot.discount.itemDiscountSatang)}</dd></div>}
+          <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd className="flex gap-2">{snapshot.discount && snapshot.discount.shippingDiscountSatang > 0 && <s className="text-muted-foreground">{formatStorePrice(snapshot.shippingSatang + snapshot.discount.shippingDiscountSatang)}</s>}<span>{formatStorePrice(snapshot.shippingSatang)}</span></dd></div>
           <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดคำสั่งซื้อ</dt><dd className="text-primary-ink">{formatStorePrice(snapshot.totalSatang)}</dd></div>
         </dl>
       </section>

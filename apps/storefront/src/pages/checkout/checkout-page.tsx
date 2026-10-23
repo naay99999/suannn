@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useLocation, useNavigate } from 'react-router'
@@ -11,7 +11,7 @@ import { Input } from '@workspace/ui/components/input'
 import { cn } from '@workspace/ui/lib/utils'
 import { useCart } from '@/components/cart/cart-context'
 import { authSessionQuery } from '@/lib/auth-session'
-import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, isStripeChoice, placeStoreOrder, refreshAfterStaleQuote, type CheckoutPaymentChoice } from '@/lib/store-checkout'
+import { StoreCheckoutRequestError, availablePaymentMethods, buildCheckoutOrderBody, checkoutQuoteExpired, checkoutQuoteQueryKey, createCheckoutQuote, effectivePaymentMethod, isStaleCheckoutQuoteError, isStripeChoice, placeStoreOrder, quoteEmail, refreshAfterStaleQuote, type CheckoutPaymentChoice, type CheckoutQuote } from '@/lib/store-checkout'
 import { formatStorePrice } from '@/lib/store-products'
 import { getCartSummary } from '@/lib/cart'
 import { addressesQuery } from '@/pages/account/account-queries'
@@ -55,13 +55,6 @@ export function Component() {
   const addresses = useQuery({ ...addressesQuery(userId), enabled: Boolean(userId) })
   const serverCart = cart ?? { cartVersion: 0, lines: [], discount: null }
   const { lines, hasUnavailable } = getCartSummary(serverCart)
-  const quoteKey = checkoutQuoteQueryKey(serverCart.cartVersion)
-  const quote = useQuery({
-    queryKey: quoteKey,
-    queryFn: () => createCheckoutQuote(),
-    enabled: Boolean(cart && lines.length && !hasUnavailable && !cartPending),
-    retry: false,
-  })
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentChoice>('cod')
   const [submitError, setSubmitError] = useState('')
   const orderMutation = useMutation({ mutationFn: ({ input, key }: { input: Parameters<typeof placeStoreOrder>[0]; key: string }) => placeStoreOrder(input, key) })
@@ -76,6 +69,21 @@ export function Component() {
     },
   })
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = form
+  // Guests send their contact email so first-order codes can be checked; edits settle for 500 ms before a new quote.
+  const typedEmail = isCustomer ? '' : quoteEmail(watch('email') ?? '')
+  const [settledEmail, setSettledEmail] = useState(typedEmail)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledEmail(typedEmail), 500)
+    return () => clearTimeout(timer)
+  }, [typedEmail])
+  const quoteKey = checkoutQuoteQueryKey(serverCart.cartVersion, settledEmail)
+  const quote = useQuery({
+    queryKey: quoteKey,
+    queryFn: () => createCheckoutQuote(settledEmail),
+    enabled: Boolean(cart && lines.length && !hasUnavailable && !cartPending),
+    placeholderData: keepPreviousData,
+    retry: false,
+  })
   const shipDifferent = watch('shipDifferent')
   const savedAddresses = addresses.data?.items
   const defaultBillingId = savedAddresses?.find(address => address.isDefaultBilling)?.id ?? null
@@ -122,15 +130,18 @@ export function Component() {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
-    let currentQuote = quote.data
-    if (!currentQuote || checkoutQuoteExpired(currentQuote.expiresAt)) {
-      const refreshed = await quote.refetch()
-      if (refreshed.error || !refreshed.data) {
+    let currentQuote: CheckoutQuote | undefined = quote.data
+    // A quote for an older email (typed less than 500 ms ago) could carry the wrong discount, so ask again.
+    const wantedEmail = isCustomer ? '' : quoteEmail(values.email)
+    if (!currentQuote || checkoutQuoteExpired(currentQuote.expiresAt) || wantedEmail !== settledEmail) {
+      try {
+        currentQuote = await queryClient.fetchQuery({ queryKey: checkoutQuoteQueryKey(serverCart.cartVersion, wantedEmail), queryFn: () => createCheckoutQuote(wantedEmail), staleTime: 0 })
+      } catch {
         setSubmitError('ขอราคาใหม่ไม่ได้ กรุณาลองอีกครั้ง')
         return
       }
-      currentQuote = refreshed.data
     }
+    if (!currentQuote) return
 
     const savedFor = (id: string) => savedAddresses?.find(address => address.id === id)
     const billingAddress = addressPayload(values.billing, savedFor(values.billing.savedAddressId))

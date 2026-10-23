@@ -10,6 +10,7 @@ import { StoreProductImage } from '@/components/store-product-image'
 import { useCart } from './cart-context'
 import { QuantityControl } from './quantity-control'
 import { Spinner } from '@workspace/ui/components/spinner'
+import { DiscountCodeField } from './discount-code-field'
 
 export function CartTrigger() {
   const { cart, open, setOpen, triggerRef } = useCart()
@@ -26,6 +27,8 @@ export function SideCart() {
   const { cart, pending, error, setItem, removeItem, mergeNotice, open, setOpen, triggerRef } = useCart()
   const { lines, count, subtotalSatang, hasUnavailable } = getCartSummary(cart ?? { cartVersion: 0, lines: [], discount: null })
   const canCheckout = lines.length > 0 && !hasUnavailable && !pending
+  const discount = cart?.discount ?? null
+  const discountApplied = discount?.status === 'applied'
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -73,6 +76,9 @@ export function SideCart() {
         </div>
         {lines.length > 0 && <SheetFooter className="shrink-0 gap-4 border-t p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-between gap-4"><span>ยอดรวมสินค้า</span><span className="text-xl font-semibold tabular-nums">{formatStorePrice(subtotalSatang)}</span></div>
+          <DiscountCodeField discount={discount} />
+          {discount && discountApplied && discount.itemDiscountSatang > 0 && <div className="flex items-center justify-between gap-4 text-sm"><span>ส่วนลด ({discount.code})</span><span className="tabular-nums text-success">−{formatStorePrice(discount.itemDiscountSatang)}</span></div>}
+          {discount && discountApplied && discount.freeShipping && <div className="flex items-center justify-between gap-4 text-sm"><span>ค่าจัดส่ง</span><span className="text-success">ส่งฟรี</span></div>}
           {hasUnavailable && <p role="status" className="text-xs leading-6 text-destructive">มีสินค้าไม่พร้อมสั่งซื้อ กรุณาลบรายการหรือปรับจำนวนก่อน checkout</p>}
           {canCheckout
             ? <Button render={<Link to="/checkout" />} nativeButton={false} size="storefront" onClick={() => setOpen(false)}>ตรวจสอบและชำระเงิน</Button>

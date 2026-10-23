@@ -13,7 +13,7 @@ export type CheckoutAddress = PlaceOrderBody['billingAddress']
 export type CheckoutContact = PlaceOrderBody['contact']
 
 export interface StoreCheckoutTransport {
-  quote(): Promise<CheckoutQuote>
+  quote(email?: string): Promise<CheckoutQuote>
   placeOrder(input: PlaceOrderBody, idempotencyKey: string): Promise<CreateOrderResponse>
 }
 
@@ -39,20 +39,27 @@ function unwrapCheckout<T>(result: { data: T | null; error: unknown; status: num
 }
 
 const edenTransport: StoreCheckoutTransport = {
-  async quote() {
-    return unwrapCheckout(await api.store.checkout.quote.post({}))
+  async quote(email) {
+    return unwrapCheckout(await api.store.checkout.quote.post(email ? { email } : {}))
   },
   async placeOrder(input, idempotencyKey) {
     return unwrapCheckout(await api.store.checkout.orders.post(input, { headers: { 'idempotency-key': idempotencyKey } }))
   },
 }
 
-export function checkoutQuoteQueryKey(cartVersion: number) {
-  return ['store-checkout-quote', cartVersion] as const
+export function checkoutQuoteQueryKey(cartVersion: number, email = '') {
+  return ['store-checkout-quote', cartVersion, email] as const
 }
 
-export function createCheckoutQuote(transport = edenTransport): Promise<CheckoutQuote> {
-  return transport.quote()
+// Only a plausible address is worth sending: the API uses it to check first-order discount codes.
+export function quoteEmail(value: string): string {
+  const email = value.trim().toLowerCase()
+  const at = email.indexOf('@')
+  return at > 0 && email.indexOf('.', at) > at + 1 && !email.endsWith('.') && !/\s/.test(email) ? email : ''
+}
+
+export function createCheckoutQuote(email = '', transport = edenTransport): Promise<CheckoutQuote> {
+  return transport.quote(email || undefined)
 }
 
 export function placeStoreOrder(input: PlaceOrderBody, idempotencyKey: string, transport = edenTransport): Promise<CreateOrderResponse> {

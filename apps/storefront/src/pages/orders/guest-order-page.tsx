@@ -90,7 +90,8 @@ export function Component() {
         <ul className="mt-5 divide-y">{detail.items.map(item => <li key={item.id} className="flex justify-between gap-4 py-3"><span>{item.productName} · {item.variantName} × {item.quantity}</span><span className="shrink-0 tabular-nums">{formatStorePrice(item.lineTotalSatang)}</span></li>)}</ul>
         <dl className="mt-4 flex flex-col gap-3 border-t pt-4 text-sm">
           <div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd>{formatStorePrice(detail.subtotalSatang)}</dd></div>
-          <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd>{formatStorePrice(detail.shippingSatang)}</dd></div>
+          {detail.discount && detail.discount.itemDiscountSatang > 0 && <div className="flex justify-between gap-4"><dt>ส่วนลด ({detail.discount.code})</dt><dd className="text-success">−{formatStorePrice(detail.discount.itemDiscountSatang)}</dd></div>}
+          <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd className="flex gap-2">{detail.discount && detail.discount.shippingDiscountSatang > 0 && <s className="text-muted-foreground">{formatStorePrice(detail.shippingSatang + detail.discount.shippingDiscountSatang)}</s>}<span>{formatStorePrice(detail.shippingSatang)}</span></dd></div>
           <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดรวม</dt><dd>{formatStorePrice(detail.totalSatang)}</dd></div>
         </dl>
         <div className="mt-5 empty:hidden"><OrderPaymentActions order={detail} guestAccessToken={request.token} /></div>

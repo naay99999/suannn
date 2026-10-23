@@ -93,7 +93,8 @@ export function Component() {
             <OrderItems order={detail} />
             <dl className="flex flex-col gap-3 border-t pt-5 text-sm">
               <div className="flex justify-between gap-4"><dt className="text-muted-foreground">ยอดรวมสินค้า</dt><dd className="tabular-nums">{formatSatang(detail.subtotalSatang)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">ค่าจัดส่ง</dt><dd className="tabular-nums">{detail.shippingSatang ? formatSatang(detail.shippingSatang) : 'ส่งฟรี'}</dd></div>
+              {detail.discount && detail.discount.itemDiscountSatang > 0 && <div className="flex justify-between gap-4"><dt className="text-muted-foreground">ส่วนลด ({detail.discount.code})</dt><dd className="tabular-nums text-success">−{formatSatang(detail.discount.itemDiscountSatang)}</dd></div>}
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">ค่าจัดส่ง</dt><dd className="flex gap-2 tabular-nums">{detail.discount && detail.discount.shippingDiscountSatang > 0 && <s className="text-muted-foreground">{formatSatang(detail.shippingSatang + detail.discount.shippingDiscountSatang)}</s>}<span>{detail.shippingSatang ? formatSatang(detail.shippingSatang) : 'ส่งฟรี'}</span></dd></div>
               <div className="flex items-baseline justify-between gap-4 border-t pt-4"><dt className="font-medium">ยอดรวมทั้งหมด</dt><dd className="text-xl font-semibold tabular-nums">{formatSatang(detail.totalSatang)}</dd></div>
               {refund && <div className="flex justify-between gap-4 text-muted-foreground"><dt>{refundStatusLabel(refund)}</dt><dd className="tabular-nums">−{formatSatang(refund.amountSatang)}</dd></div>}
             </dl>

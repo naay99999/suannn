@@ -62,7 +62,14 @@ export function CheckoutQuoteSummary({ quote, images }: { quote: CheckoutQuote; 
       </Collapsible>
       <dl className="mt-6 flex flex-col gap-3 border-t pt-5 text-sm">
         <div className="flex justify-between gap-4"><dt>ยอดรวมสินค้า</dt><dd className="tabular-nums">{formatStorePrice(quote.subtotalSatang)}</dd></div>
-        <div className="flex justify-between gap-4"><dt>ค่าจัดส่ง</dt><dd className="tabular-nums">{quote.shippingSatang === 0 ? 'ฟรี' : formatStorePrice(quote.shippingSatang)}</dd></div>
+        {quote.discount && quote.discountSatang > 0 && <div className="flex justify-between gap-4"><dt>ส่วนลด ({quote.discount.code})</dt><dd className="tabular-nums text-success">−{formatStorePrice(quote.discountSatang)}</dd></div>}
+        <div className="flex justify-between gap-4">
+          <dt>ค่าจัดส่ง</dt>
+          <dd className="flex gap-2 tabular-nums">
+            {quote.shippingDiscountSatang > 0 && <s className="text-muted-foreground">{formatStorePrice(quote.shippingSatang + quote.shippingDiscountSatang)}</s>}
+            <span>{quote.shippingSatang === 0 ? 'ฟรี' : formatStorePrice(quote.shippingSatang)}</span>
+          </dd>
+        </div>
         <div className="flex justify-between gap-4 border-t pt-4 text-base font-semibold"><dt>ยอดชำระทั้งหมด</dt><dd className="text-2xl tabular-nums text-primary-ink">{formatStorePrice(quote.totalSatang)}</dd></div>
       </dl>
     </section>

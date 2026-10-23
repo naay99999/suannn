@@ -5,16 +5,19 @@ export type StoreCartDetail = NonNullable<Awaited<ReturnType<typeof api.store.ca
 export type StoreCartLine = StoreCartDetail['lines'][number]
 export type StoreCartMerge = NonNullable<Awaited<ReturnType<typeof api.store.cart.merge.post>>['data']>
 export type SkippedCartLine = StoreCartMerge['skipped'][number]
+export type CartDiscount = NonNullable<StoreCartDetail['discount']>
 
 export interface StoreCartTransport {
   get(): Promise<StoreCartDetail>
   setItem(variantId: string, quantity: number): Promise<StoreCartDetail>
   removeItem(variantId: string): Promise<StoreCartDetail>
   mergeGuest(): Promise<StoreCartMerge>
+  applyDiscount(code: string): Promise<StoreCartDetail>
+  removeDiscount(): Promise<StoreCartDetail>
 }
 
 export class StoreCartRequestError extends Error {
-  constructor(public status: number, public code: string) {
+  constructor(public status: number, public code: string, public reason?: string) {
     super(code)
     this.name = 'StoreCartRequestError'
   }
@@ -28,7 +31,8 @@ function unwrapStoreCart<T>(result: { data: T | null; error: unknown; status: nu
   if (result.error) {
     const body = isRecord(result.error) && 'value' in result.error ? result.error.value : result.error
     const code = isRecord(body) && typeof body.code === 'string' ? body.code : 'STORE_CART_REQUEST_FAILED'
-    throw new StoreCartRequestError(result.status, code)
+    const reason = isRecord(body) && typeof body.reason === 'string' ? body.reason : undefined
+    throw new StoreCartRequestError(result.status, code, reason)
   }
   if (result.data === null) throw new StoreCartRequestError(502, 'EMPTY_STORE_CART_RESPONSE')
   return result.data
@@ -47,6 +51,12 @@ const edenTransport: StoreCartTransport = {
   async mergeGuest() {
     return unwrapStoreCart(await api.store.cart.merge.post({}))
   },
+  async applyDiscount(code) {
+    return unwrapStoreCart(await api.store.cart.discount.put({ code }))
+  },
+  async removeDiscount() {
+    return unwrapStoreCart(await api.store.cart.discount.delete({}))
+  },
 }
 
 export const storeCartQueryKey = ['store-cart'] as const
@@ -62,6 +72,14 @@ export function setCartItem(variantId: string, quantity: number, transport = ede
 
 export function removeCartItem(variantId: string, transport = edenTransport): Promise<StoreCartDetail> {
   return transport.removeItem(variantId)
+}
+
+export function applyCartDiscount(code: string, transport = edenTransport): Promise<StoreCartDetail> {
+  return transport.applyDiscount(code)
+}
+
+export function removeCartDiscount(transport = edenTransport): Promise<StoreCartDetail> {
+  return transport.removeDiscount()
 }
 
 export function mergeGuestCart(transport = edenTransport): Promise<StoreCartMerge> {

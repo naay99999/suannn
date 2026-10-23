@@ -270,3 +270,16 @@ test('unresolved session blocks order submission until account status is known',
   expect((submit as HTMLButtonElement).disabled).toBe(true)
   expect(requests.some(request => request.path === '/api/v1/store/checkout/orders')).toBe(false)
 })
+
+test('typing the contact email requests a quote that carries it', async () => {
+  previousFetch = globalThis.fetch
+  globalThis.fetch = responseFor as typeof fetch
+  mountCheckout(null)
+
+  await screen.findByRole('radio', { name: /บัตรเครดิต/ })
+  await userEvent.setup().type(screen.getByLabelText('อีเมลสำหรับรับรายละเอียดคำสั่งซื้อ'), 'buyer@example.test')
+
+  await waitFor(() => expect(requests.some(request => request.path === '/api/v1/store/checkout/quote' && request.body?.email === 'buyer@example.test')).toBe(true))
+  // Half-typed addresses are never sent.
+  expect(requests.filter(request => request.path === '/api/v1/store/checkout/quote').every(request => request.body?.email === undefined || request.body.email === 'buyer@example.test')).toBe(true)
+})
