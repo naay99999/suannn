@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { createRef } from 'react'
+import { createRef, useState } from 'react'
 import { CartContext } from '../src/components/cart/cart-context'
 import type { StoreCartDetail } from '../src/lib/store-cart'
 import type { AuthSession } from '../src/lib/auth-client'
@@ -24,6 +24,7 @@ let addressItems: CustomerAddress[] = [savedAddress]
 let previousFetch: typeof fetch
 let previousLocationAssign: Location['assign']
 let holdSessionRequest = false
+let quoteOverride: (() => Promise<Response>) | null = null
 const stripeRedirects: string[] = []
 let requests: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = []
 const stripeCheckoutUrl = 'https://checkout.stripe.com/c/pay/cs_test_checkout'
@@ -36,7 +37,7 @@ function responseFor(input: RequestInfo | URL, init?: RequestInit) {
   try { body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null } catch { body = null }
   requests.push({ path: url.pathname, method, body })
   if (holdSessionRequest && url.pathname === '/api/v1/auth/get-session') return new Promise<Response>(() => {})
-  if (url.pathname === '/api/v1/store/checkout/quote') return Response.json(quote)
+  if (url.pathname === '/api/v1/store/checkout/quote') return quoteOverride ? quoteOverride() : Response.json(quote)
   if (url.pathname === '/api/v1/customer/addresses') return Response.json({ items: addressItems })
   if (url.pathname === '/api/v1/store/checkout/orders') {
     const result = { order: { id: orderId } }
@@ -57,7 +58,7 @@ function mountCheckout(session: AuthSession | null, details?: Record<string, str
   return { view, queryClient }
 }
 
-afterEach(() => { cleanup(); globalThis.fetch = previousFetch; Object.getPrototypeOf(window.location).assign = previousLocationAssign; holdSessionRequest = false; addressItems = [savedAddress]; requests = []; stripeRedirects.length = 0; sessionStorage.clear() })
+afterEach(() => { cleanup(); globalThis.fetch = previousFetch; Object.getPrototypeOf(window.location).assign = previousLocationAssign; holdSessionRequest = false; quoteOverride = null; addressItems = [savedAddress]; requests = []; stripeRedirects.length = 0; sessionStorage.clear() })
 
 function interceptStripeRedirect() {
   previousLocationAssign = Object.getPrototypeOf(window.location).assign
@@ -282,4 +283,32 @@ test('typing the contact email requests a quote that carries it', async () => {
   await waitFor(() => expect(requests.some(request => request.path === '/api/v1/store/checkout/quote' && request.body?.email === 'buyer@example.test')).toBe(true))
   // Half-typed addresses are never sent.
   expect(requests.filter(request => request.path === '/api/v1/store/checkout/quote').every(request => request.body?.email === undefined || request.body.email === 'buyer@example.test')).toBe(true)
+})
+
+test('after the cart changes, the previous cart quote is neither shown nor submittable until the new quote arrives', async () => {
+  previousFetch = globalThis.fetch
+  globalThis.fetch = responseFor as typeof fetch
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnMount: false } } })
+  queryClient.setQueryData(authSessionQuery.queryKey, null)
+  let bumpCart: () => void = () => {}
+  function Harness() {
+    const [value, setValue] = useState(cart)
+    bumpCart = () => setValue({ ...cart, cartVersion: 2 })
+    const cartValue = { cart: value, pending: false, error: null, setItem: async () => {}, removeItem: async () => {}, mergeNotice: null, open: false, setOpen: () => {}, triggerRef: createRef<HTMLButtonElement>() }
+    return <CartContext.Provider value={cartValue}><CheckoutPage /></CartContext.Provider>
+  }
+  const router = createMemoryRouter([{ path: '/checkout', element: <Harness /> }], { initialEntries: ['/checkout'] })
+  render(<QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>)
+
+  await screen.findByRole('button', { name: /ไปชำระเงิน · ฿45/ })
+  let release: (response: Response) => void = () => {}
+  quoteOverride = () => new Promise<Response>(resolve => { release = resolve })
+  act(() => bumpCart())
+
+  await waitFor(() => expect(screen.queryByRole('button', { name: /฿45/ })).toBeNull())
+  expect(screen.queryByText('฿45')).toBeNull()
+  expect((screen.getAllByRole('button', { name: /ไปชำระเงิน/ })[0] as HTMLButtonElement).disabled).toBe(true)
+
+  release(Response.json({ ...quote, cartVersion: 2, totalSatang: 9000 }))
+  expect(await screen.findByRole('button', { name: /ไปชำระเงิน · ฿90/ })).toBeTruthy()
 })

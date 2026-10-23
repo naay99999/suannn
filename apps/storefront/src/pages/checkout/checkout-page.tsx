@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useLocation, useNavigate } from 'react-router'
@@ -81,7 +81,8 @@ export function Component() {
     queryKey: quoteKey,
     queryFn: () => createCheckoutQuote(settledEmail),
     enabled: Boolean(cart && lines.length && !hasUnavailable && !cartPending),
-    placeholderData: keepPreviousData,
+    // Keep the last quote on screen while only the email changed; never carry one across a cart change.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === serverCart.cartVersion ? previous : undefined,
     retry: false,
   })
   const shipDifferent = watch('shipDifferent')
@@ -95,7 +96,7 @@ export function Component() {
   const lineImages = new Map(lines.map(line => [line.variantId, { src: line.productImageUrl, alt: line.productImageAlt }]))
   const actions = useRef<HTMLDivElement>(null)
   const sticky = useStickyVisibility(actions)
-  const submitDisabled = !sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)
+  const submitDisabled = !sessionResolved || isSubmitting || orderMutation.isPending || !quote.data || quote.isPlaceholderData || quote.isFetching || hasUnavailable || !availableMethods.includes(selectedPaymentMethod)
   const submitBusy = isSubmitting || orderMutation.isPending
   const submitLabel = isSubmitting ? 'กำลังส่งคำสั่งซื้อ...' : paysWithStripe ? 'ไปชำระเงิน' : 'ยืนยันสั่งซื้อ'
 
@@ -130,12 +131,14 @@ export function Component() {
       setSubmitError('วิธีชำระเงินนี้ใช้ไม่ได้กับสถานะบัญชีปัจจุบัน')
       return
     }
-    let currentQuote: CheckoutQuote | undefined = quote.data
+    let currentQuote: CheckoutQuote | undefined = quote.isPlaceholderData ? undefined : quote.data
+    let usedKey: readonly unknown[] = quoteKey
     // A quote for an older email (typed less than 500 ms ago) could carry the wrong discount, so ask again.
     const wantedEmail = isCustomer ? '' : quoteEmail(values.email)
     if (!currentQuote || checkoutQuoteExpired(currentQuote.expiresAt) || wantedEmail !== settledEmail) {
+      usedKey = checkoutQuoteQueryKey(serverCart.cartVersion, wantedEmail)
       try {
-        currentQuote = await queryClient.fetchQuery({ queryKey: checkoutQuoteQueryKey(serverCart.cartVersion, wantedEmail), queryFn: () => createCheckoutQuote(wantedEmail), staleTime: 0 })
+        currentQuote = await queryClient.fetchQuery({ queryKey: usedKey, queryFn: () => createCheckoutQuote(wantedEmail), staleTime: 0 })
       } catch {
         setSubmitError('ขอราคาใหม่ไม่ได้ กรุณาลองอีกครั้ง')
         return
@@ -169,7 +172,7 @@ export function Component() {
         navigate(`/checkout/confirmation/${result.order.id}`, { replace: true })
       }
     } catch (error) {
-      if (isStaleCheckoutQuoteError(error)) await refreshAfterStaleQuote(queryClient, quoteKey)
+      if (isStaleCheckoutQuoteError(error)) await refreshAfterStaleQuote(queryClient, usedKey)
       setSubmitError(checkoutErrorMessage(error))
     }
   }

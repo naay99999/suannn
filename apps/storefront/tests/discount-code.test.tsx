@@ -177,3 +177,10 @@ test('confirmation page shows the discount row', async () => {
   expect(await screen.findByText('ส่วนลด (MANGO10)')).toBeTruthy()
   expect(screen.getByText(`−${formatStorePrice(2000)}`)).toBeTruthy()
 })
+
+test('a free-shipping-only code is named on the shipping row', () => {
+  const freeOnly = { ...baseQuote, discountSatang: 0, shippingSatang: 0, shippingDiscountSatang: 3500, totalSatang: 20000, discount: { ...quoteDiscount, code: 'SHIPFREE', itemDiscountSatang: 0, freeShipping: true } } as CheckoutQuote
+  render(<OrderSummary quote={freeOnly} />)
+  expect(screen.getByText('ค่าจัดส่ง (ส่งฟรี SHIPFREE)')).toBeTruthy()
+  expect(screen.getByText('ราคาเดิม')).toBeTruthy()
+})
