@@ -125,7 +125,10 @@ describe('authentication domain constraints', () => {
   })
 
   it('refuses cleanup when the database name is not test-scoped', async () => {
-    const unsafeDatabase = createTestDatabase('postgresql://naay@127.0.0.1:5432/postgres')
+    // Same server and credentials as the test database, but the maintenance database.
+    const unsafeUrl = new URL(database.url)
+    unsafeUrl.pathname = '/postgres'
+    const unsafeDatabase = createTestDatabase(unsafeUrl.href)
 
     try {
       await expect(resetTestDatabase(unsafeDatabase)).rejects.toThrow(
