@@ -25,6 +25,7 @@ import {
   listStaffInvitations,
   reactivateStaff,
   resetStaffMfa,
+  sendStaffPasswordReset,
   resendStaffInvitation,
   revokeStaffSessions,
   suspendStaff,
@@ -57,7 +58,7 @@ type Invitation = {
   revokedAt: string | Date | null
 }
 
-type ManagedAction = 'change-role' | 'suspend' | 'reactivate' | 'revoke-sessions' | 'reset-mfa'
+type ManagedAction = 'change-role' | 'suspend' | 'reactivate' | 'revoke-sessions' | 'reset-mfa' | 'reset-password'
 
 function asIso(value: string | Date | null) {
   return value instanceof Date ? value.toISOString() : value
@@ -126,13 +127,17 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
       if (action === 'suspend') return suspendStaff(member.id, reason)
       if (action === 'reactivate') return reactivateStaff(member.id)
       if (action === 'revoke-sessions') return revokeStaffSessions(member.id)
+      if (action === 'reset-password') return sendStaffPasswordReset(member.id)
       return resetStaffMfa(member.id)
     },
     onSuccess: async (_result, input) => {
       setSelectedAction(null)
       setActionError('')
       setSuspendReason('')
-      toast.add({ title: `${input.member.name}'s account was updated`, type: 'success' })
+      toast.add({
+        title: input.action === 'reset-password' ? `Password reset link sent to ${input.member.email}` : `${input.member.name}'s account was updated`,
+        type: 'success',
+      })
       await queryClient.invalidateQueries({ queryKey: ['staff'] })
     },
     onError: (error) => {
@@ -164,6 +169,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
     reactivate: { title: 'Reactivate staff account', description: 'The staff member will be able to sign in again.', confirm: 'Reactivate account' },
     'revoke-sessions': { title: 'Revoke all sessions', description: 'This signs the staff member out of every active session.', confirm: 'Revoke sessions' },
     'reset-mfa': { title: 'Reset staff MFA', description: 'This removes the authenticator enrollment and signs the staff member out.', confirm: 'Reset MFA' },
+    'reset-password': { title: 'ส่งลิงก์ตั้งรหัสผ่านใหม่', description: 'An email with a password reset link will be sent to this staff member. Setting a new password signs them out everywhere.', confirm: 'Send reset link' },
   }
 
   return (
@@ -186,7 +192,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
               <TableBody>
                 {staffQuery.data.items.map((member: StaffMember) => {
                   const actions = getStaffActions({ actorId, actorRole, actorPermissions: permissions, target: member })
-                  const hasActions = canReadAudit || actions.canChangeRole || actions.canSuspend || actions.canReactivate || actions.canRevokeSessions || actions.canResetMfa
+                  const hasActions = canReadAudit || actions.canChangeRole || actions.canSuspend || actions.canReactivate || actions.canRevokeSessions || actions.canResetMfa || actions.canResetPassword
                   return (
                     <TableRow key={member.id}>
                       <TableCell><div className="flex flex-col gap-0.5"><span className="font-medium">{member.name || 'Unnamed staff'}</span><span className="text-muted-foreground">{member.email}</span></div></TableCell>
@@ -203,6 +209,7 @@ function StaffMembers({ actorId, actorRole, permissions }: { actorId: string; ac
                             {actions.canReactivate && <DropdownMenuItem onClick={() => openAction('reactivate', member)}>Reactivate account</DropdownMenuItem>}
                             {actions.canRevokeSessions && <DropdownMenuItem variant="destructive" onClick={() => openAction('revoke-sessions', member)}>Revoke all sessions</DropdownMenuItem>}
                             {actions.canResetMfa && <DropdownMenuItem variant="destructive" onClick={() => openAction('reset-mfa', member)}>Reset MFA</DropdownMenuItem>}
+                            {actions.canResetPassword && <DropdownMenuItem onClick={() => openAction('reset-password', member)}>ส่งลิงก์ตั้งรหัสผ่านใหม่</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>}
                       </TableCell>

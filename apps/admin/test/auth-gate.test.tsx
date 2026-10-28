@@ -20,7 +20,7 @@ const staffSession: AuthSession = {
 function renderRoute(path = '/dashboard') {
   activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
-    if (url.pathname.endsWith('/auth/get-session')) {
+    if (url.pathname.endsWith('/staff-auth/get-session')) {
       sessionRequests++
       return Response.json(await sessionResult())
     }

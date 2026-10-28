@@ -3,19 +3,19 @@ import { getInvitationStatus, getStaffActions } from '../src/pages/settings/_com
 
 test('limits staff actions to permissions and owner protections', () => {
   expect(getStaffActions({
-    actorId: 'admin-1', actorRole: 'admin', actorPermissions: ['staff:read', 'staff:invite', 'staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa'],
+    actorId: 'admin-1', actorRole: 'admin', actorPermissions: ['staff:read', 'staff:invite', 'staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa', 'staff:reset-password'],
     target: { id: 'owner-1', role: 'owner', banned: false },
-  })).toEqual({ canChangeRole: false, canSuspend: false, canReactivate: false, canRevokeSessions: false, canResetMfa: false, mayManageTarget: false })
+  })).toEqual({ canChangeRole: false, canSuspend: false, canReactivate: false, canRevokeSessions: false, canResetMfa: false, canResetPassword: false, mayManageTarget: false })
 
   expect(getStaffActions({
-    actorId: 'owner-1', actorRole: 'owner', actorPermissions: ['staff:read', 'staff:invite', 'staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa'],
+    actorId: 'owner-1', actorRole: 'owner', actorPermissions: ['staff:read', 'staff:invite', 'staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa', 'staff:reset-password'],
     target: { id: 'owner-1', role: 'owner', banned: false },
-  })).toEqual({ canChangeRole: false, canSuspend: false, canReactivate: false, canRevokeSessions: false, canResetMfa: false, mayManageTarget: true })
+  })).toEqual({ canChangeRole: false, canSuspend: false, canReactivate: false, canRevokeSessions: false, canResetMfa: false, canResetPassword: false, mayManageTarget: true })
 
   expect(getStaffActions({
-    actorId: 'owner-1', actorRole: 'owner', actorPermissions: ['staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa'],
+    actorId: 'owner-1', actorRole: 'owner', actorPermissions: ['staff:change-role', 'staff:suspend', 'staff:revoke-session', 'staff:reset-mfa', 'staff:reset-password'],
     target: { id: 'staff-2', role: 'support', banned: true },
-  })).toEqual({ canChangeRole: true, canSuspend: false, canReactivate: true, canRevokeSessions: true, canResetMfa: true, mayManageTarget: true })
+  })).toEqual({ canChangeRole: true, canSuspend: false, canReactivate: true, canRevokeSessions: true, canResetMfa: true, canResetPassword: true, mayManageTarget: true })
 })
 
 test('derives invitation status from accepted, revoked, and expiration fields', () => {

@@ -23,7 +23,7 @@ export function LoginForm({ className, ...props }: ComponentProps<'div'>) {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const routeState = location.state as { from?: string; reason?: string } | null
+  const routeState = location.state as { from?: string; reason?: string; notice?: string } | null
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const {
@@ -71,6 +71,7 @@ export function LoginForm({ className, ...props }: ComponentProps<'div'>) {
       </div>
       <form onSubmit={handleSubmit(submit)}>
         <FieldGroup>
+          {routeState?.notice && <p role="status" className="text-sm text-success">{routeState.notice}</p>}
           {(submitError || routeState?.reason) && <p role="alert" className="text-sm text-destructive">{submitError || routeState?.reason}</p>}
           <Field data-invalid={!!errors.email}>
             <FieldLabel htmlFor="email">Email</FieldLabel>

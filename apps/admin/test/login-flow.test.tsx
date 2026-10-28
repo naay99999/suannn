@@ -37,10 +37,10 @@ function installAuthBoundary() {
   activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null
-    if (url.pathname.endsWith('/auth/get-session')) {
+    if (url.pathname.endsWith('/staff-auth/get-session')) {
       return Response.json(sessionForState(afterSignIn ? await refreshResult() as AuthState : initialAuthState))
     }
-    if (url.pathname.endsWith('/auth/sign-in/email')) {
+    if (url.pathname.endsWith('/staff-auth/sign-in/email')) {
       afterSignIn = true
       try {
         return Response.json(await signInResult() === 'challenge' ? { twoFactorRedirect: true } : {})
@@ -48,7 +48,7 @@ function installAuthBoundary() {
         return authErrorResponse(error)
       }
     }
-    if (url.pathname.endsWith('/auth/two-factor/verify-totp')) {
+    if (url.pathname.endsWith('/staff-auth/two-factor/verify-totp')) {
       try {
         await verifyResult()
         return Response.json({})
@@ -56,7 +56,7 @@ function installAuthBoundary() {
         return authErrorResponse(error)
       }
     }
-    if (url.pathname.endsWith('/auth/two-factor/verify-backup-code')) {
+    if (url.pathname.endsWith('/staff-auth/two-factor/verify-backup-code')) {
       backupCodesSubmitted.push(String(body?.code ?? ''))
       try {
         await backupResult()

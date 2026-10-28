@@ -14,6 +14,10 @@ export const router = createBrowserRouter([
     lazy: () => import('./pages/login/mfa-page'),
   },
   {
+    path: 'reset-password',
+    lazy: () => import('./pages/login/reset-password-page'),
+  },
+  {
     path: 'staff/invitations/accept',
     lazy: () => import('./pages/staff/invitation-page'),
   },

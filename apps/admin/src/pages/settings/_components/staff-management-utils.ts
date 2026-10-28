@@ -6,6 +6,7 @@ export type StaffActions = {
   canReactivate: boolean
   canRevokeSessions: boolean
   canResetMfa: boolean
+  canResetPassword: boolean
   mayManageTarget: boolean
 }
 
@@ -25,6 +26,7 @@ export function getStaffActions(input: {
     canReactivate: has('staff:suspend') && input.target.banned && mayManageTarget,
     canRevokeSessions: has('staff:revoke-session') && !isSelf && mayManageTarget,
     canResetMfa: has('staff:reset-mfa') && !isSelf && mayManageTarget,
+    canResetPassword: has('staff:reset-password') && !isSelf && mayManageTarget,
     mayManageTarget,
   }
 }

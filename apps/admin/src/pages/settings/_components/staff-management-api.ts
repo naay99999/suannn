@@ -55,6 +55,10 @@ export async function resetStaffMfa(id: string) {
   throwApiError(await api.staff({ id }).mfa.reset.post({}))
 }
 
+export async function sendStaffPasswordReset(id: string) {
+  throwApiError(await api.staff({ id })['password-reset'].post({}))
+}
+
 export async function resendStaffInvitation(id: string) {
   throwApiError(await api.staff.invitations({ id }).resend.post({}))
 }

@@ -30,7 +30,7 @@ function renderPage(initialPath: string) {
   activeSpies.push(spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null
-    if (url.pathname.endsWith('/auth/get-session')) {
+    if (url.pathname.endsWith('/staff-auth/get-session')) {
       sessionRequests++
       if (sessionRequests > 1) {
         try {

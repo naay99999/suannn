@@ -68,7 +68,7 @@ function parseSession(value: unknown): AuthSession | null {
 }
 
 export function createAuthClient(baseUrl: string, fetcher: Fetcher = currentFetch) {
-  const base = new URL('/api/v1/auth/', baseUrl)
+  const base = new URL('/api/v1/staff-auth/', baseUrl)
 
   async function request(path: string, body?: JsonRecord): Promise<unknown> {
     let response: Response
@@ -114,12 +114,15 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = currentFetc
     async signOut() {
       await request('sign-out', {})
     },
+    async resetPassword(token: string, newPassword: string): Promise<void> {
+      await request('reset-password', { token, newPassword })
+    },
   }
 }
 
 const authClient = createAuthClient(resolveApiUrl(import.meta.env.VITE_API_URL, import.meta.env.PROD))
 
-export const { getSession, signIn, verifyTotp, verifyBackupCode, signOut } = authClient
+export const { getSession, signIn, verifyTotp, verifyBackupCode, signOut, resetPassword } = authClient
 
 function dataOrError<T>(result: { data: T | null; error: unknown; status: number }): T {
   if (result.error) {

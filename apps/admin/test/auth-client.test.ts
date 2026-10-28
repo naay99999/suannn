@@ -15,7 +15,7 @@ test('uses credentialed JSON and recognizes MFA challenge', async () => {
   })
 
   expect(await client.signIn('sam@example.com', 'password')).toBe('challenge')
-  expect(requests[0]?.url).toBe('http://localhost:6767/api/v1/auth/sign-in/email')
+  expect(requests[0]?.url).toBe('http://localhost:6767/api/v1/staff-auth/sign-in/email')
   expect(requests[0]?.init.credentials).toBe('include')
   expect((requests[0]!.init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
   expect(JSON.parse(String(requests[0]!.init.body))).toEqual({ email: 'sam@example.com', password: 'password' })
@@ -61,4 +61,26 @@ test('maps safe client errors and hides server exception text', async () => {
     expect(error).toBeInstanceOf(AuthRequestError)
     expect((error as Error).message).not.toContain('database password')
   }
+})
+
+test('reads the session from the staff auth instance', async () => {
+  const urls: string[] = []
+  const client = createAuthClient('http://localhost:6767', async (url) => {
+    urls.push(String(url))
+    return Response.json(activeSession)
+  })
+  await client.getSession()
+  expect(urls).toEqual(['http://localhost:6767/api/v1/staff-auth/get-session'])
+})
+
+test('posts the token and new password to staff reset-password', async () => {
+  const requests: Array<{ url: string; init: RequestInit }> = []
+  const client = createAuthClient('http://localhost:6767', async (url, init) => {
+    requests.push({ url: String(url), init: init ?? {} })
+    return Response.json({ status: true })
+  })
+  await client.resetPassword('abc', 'a-long-enough-password')
+  expect(requests[0]?.url).toBe('http://localhost:6767/api/v1/staff-auth/reset-password')
+  expect(requests[0]?.init.method).toBe('POST')
+  expect(JSON.parse(String(requests[0]!.init.body))).toEqual({ token: 'abc', newPassword: 'a-long-enough-password' })
 })
