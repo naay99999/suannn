@@ -26,6 +26,7 @@ describe('API configuration', () => {
   })
   it('uses safe local defaults outside production', () => {
     expect(loadConfig(testEnv)).toEqual({
+      deployEnv: 'production',
       host: '0.0.0.0',
       port: 6767,
       shutdownTimeoutMs: 30_000,
@@ -113,6 +114,34 @@ describe('API configuration', () => {
     })).toThrow('STRIPE_API_KEY must be a restricted rk_live_ key in production')
   })
 
+  it('uses Stripe test keys for a staging deployment in production mode', () => {
+    const stagingEnv = {
+      ...testEnv,
+      NODE_ENV: 'production',
+      DEPLOY_ENV: 'staging',
+      CORS_ORIGINS: 'https://store.example.com,https://admin.example.com',
+      BETTER_AUTH_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://store.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      TRUSTED_PROXY_HEADERS: 'x-real-ip',
+      STRIPE_API_KEY: 'rk_test_restricted',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      STRIPE_SUCCESS_URL: 'https://store.example.com/checkout/success',
+      STRIPE_CANCEL_URL: 'https://store.example.com/checkout/cancel',
+    }
+
+    const config = loadConfig(stagingEnv)
+    expect(config.deployEnv).toBe('staging')
+    expect(config.stripe?.apiKey).toBe('rk_test_restricted')
+    expect(config.secureCookies).toBe(true)
+    expect(config.requireTrustedClientIp).toBe(true)
+    expect(() => loadConfig({ ...stagingEnv, STRIPE_API_KEY: 'rk_live_restricted' }))
+      .toThrow('STRIPE_API_KEY must be a restricted rk_test_ key outside production')
+    expect(() => loadConfig({ ...stagingEnv, STRIPE_SUCCESS_URL: 'http://store.example.com/checkout/success' }))
+      .toThrow('STRIPE_SUCCESS_URL must use HTTPS in production')
+    expect(() => loadConfig({ ...testEnv, DEPLOY_ENV: 'preview' })).toThrow('DEPLOY_ENV')
+  })
+
   it('restricts Stripe return URLs to the configured storefront origin', () => {
     expect(() => loadConfig({
       ...testEnv,
@@ -171,6 +200,7 @@ describe('API configuration', () => {
       AUTH_EMAIL_FROM: 'Suannn <auth@example.com>',
       TRUSTED_PROXY_HEADERS: 'X-Forwarded-For, x-real-ip,x-forwarded-for',
     })).toEqual({
+      deployEnv: 'production',
       host: '127.0.0.1',
       port: 8080,
       shutdownTimeoutMs: 30_000,

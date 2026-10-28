@@ -8,6 +8,9 @@ services:
     pull_policy: always
     environment:
       DATABASE_URL: ${DATABASE_URL:?}
+    # The Dokploy PostgreSQL service is reachable only on dokploy-network.
+    networks:
+      - dokploy-network
     restart: 'no'
 
   api:
@@ -15,6 +18,8 @@ services:
     pull_policy: always
     environment:
       NODE_ENV: production
+      # staging keeps production hardening but requires Stripe rk_test_ keys.
+      DEPLOY_ENV: ${DEPLOY_ENV:-production}
       HOST: 0.0.0.0
       PORT: 6767
       DATABASE_URL: ${DATABASE_URL:?}
@@ -31,8 +36,40 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-}
       STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-}
+      # Media library: all five or none. Without them products cannot be published.
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      # Server-side tracking and marketing reports. Each group is all-or-none.
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      POSTHOG_PERSONAL_API_KEY: ${POSTHOG_PERSONAL_API_KEY:-}
+      POSTHOG_PROJECT_ID: ${POSTHOG_PROJECT_ID:-}
+      META_PIXEL_ID: ${META_PIXEL_ID:-}
+      META_CAPI_ACCESS_TOKEN: ${META_CAPI_ACCESS_TOKEN:-}
+      META_TEST_EVENT_CODE: ${META_TEST_EVENT_CODE:-}
+      META_ADS_ACCOUNT_ID: ${META_ADS_ACCOUNT_ID:-}
+      META_ADS_ACCESS_TOKEN: ${META_ADS_ACCESS_TOKEN:-}
+      TIKTOK_PIXEL_CODE: ${TIKTOK_PIXEL_CODE:-}
+      TIKTOK_EVENTS_ACCESS_TOKEN: ${TIKTOK_EVENTS_ACCESS_TOKEN:-}
+      TIKTOK_TEST_EVENT_CODE: ${TIKTOK_TEST_EVENT_CODE:-}
+      TIKTOK_ADVERTISER_ID: ${TIKTOK_ADVERTISER_ID:-}
+      TIKTOK_MARKETING_ACCESS_TOKEN: ${TIKTOK_MARKETING_ACCESS_TOKEN:-}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${GOOGLE_ADS_DEVELOPER_TOKEN:-}
+      GOOGLE_ADS_CLIENT_ID: ${GOOGLE_ADS_CLIENT_ID:-}
+      GOOGLE_ADS_CLIENT_SECRET: ${GOOGLE_ADS_CLIENT_SECRET:-}
+      GOOGLE_ADS_REFRESH_TOKEN: ${GOOGLE_ADS_REFRESH_TOKEN:-}
+      GOOGLE_ADS_CUSTOMER_ID: ${GOOGLE_ADS_CUSTOMER_ID:-}
+      GOOGLE_ADS_CONVERSION_ACTION_ID: ${GOOGLE_ADS_CONVERSION_ACTION_ID:-}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${GOOGLE_ADS_LOGIN_CUSTOMER_ID:-}
+      TRACKING_ALERT_EMAIL: ${TRACKING_ALERT_EMAIL:-}
     expose:
       - 6767
+    networks:
+      - default
+      - dokploy-network
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -45,4 +82,11 @@ services:
     expose:
       - 4183
       - 4184
+    networks:
+      - default
+      - dokploy-network
     restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true

@@ -13,7 +13,10 @@ export const developmentCorsOrigins = [
 
 export const guestCartCookieMaxAgeSeconds = 60 * 60 * 24 * 30
 
+export type DeployEnv = 'production' | 'staging'
+
 export interface AppConfig {
+  deployEnv: DeployEnv
   host: string
   port: number
   shutdownTimeoutMs: number
@@ -80,6 +83,17 @@ function parseShutdownTimeout(value: string | undefined) {
     throw new Error('SHUTDOWN_TIMEOUT_MS must be an integer between 1 and 300000')
   }
   return milliseconds
+}
+
+// Staging runs the production hardening (NODE_ENV=production) with Stripe test keys.
+function parseDeployEnv(value: string | undefined): DeployEnv {
+  const parsed = value?.trim() || 'production'
+
+  if (parsed !== 'production' && parsed !== 'staging') {
+    throw new Error('DEPLOY_ENV must be production or staging')
+  }
+
+  return parsed
 }
 
 function parsePort(value: string | undefined) {
@@ -187,7 +201,12 @@ function parseOrigin(name: string, value: string) {
   return url.origin
 }
 
-function parseStripeConfig(env: Environment, storefrontUrl: string, isProduction: boolean): StripeConfig | null {
+function parseStripeConfig(
+  env: Environment,
+  storefrontUrl: string,
+  isProduction: boolean,
+  requireLiveKey: boolean,
+): StripeConfig | null {
   const names = [
     'STRIPE_API_KEY',
     'STRIPE_WEBHOOK_SECRET',
@@ -206,9 +225,9 @@ function parseStripeConfig(env: Environment, storefrontUrl: string, isProduction
   }
 
   const [apiKey, webhookSecret, successUrl, cancelUrl] = values as [string, string, string, string]
-  const requiredKeyPrefix = isProduction ? 'rk_live_' : 'rk_test_'
+  const requiredKeyPrefix = requireLiveKey ? 'rk_live_' : 'rk_test_'
   if (!apiKey.startsWith(requiredKeyPrefix)) {
-    throw new Error(isProduction
+    throw new Error(requireLiveKey
       ? 'STRIPE_API_KEY must be a restricted rk_live_ key in production'
       : 'STRIPE_API_KEY must be a restricted rk_test_ key outside production')
   }
@@ -384,6 +403,7 @@ function parseTrackingConfig(env: Environment): TrackingConfig {
 export function loadConfig(env: Environment = process.env): AppConfig {
   const corsOrigins = parseOrigins(env.CORS_ORIGINS)
   const isProduction = env.NODE_ENV === 'production'
+  const deployEnv = parseDeployEnv(env.DEPLOY_ENV)
 
   if (isProduction && corsOrigins.length === 0) {
     throw new Error('CORS_ORIGINS is required when NODE_ENV is production')
@@ -422,7 +442,12 @@ export function loadConfig(env: Environment = process.env): AppConfig {
     'ADMIN_URL',
     requiredValue('ADMIN_URL', env.ADMIN_URL),
   )
-  const stripe = parseStripeConfig(env, storefrontUrl, isProduction)
+  const stripe = parseStripeConfig(
+    env,
+    storefrontUrl,
+    isProduction,
+    isProduction && deployEnv === 'production',
+  )
 
   if (isProduction && !corsOrigins.includes(storefrontUrl)) {
     throw new Error('STOREFRONT_URL must be included in CORS_ORIGINS')
@@ -433,6 +458,7 @@ export function loadConfig(env: Environment = process.env): AppConfig {
   }
 
   return {
+    deployEnv,
     host: env.HOST?.trim() || '0.0.0.0',
     port: parsePort(env.PORT),
     shutdownTimeoutMs: parseShutdownTimeout(env.SHUTDOWN_TIMEOUT_MS),

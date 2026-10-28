@@ -32,6 +32,19 @@ Repository **variables** (Settings → Secrets and variables → Actions → Var
 |---|---|
 | `API_URL` | `https://api.example.com` |
 | `ADMIN_URL` | `https://admin.example.com` |
+| `STOREFRONT_URL` | `https://example.com` (canonical URLs, Open Graph, sitemap) |
+
+Release fails if any of these three is missing, so a web image never ships with a localhost URL.
+
+Optional storefront tracking variables. They are public browser IDs, so variables rather than secrets; leave one unset to disable it:
+
+| Variable | Embedded as |
+|---|---|
+| `POSTHOG_KEY` | `VITE_POSTHOG_KEY` (project API key, `phc_…`) |
+| `POSTHOG_HOST` | `VITE_POSTHOG_HOST` (defaults to `https://us.i.posthog.com`) |
+| `META_PIXEL_ID` | `VITE_META_PIXEL_ID` |
+| `TIKTOK_PIXEL_CODE` | `VITE_TIKTOK_PIXEL_CODE` |
+| `GOOGLE_ADS_ID` | `VITE_GOOGLE_ADS_ID` (`AW-…`) |
 
 Repository or `production` environment **secrets**, used to trigger the deploy. Release still pushes images when they are absent:
 
@@ -47,7 +60,7 @@ GHCR packages start private. Either make the three `suannn-*` packages public or
 
 1. Create a **PostgreSQL** database service and configure scheduled backups. Copy its internal connection URL.
 2. Create a **Docker Compose** app from this repository with compose path `compose.prod.yaml`. Leave Dokploy's own auto-deploy off; the Release workflow triggers deploys.
-3. Set its environment:
+3. Set its environment. `.env.example` in the repository root is the full template with every variable `compose.prod.yaml` reads; the essentials are:
 
    ```dotenv
    DATABASE_URL=postgresql://...            # internal URL from step 1
@@ -60,6 +73,25 @@ GHCR packages start private. Either make the three `suannn-*` packages public or
    AUTH_EMAIL_FROM=Suannn <auth@example.com> # sender on a domain verified in Resend
    # TRUSTED_PROXY_HEADERS=x-real-ip         # default; use cf-connecting-ip behind Cloudflare proxy
    # STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL
+
+   # Media library (Cloudflare R2). All five or none; without them uploads return 503
+   # and products and farms cannot be published, so production needs them.
+   R2_ACCOUNT_ID=
+   R2_ACCESS_KEY_ID=
+   R2_SECRET_ACCESS_KEY=
+   R2_BUCKET=suannn-prod
+   R2_PUBLIC_URL=https://media.example.com
+
+   # Optional server-side tracking and marketing reports; each group is all-or-none.
+   # See apps/api/README.md for what each group enables.
+   # POSTHOG_API_KEY / POSTHOG_HOST
+   # POSTHOG_PERSONAL_API_KEY / POSTHOG_PROJECT_ID
+   # META_PIXEL_ID / META_CAPI_ACCESS_TOKEN (+ META_TEST_EVENT_CODE)
+   # META_ADS_ACCOUNT_ID / META_ADS_ACCESS_TOKEN
+   # TIKTOK_PIXEL_CODE / TIKTOK_EVENTS_ACCESS_TOKEN (+ TIKTOK_TEST_EVENT_CODE)
+   # TIKTOK_ADVERTISER_ID / TIKTOK_MARKETING_ACCESS_TOKEN
+   # GOOGLE_ADS_DEVELOPER_TOKEN / _CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN / _CUSTOMER_ID / _CONVERSION_ACTION_ID (+ _LOGIN_CUSTOMER_ID)
+   # TRACKING_ALERT_EMAIL
    ```
 
 4. Add domains (HTTPS on, Let's Encrypt): `web` port `4183` → storefront host, `web` port `4184` → admin host, `api` port `6767` → API host.
@@ -69,9 +101,24 @@ GHCR packages start private. Either make the three `suannn-*` packages public or
    bun src/cli/bootstrap-owner.ts owner@example.com
    ```
 
+### Cloudflare R2
+
+Create a production-only bucket (never share one with development or CI) and an R2 API token scoped to it with object read/write. Connect a custom domain to the bucket and use it as `R2_PUBLIC_URL`; `r2.dev` URLs are rate limited and not edge-cached. `R2_PUBLIC_URL` is the public URL, not the `*.r2.cloudflarestorage.com` S3 endpoint. Image URLs are derived from it at read time, so changing the domain later is a config change only.
+
 ### Stripe (optional)
 
 With `NODE_ENV=production` the API only accepts a restricted `rk_live_` key. Register a webhook endpoint at `https://api.example.com/api/v1/webhooks/stripe` for the events listed in `apps/api/.env.example`, and use that endpoint's signing secret. Success and cancel URLs must use the storefront origin.
+
+## Staging
+
+A staging stack is the same `compose.prod.yaml` deployed from the `staging` branch. Release builds `:staging` images under the `staging` GitHub environment (main uses `production`), so put that stack's `API_URL`, `ADMIN_URL`, `STOREFRONT_URL`, and `DOKPLOY_*` values on the `staging` environment in GitHub. In the Dokploy compose app set:
+
+```dotenv
+DEPLOY_ENV=staging   # keeps production hardening but requires a Stripe rk_test_ key
+IMAGE_TAG=staging
+```
+
+Use a test-mode Stripe webhook endpoint on the staging API host and its signing secret.
 
 ## Routine deploys
 

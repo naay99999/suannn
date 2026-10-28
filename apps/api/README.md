@@ -77,7 +77,7 @@ The native storefront uses Stripe Hosted Checkout for customer and guest orders.
 
 Set all four Stripe values together to enable Checkout:
 
-- `STRIPE_API_KEY`: a restricted server-side key, `rk_test_...` for development/CI and `rk_live_...` for production.
+- `STRIPE_API_KEY`: a restricted server-side key, `rk_test_...` for development/CI and `rk_live_...` for production. A staging deployment (`NODE_ENV=production` with `DEPLOY_ENV=staging`) requires `rk_test_...`.
 - `STRIPE_WEBHOOK_SECRET`: the signing secret for this API's Stripe webhook endpoint.
 - `STRIPE_SUCCESS_URL`: a URL on the exact `STOREFRONT_URL` origin. Include `session_id={CHECKOUT_SESSION_ID}` if the return page needs to look up the Checkout Session.
 - `STRIPE_CANCEL_URL`: a URL on the exact `STOREFRONT_URL` origin.
