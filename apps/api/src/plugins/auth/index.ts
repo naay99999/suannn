@@ -26,17 +26,6 @@ type PreparedAuthRequest = { request: Request; bypassStaffMfa: boolean } | Respo
 
 const invalidCredentials = { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' }
 
-// Better Auth's success body for request-password-reset, also used for unknown emails.
-const passwordResetAccepted = {
-  status: true,
-  message: 'If this email exists in our system, check your email for the reset link',
-}
-
-const otherAccountType: Record<AuthSurface, 'customer' | 'staff'> = {
-  customer: 'staff',
-  staff: 'customer',
-}
-
 const staffCookiePrefix = authSurfaces.staff.cookiePrefix.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')
 const staffTwoFactorCookie = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${staffCookiePrefix}\\.two_factor=`)
 
@@ -105,7 +94,9 @@ async function prepareAuthRequest(
       const email = normalizeEmail(body.email)
       const state = await dependencies.identityReservations.findState(email)
 
-      if (state === 'pending_staff' || state === 'pending_customer' || state === otherAccountType[surface]) {
+      // The other account type is refused by the instance's session.create.before hook,
+      // after Better Auth's origin checks and rate limits, with this same 401 body.
+      if (state === 'pending_staff' || state === 'pending_customer') {
         return jsonResponse(401, invalidCredentials)
       }
 
@@ -116,20 +107,6 @@ async function prepareAuthRequest(
         method: request.method,
         body: JSON.stringify({ ...body, email }),
       }), bypassStaffMfa }
-    }
-  }
-
-  if (surface === 'customer' && request.method === 'POST' && path === '/request-password-reset') {
-    const body = await readJsonObject(request)
-    if (body instanceof Response) return body
-
-    if (typeof body.email === 'string') {
-      const state = await dependencies.identityReservations.findState(normalizeEmail(body.email))
-
-      // Staff resets are issued only by staff management; answer like an unknown email.
-      if (state === 'staff' || state === 'pending_staff') {
-        return jsonResponse(200, passwordResetAccepted)
-      }
     }
   }
 

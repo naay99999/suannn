@@ -186,6 +186,9 @@ export function createAuth(
       minPasswordLength: 12,
       maxPasswordLength: 256,
       sendResetPassword: async ({ user, url }) => {
+        // Staff reset links come only from staff management. The customer instance still runs
+        // Better Auth's full request path (origin check, rate limit, response) and just sends nothing.
+        if (surface === 'customer' && (user as { accountType?: unknown }).accountType === 'staff') return
         const template = surface === 'staff' ? 'staff-reset-password' : 'reset-password'
         const content = surface === 'staff' ? staffResetPasswordEmail(url) : resetPasswordEmail(url)
         scheduleBackground(

@@ -101,11 +101,6 @@ const alwaysDenied = [
   ['GET', '/reset-password/'],
 ] as const
 
-const resetSuccessBody = {
-  status: true,
-  message: 'If this email exists in our system, check your email for the reset link',
-}
-
 describe('Better Auth HTTP policy', () => {
   it('redacts password-reset tokens from request log paths', () => {
     expect(requestLogPath('http://localhost/api/v1/auth/reset-password/raw-secret-token'))
@@ -212,7 +207,7 @@ describe('Better Auth HTTP policy', () => {
     }
   })
 
-  it('rejects the other account type on sign-in without calling Better Auth', async () => {
+  it('forwards other-account-type sign-in so Better Auth rate limits and refuses it', async () => {
     for (const [surface, state] of [['customer', 'staff'], ['staff', 'customer']] as const) {
       const { auth, calls } = fakeAuth(surface)
       const app = appFor(surface, auth, { identityReservations: { findState: async () => state } })
@@ -220,12 +215,8 @@ describe('Better Auth HTTP policy', () => {
         email: 'person@example.com', password: 'secret',
       }))
 
-      expect(response.status).toBe(401)
-      expect(await response.json()).toEqual({
-        code: 'INVALID_EMAIL_OR_PASSWORD',
-        message: 'Invalid email or password',
-      })
-      expect(calls.handled).toBe(0)
+      expect(response.status).toBe(200)
+      expect(calls.handled).toBe(1)
     }
   })
 
@@ -278,33 +269,12 @@ describe('Better Auth HTTP policy', () => {
     expect(bypassed).toBe(1)
   })
 
-  it('answers a customer password reset for a staff email with the normal success body and sends nothing', async () => {
-    for (const state of ['staff', 'pending_staff'] as const) {
-      const { auth, calls } = fakeAuth('customer')
-      const app = appFor('customer', auth, {
-        identityReservations: {
-          async findState(email) {
-            expect(email).toBe('staff@example.com')
-            return state
-          },
-        },
-      })
-      const response = await app.handle(post('customer', '/request-password-reset', {
-        email: ' Staff@Example.com ', redirectTo: 'http://localhost:5183/reset-password',
-      }))
-
-      expect(response.status).toBe(200)
-      expect(await response.json()).toEqual(resetSuccessBody)
-      expect(calls.handled).toBe(0)
-    }
-  })
-
-  it('forwards a customer password reset for a customer or unknown email', async () => {
-    for (const state of ['customer', null] as const) {
+  it('forwards every customer password reset so Better Auth applies its checks', async () => {
+    for (const state of ['staff', 'pending_staff', 'customer', null] as const) {
       const { auth, calls } = fakeAuth('customer')
       const app = appFor('customer', auth, { identityReservations: { findState: async () => state } })
       const response = await app.handle(post('customer', '/request-password-reset', {
-        email: 'customer@example.com',
+        email: 'person@example.com',
       }))
 
       expect(response.status).toBe(200)
@@ -351,7 +321,6 @@ describe('Better Auth HTTP policy', () => {
   it('returns 400 for malformed JSON and non-object auth bodies', async () => {
     const cases = [
       ['customer', '/sign-in/email'],
-      ['customer', '/request-password-reset'],
       ['staff', '/sign-in/email'],
       ['staff', '/two-factor/verify-totp'],
     ] as const
