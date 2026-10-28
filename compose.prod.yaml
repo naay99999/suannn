@@ -1,11 +1,12 @@
 # Production stack for Dokploy (Docker Compose app type).
-# Images are built and pushed by .github/workflows/ci.yml.
+# Dokploy builds the images on the server from the deployed commit (`up --build`).
 # Domains and TLS are configured in the Dokploy UI; see docs/deployment.md.
 
 services:
   migrate:
-    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-migrate:${IMAGE_TAG:-main}
-    pull_policy: always
+    build:
+      context: .
+      target: migrate
     environment:
       DATABASE_URL: ${DATABASE_URL:?}
     # The Dokploy PostgreSQL service is reachable only on dokploy-network.
@@ -14,8 +15,9 @@ services:
     restart: 'no'
 
   api:
-    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-api:${IMAGE_TAG:-main}
-    pull_policy: always
+    build:
+      context: .
+      target: api
     environment:
       NODE_ENV: production
       # staging keeps production hardening but requires Stripe rk_test_ keys.
@@ -77,8 +79,19 @@ services:
     stop_grace_period: 35s
 
   web:
-    image: ${IMAGE_PREFIX:-ghcr.io/naay99999/suannn}-web:${IMAGE_TAG:-main}
-    pull_policy: always
+    build:
+      context: .
+      target: web
+      # Vite embeds these at build time; the tracking IDs are public and empty disables each.
+      args:
+        VITE_API_URL: ${API_URL:?}
+        VITE_ADMIN_URL: ${ADMIN_URL:?}
+        VITE_SITE_URL: ${STOREFRONT_URL:?}
+        VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY:-}
+        VITE_POSTHOG_HOST: ${VITE_POSTHOG_HOST:-}
+        VITE_META_PIXEL_ID: ${VITE_META_PIXEL_ID:-}
+        VITE_TIKTOK_PIXEL_CODE: ${VITE_TIKTOK_PIXEL_CODE:-}
+        VITE_GOOGLE_ADS_ID: ${VITE_GOOGLE_ADS_ID:-}
     expose:
       - 4183
       - 4184

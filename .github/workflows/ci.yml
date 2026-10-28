@@ -2,10 +2,9 @@ name: CI
 
 # Pull requests and main run the full suite. A push to staging skips the integration
 # suite (the pre-push hook runs it locally) so it deploys sooner.
-# On main and staging the images build alongside the checks under a commit-SHA tag only.
-# After every check passes, deploy moves the branch tag (main or staging) to that commit
-# and asks Dokploy to redeploy. main uses the `production` GitHub environment and
-# staging the `staging` one, so each holds its own URL variables and Dokploy secrets.
+# On main and staging, once every check passes, deploy asks Dokploy to redeploy; Dokploy
+# builds the images on the server. main uses the `production` GitHub environment and
+# staging the `staging` one, so each holds its own Dokploy secrets.
 on:
   pull_request:
   push:
@@ -74,81 +73,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:integration
 
-  images:
-    if: github.event_name != 'pull_request' && contains(fromJSON('["main","staging"]'), github.ref_name)
-    runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        target: [api, migrate, web]
-    steps:
-      - name: Require public URL variables
-        if: matrix.target == 'web'
-        env:
-          API_URL: ${{ vars.API_URL }}
-          ADMIN_URL: ${{ vars.ADMIN_URL }}
-          STOREFRONT_URL: ${{ vars.STOREFRONT_URL }}
-        run: |
-          for name in API_URL ADMIN_URL STOREFRONT_URL; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Variable $name is not set; the web image would embed a localhost URL."
-              exit 1
-            fi
-          done
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: ${{ matrix.target }}
-          push: true
-          build-args: |
-            VITE_API_URL=${{ vars.API_URL }}
-            VITE_ADMIN_URL=${{ vars.ADMIN_URL }}
-            VITE_SITE_URL=${{ vars.STOREFRONT_URL }}
-            VITE_POSTHOG_KEY=${{ vars.POSTHOG_KEY }}
-            VITE_POSTHOG_HOST=${{ vars.POSTHOG_HOST }}
-            VITE_META_PIXEL_ID=${{ vars.META_PIXEL_ID }}
-            VITE_TIKTOK_PIXEL_CODE=${{ vars.TIKTOK_PIXEL_CODE }}
-            VITE_GOOGLE_ADS_ID=${{ vars.GOOGLE_ADS_ID }}
-          tags: ghcr.io/${{ github.repository }}-${{ matrix.target }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,scope=${{ matrix.target }},mode=max
-
   deploy:
-    needs: [check, integration, images]
+    needs: [check, integration]
     # integration is skipped on staging; every job that ran must have passed.
     if: >-
       !cancelled() &&
+      github.event_name != 'pull_request' &&
+      contains(fromJSON('["main","staging"]'), github.ref_name) &&
       needs.check.result == 'success' &&
-      needs.images.result == 'success' &&
       contains(fromJSON('["success","skipped"]'), needs.integration.result)
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-    permissions:
-      contents: read
-      packages: write
     steps:
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Move the branch tag to this commit
-        run: |
-          for target in api migrate web; do
-            image="ghcr.io/${{ github.repository }}-$target"
-            docker buildx imagetools create -t "$image:${{ github.ref_name }}" "$image:${{ github.sha }}"
-          done
       - name: Trigger Dokploy deploy
         env:
           DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
@@ -156,7 +92,7 @@ jobs:
           DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
         run: |
           if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
-            echo "::notice::Dokploy secrets are not set; images were tagged but no deploy was triggered."
+            echo "::notice::Dokploy secrets are not set; no deploy was triggered."
             exit 0
           fi
           curl --fail-with-body -sS -X POST "${DOKPLOY_URL%/}/api/compose.deploy" \

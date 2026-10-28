@@ -35,7 +35,7 @@ This starts PostgreSQL, applies Drizzle migrations once, then serves:
 
 Create the first owner invitation with `docker compose run --rm api bun src/cli/bootstrap-owner.ts <email>`. `docker compose down -v` removes the database volume. The frontend API URLs are baked in at build time through the `web` service build args.
 
-Production runs the same images through Dokploy; see [`docs/deployment.md`](docs/deployment.md).
+Production builds the same Dockerfile targets on the server through Dokploy; see [`docs/deployment.md`](docs/deployment.md).
 
 ## Quality checks
 
