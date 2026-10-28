@@ -46,7 +46,7 @@
 - `apps/api/src/shared/domain-error.ts`
 - `apps/api/test/integration/checkout.test.ts`
 - `apps/api/test/unit/checkout-routes.test.ts`
-- `.superpowers/sdd/2026-09-27-stripe-one-time-payments/task-3-report.md`
+- `docs/reports/2026-09-27-stripe-one-time-payments-task-3.md`
 
 ## Self-review and limitations
 

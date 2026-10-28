@@ -10,6 +10,9 @@ coverage/
 .vite/
 .worktrees/
 
+# Agent scratch output (task reports worth keeping go in docs/reports/)
+.superpowers/
+
 # Local environment configuration
 .env
 .env.*
