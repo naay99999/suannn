@@ -21,6 +21,9 @@
     "test:integration": "bun --filter api test:integration",
     "check": "bun run lint && bun run typecheck && bun run test && bun run build",
     "check:fast": "bun run lint && bun run typecheck && bun run test:unit && bun run build",
-    "hooks:install": "git config core.hooksPath scripts/git-hooks"
+    "prepare": "test ! -e .git || lefthook install"
+  },
+  "devDependencies": {
+    "lefthook": "^2.2.2"
   }
 }

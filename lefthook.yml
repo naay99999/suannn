@@ -1,0 +1,11 @@
+# Git hooks, installed by `bun install` (the root prepare script).
+# CI skips the integration suite on staging pushes, so it runs here instead.
+# Skip once with `git push --no-verify`. The suite resets TEST_DATABASE_URL and refuses
+# any database whose name does not end in _test.
+pre-push:
+  jobs:
+    - name: api integration tests
+      only:
+        - ref: main
+        - ref: staging
+      run: TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgresql://$(whoami)@127.0.0.1:5432/suannn_test}" bun run test:integration

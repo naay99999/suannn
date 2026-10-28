@@ -123,13 +123,7 @@ IMAGE_TAG=staging
 
 Use a test-mode Stripe webhook endpoint on the staging API host and its signing secret.
 
-CI skips the integration suite on staging pushes to deploy sooner. Install the pre-push hook once per clone so it runs locally before pushing to `staging` or `main`:
-
-```bash
-bun run hooks:install   # sets core.hooksPath to scripts/git-hooks
-```
-
-The hook uses `TEST_DATABASE_URL`, defaulting to `postgresql://$(whoami)@127.0.0.1:5432/suannn_test`. Skip it once with `git push --no-verify`.
+CI skips the integration suite on staging pushes to deploy sooner. A lefthook pre-push hook (`lefthook.yml`, installed by `bun install`) runs it locally when pushing from `main` or `staging`. It uses `TEST_DATABASE_URL`, defaulting to `postgresql://$(whoami)@127.0.0.1:5432/suannn_test`. Skip it once with `git push --no-verify`.
 
 ## Routine deploys
 
