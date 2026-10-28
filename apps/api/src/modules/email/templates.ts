@@ -41,6 +41,15 @@ export function resetPasswordEmail(url: string) {
   )
 }
 
+export function staffResetPasswordEmail(url: string) {
+  return linkEmail(
+    'ตั้งรหัสผ่าน Suannn Admin ใหม่ / Reset your Suannn Admin password',
+    'ผู้ดูแลระบบขอให้คุณตั้งรหัสผ่านใหม่สำหรับ Suannn Admin ลิงก์นี้ใช้ได้ 1 ชั่วโมง หากไม่ได้คาดว่าจะได้รับอีเมลนี้ โปรดติดต่อผู้ดูแลระบบ / An administrator requested a password reset for your Suannn Admin account. This link is valid for 1 hour. If you did not expect this email, contact your administrator.',
+    'ตั้งรหัสผ่านใหม่ / Reset password',
+    url,
+  )
+}
+
 export function invitationEmail(roleName: string, url: string) {
   return linkEmail(
     'You are invited to Suannn Admin',

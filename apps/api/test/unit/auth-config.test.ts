@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'bun:test'
 import { loadConfig } from '../../src/config/env'
 import { createDatabase } from '../../src/database/client'
 import * as authSchema from '../../src/database/schema/auth'
-import { createAuth, type AuthDependencies } from '../../src/plugins/auth/auth'
+import { authSurfaces, createAuth, type AuthDependencies } from '../../src/plugins/auth/auth'
 import { testEnv } from '../fixtures'
 
 const config = loadConfig(testEnv)
@@ -17,6 +17,7 @@ const dependencies: AuthDependencies = {
   },
 }
 const auth = createAuth(config, database.db, dependencies)
+const staffAuth = createAuth(config, database.db, dependencies, 'staff')
 
 afterAll(async () => {
   await Promise.allSettled(backgroundTasks)
@@ -75,5 +76,32 @@ describe('Better Auth security configuration', () => {
       expect(signupSchema).not.toContain(field)
       expect(updateSessionSchema).not.toContain(field)
     }
+  })
+})
+
+describe('Better Auth surfaces', () => {
+  it('defines a base path and cookie prefix per surface', () => {
+    expect(authSurfaces).toEqual({
+      customer: { basePath: '/api/v1/auth', cookiePrefix: 'better-auth' },
+      staff: { basePath: '/api/v1/staff-auth', cookiePrefix: 'suannn-staff' },
+    })
+  })
+
+  it('keeps the customer instance on the existing path and cookie prefix by default', () => {
+    expect(auth.options.basePath).toBe('/api/v1/auth')
+    expect(auth.options.advanced?.cookiePrefix).toBe('better-auth')
+  })
+
+  it('serves the staff instance from its own path and cookie prefix', () => {
+    expect(staffAuth.options.basePath).toBe('/api/v1/staff-auth')
+    expect(staffAuth.options.advanced?.cookiePrefix).toBe('suannn-staff')
+  })
+
+  it('uses custom rate-limit storage when provided', () => {
+    const rateLimitStorage = { consume: async () => ({ allowed: true, retryAfter: null }) }
+    const limited = createAuth(config, database.db, { ...dependencies, rateLimitStorage } as never, 'staff')
+
+    expect(limited.options.rateLimit?.customStorage).toBe(rateLimitStorage as never)
+    expect(staffAuth.options.rateLimit?.customStorage).toBeUndefined()
   })
 })

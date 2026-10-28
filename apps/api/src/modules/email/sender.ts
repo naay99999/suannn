@@ -5,6 +5,7 @@ import type { EmailContent } from './templates'
 export type EmailTemplate =
   | 'verify-email'
   | 'reset-password'
+  | 'staff-reset-password'
   | 'staff-invitation'
   | 'staff-mfa-recovery'
   | 'change-email'

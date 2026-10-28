@@ -1,5 +1,5 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
-import { betterAuth } from 'better-auth'
+import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { openAPI } from 'better-auth/plugins'
 import { admin } from 'better-auth/plugins/admin'
@@ -14,7 +14,11 @@ import {
   type EmailDeliveryLogger,
   type EmailSender,
 } from '../../modules/email/sender'
-import { resetPasswordEmail, verificationEmail } from '../../modules/email/templates'
+import {
+  resetPasswordEmail,
+  staffResetPasswordEmail,
+  verificationEmail,
+} from '../../modules/email/templates'
 import * as schema from '../../database/schema/auth'
 import type { AuditContext } from '../../modules/audit/model'
 import type { AuditService } from '../../modules/audit/service'
@@ -27,6 +31,15 @@ import {
   validateStaffSession,
 } from './session-policy'
 
+export type AuthSurface = 'customer' | 'staff'
+
+export const authSurfaces: Record<AuthSurface, { basePath: string; cookiePrefix: string }> = {
+  customer: { basePath: '/api/v1/auth', cookiePrefix: 'better-auth' },
+  staff: { basePath: '/api/v1/staff-auth', cookiePrefix: 'suannn-staff' },
+}
+
+type BetterAuthRateLimitStorage = NonNullable<NonNullable<BetterAuthOptions['rateLimit']>['customStorage']>
+
 export interface AuthDependencies {
   emailSender: EmailSender
   runInBackground(task: Promise<unknown>): void
@@ -35,6 +48,7 @@ export interface AuthDependencies {
   audit?: AuditService
   staffMfaRequired?(): Promise<boolean>
   customerEmailVerificationRequired?(): Promise<boolean>
+  rateLimitStorage?: BetterAuthRateLimitStorage
 }
 
 const backupCodeAuditContext = new AsyncLocalStorage<{ userId: string; context: AuditContext }>()
@@ -61,19 +75,26 @@ export function createAuth(
   config: AppConfig,
   db: Database,
   dependencies: AuthDependencies = unconfiguredDependencies,
+  surface: AuthSurface = 'customer',
 ) {
   return betterAuth({
     appName: 'Suannn',
     baseURL: config.betterAuthUrl,
-    basePath: '/api/v1/auth',
+    basePath: authSurfaces[surface].basePath,
     secret: config.betterAuthSecret,
     database: ((options: never) => {
-      const adapter = drizzleAdapter(db, { provider: 'pg', schema })(options)
-      return {
+      type TransactionAdapter = Omit<ReturnType<ReturnType<typeof drizzleAdapter>>, 'transaction'>
+      const wrap = (adapter: TransactionAdapter) => ({
         ...adapter,
         async findOne(input: Parameters<typeof adapter.findOne>[0]) {
           const result = await adapter.findOne(input)
           const foundUser = result as Record<string, unknown> | null
+          if (foundUser && input.model === 'session' && 'user' in foundUser) {
+            const sessionUser = foundUser.user as { accountType?: unknown } | null
+            // A session that belongs to the other account type resolves as no session.
+            if (sessionUser && (sessionUser.accountType ?? 'customer') !== surface) return null
+            return result
+          }
           if (!foundUser || !staffMfaBypass.getStore() || input.model !== 'user'
             || foundUser.accountType !== 'staff' || await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))) {
             return result
@@ -102,6 +123,15 @@ export function createAuth(
             return result
           })
         },
+      })
+      const adapter = drizzleAdapter(db, { provider: 'pg', schema })(options)
+      return {
+        ...wrap(adapter),
+        // Better Auth runs transactional work against the adapter handed to this callback
+        // (via getCurrentAdapter), so it must carry the same surface and MFA rules.
+        transaction: ((callback) => adapter.transaction((transactionAdapter) => (
+          callback(wrap(transactionAdapter) as typeof transactionAdapter)
+        ))) as typeof adapter.transaction,
       }
     }) as never,
     databaseHooks: {
@@ -115,6 +145,13 @@ export function createAuth(
               .from(schema.user)
               .where(eq(schema.user.id, newSession.userId))
               .limit(1)
+
+            if ((account?.accountType ?? 'customer') !== surface) {
+              throw new APIError('UNAUTHORIZED', {
+                code: 'INVALID_EMAIL_OR_PASSWORD',
+                message: 'Invalid email or password',
+              })
+            }
 
             if (account?.accountType !== 'staff') {
               if (account && !account.emailVerified
@@ -149,13 +186,15 @@ export function createAuth(
       minPasswordLength: 12,
       maxPasswordLength: 256,
       sendResetPassword: async ({ user, url }) => {
+        const template = surface === 'staff' ? 'staff-reset-password' : 'reset-password'
+        const content = surface === 'staff' ? staffResetPasswordEmail(url) : resetPasswordEmail(url)
         scheduleBackground(
           () => dependencies.emailSender.send({
             to: user.email,
-            template: 'reset-password',
-            ...resetPasswordEmail(url),
+            template,
+            ...content,
           }),
-          { template: 'reset-password' },
+          { template },
           dependencies.emailLogger,
           dependencies.enqueueEmailTask ?? ((task) => dependencies.runInBackground(task())),
         )
@@ -232,6 +271,7 @@ export function createAuth(
     rateLimit: {
       enabled: true,
       storage: 'database',
+      ...(dependencies.rateLimitStorage ? { customStorage: dependencies.rateLimitStorage } : {}),
       window: 60,
       max: 100,
       customRules: {
@@ -244,6 +284,7 @@ export function createAuth(
       },
     },
     advanced: {
+      cookiePrefix: authSurfaces[surface].cookiePrefix,
       useSecureCookies: config.secureCookies,
       disableCSRFCheck: false,
       disableOriginCheck: false,

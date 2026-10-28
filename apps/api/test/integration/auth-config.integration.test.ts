@@ -16,12 +16,14 @@ const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
 const emailSender = new FakeEmailSender()
 const backgroundTasks: Promise<unknown>[] = []
-const auth = createAuth(config, database.db, {
+const dependencies = {
   emailSender,
-  runInBackground(task) {
+  runInBackground(task: Promise<unknown>) {
     backgroundTasks.push(task)
   },
-})
+}
+const auth = createAuth(config, database.db, dependencies)
+const staffAuth = createAuth(config, database.db, dependencies, 'staff')
 let unlockDatabase: (() => Promise<void>) | undefined
 
 beforeAll(async () => {
@@ -75,7 +77,7 @@ describe('Better Auth against the migrated database', () => {
       staffActivatedAt: new Date(),
     }).where(eq(user.email, 'customer@example.com'))
 
-    const signedIn = await auth.api.signInEmail({
+    const signedIn = await staffAuth.api.signInEmail({
       body: {
         email: 'customer@example.com',
         password: 'correct horse battery staple',
@@ -91,7 +93,7 @@ describe('Better Auth against the migrated database', () => {
     expect(createdSession!.absoluteExpiresAt!.getTime() - createdSession!.lastActivityAt!.getTime())
       .toBe(8 * 60 * 60 * 1000)
 
-    const current = await auth.api.getSession({
+    const current = await staffAuth.api.getSession({
       headers: new Headers({ cookie: signedIn.headers.get('set-cookie') ?? '' }),
     })
 
