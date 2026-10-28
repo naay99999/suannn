@@ -45,6 +45,7 @@ COPY <<'EOF' /etc/caddy/Caddyfile
 (spa) {
 	encode zstd gzip
 	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	header /index.html Cache-Control "no-cache"
 	try_files {path} /index.html
 	file_server
 }

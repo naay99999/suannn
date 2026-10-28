@@ -119,4 +119,5 @@ Staff and customers now sign in through separate auth instances: the storefront 
 
 - On the first deploy with this change every staff member is signed out once and must sign in to admin again (with MFA). Customers stay signed in.
 - Staff can no longer reset a forgotten password from the storefront's forgot-password page; they ask an owner or admin.
+- Staff should reload admin before signing in after this deploy; `index.html` is now served with `Cache-Control: no-cache`, but a tab opened before the deploy keeps the old bundle.
 - Deploy the API and both frontends together (one Dokploy deploy does this). An old admin bundle talking to the new API fails sign-in until the page is reloaded.

@@ -147,13 +147,16 @@ async function prepareAuthRequest(
     }
   }
 
+  // Reset links are token-authenticated; a stale session cookie must not block recovery.
+  const isResetPassword = path === '/reset-password' || (path?.startsWith('/reset-password/') ?? false)
+
   if (path !== '/sign-in/email' && path !== '/sign-out' && path !== '/get-session'
-    && request.headers.has('cookie')) {
+    && !isResetPassword && request.headers.has('cookie')) {
     try {
       const current = await auth.api.getSession({ headers: request.headers })
 
       if (current?.user.accountType === 'staff'
-        && (!current.staff || path === '/change-password')) {
+        && !current.staff) {
         return jsonResponse(403, {
           code: 'MFA_ONBOARDING_REQUIRED',
           message: 'MFA onboarding required',
@@ -171,7 +174,9 @@ async function prepareAuthRequest(
 }
 
 export function createAuthMacros(auth: Auth) {
-  return new Elysia({ name: 'auth-macros' })
+  const surface = (auth.options as Auth['options'] | undefined)?.basePath === authSurfaces.staff.basePath ? 'staff' : 'customer'
+
+  return new Elysia({ name: `auth-macros-${surface}` })
     .macro({
       auth: {
         async resolve({ status, request: { headers } }) {

@@ -292,6 +292,52 @@ describe('admin-issued staff password reset', () => {
     expect((await signIn(targetEmail, newPassword)).response.status).toBe(200)
   })
 
+  it('reset link still works when the browser holds an idle-expired staff session', async () => {
+    const targetEmail = 'target@reset.example.com'
+    emailSender.messages.splice(0)
+    const signed = await staffAuth.api.signInEmail({
+      body: { email: targetEmail, password: newPassword },
+      returnHeaders: true,
+    })
+    const stale = {
+      cookie: signed.headers.getSetCookie().map((value) => value.split(';')[0]).join('; '),
+    }
+    expect(stale.cookie).toContain('suannn-staff.session_token')
+    await database.db.update(session).set({
+      lastActivityAt: new Date(Date.now() - 31 * 60 * 1000),
+    }).where(eq(session.userId, ids.target!))
+
+    const adminSigned = await staffAuth.api.signInEmail({
+      body: { email: 'admin@reset.example.com', password },
+      returnHeaders: true,
+    })
+    const cookie = adminSigned.headers.getSetCookie().map((value) => value.split(';')[0]).join('; ')
+    expect((await requestReset(ids.target!, cookie)).status).toBe(200)
+    await Promise.allSettled(backgroundTasks.splice(0))
+
+    const url = emailSender.messages[0]!.text.match(/https?:\/\/\S+/)?.[0]
+    if (!url) throw new Error('Missing reset URL')
+    const link = new URL(url)
+    const followed = await app.handle(new Request(`http://localhost${link.pathname}${link.search}`, {
+      headers: { cookie: stale.cookie },
+    }))
+    expect(followed.status).toBe(302)
+    const redirect = new URL(followed.headers.get('location') ?? '')
+    expect(redirect.origin + redirect.pathname).toBe(`${config.adminUrl}/reset-password`)
+    const token = redirect.searchParams.get('token')
+    if (!token) throw new Error('Missing reset token')
+
+    const reset = await app.handle(new Request('http://localhost/api/v1/staff-auth/reset-password', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', origin: config.adminUrl, 'sec-fetch-site': 'same-site',
+        cookie: stale.cookie,
+      },
+      body: JSON.stringify({ newPassword: 'yet another passphrase 2027', token }),
+    }))
+    expect(reset.status).toBe(200)
+  })
+
   it('owner recovery CLI refuses non-owners and records a null-actor audit for owners', async () => {
     const sent: string[] = []
     const recovery = databaseOwnerRecovery(database.db, audit, async (email) => void sent.push(email))
