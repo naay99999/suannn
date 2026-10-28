@@ -211,7 +211,8 @@ function createHarness(options: {
   }
   const empty = {} as never
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     audit: empty,
     customerSignup: empty,
     customerProfile: empty,

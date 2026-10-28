@@ -51,7 +51,8 @@ function createHarness(options: { denyAfter?: number } = {}) {
     },
   } as unknown as Auth
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     cart: cartService as unknown as CartService,
     discounts,
     staffMfaRequired: async () => true,

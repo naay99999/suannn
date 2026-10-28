@@ -112,3 +112,11 @@ CI skips the integration suite on staging pushes to deploy sooner. A lefthook pr
 Merge to `main`. When the CI checks pass it triggers Dokploy, which pulls the branch, builds the images on the server (a few minutes; the API keeps serving until the new containers start), runs `migrate`, then restarts `api` and `web`. Run CI manually from the Actions tab (on `main` or `staging`), or press Deploy in Dokploy, to redeploy without a new commit.
 
 To roll back, revert the commit on the branch and push; CI rebuilds and redeploys the earlier code. Migrations are forward-only, so roll back only across releases without schema changes.
+
+### Release note: separate staff and customer sessions
+
+Staff and customers now sign in through separate auth instances: the storefront keeps `/api/v1/auth` and the `better-auth.session_token` cookie, and admin uses `/api/v1/staff-auth` with the `suannn-staff.session_token` cookie. There is no migration and no new environment variable.
+
+- On the first deploy with this change every staff member is signed out once and must sign in to admin again (with MFA). Customers stay signed in.
+- Staff can no longer reset a forgotten password from the storefront's forgot-password page; they ask an owner or admin.
+- Deploy the API and both frontends together (one Dokploy deploy does this). An old admin bundle talking to the new API fails sign-in until the page is reloaded.

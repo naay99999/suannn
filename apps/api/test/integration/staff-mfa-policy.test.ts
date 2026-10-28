@@ -26,11 +26,13 @@ afterAll(async () => {
 
 describe('staff MFA enforcement switch', () => {
   it('skips existing staff enrollment during password sign-in when disabled and preserves customer MFA', async () => {
-    const auth = createAuth(config, database.db, {
+    const dependencies = {
       emailSender: { send: async () => ({ id: null }) },
-      runInBackground: (task) => void task,
+      runInBackground: (task: Promise<unknown>) => void task,
       staffMfaRequired: async () => false,
-    })
+    }
+    const auth = createAuth(config, database.db, dependencies)
+    const staffAuth = createAuth(config, database.db, dependencies, 'staff')
     const password = 'strong-password-for-test-123'
     const identities = [
       { email: 'mfa-policy-staff@example.com', accountType: 'staff' as const },
@@ -55,22 +57,26 @@ describe('staff MFA enforcement switch', () => {
       })
     }
 
-    const app = new Elysia().use(createAuthPlugin(auth, 'customer', {
+    const httpDependencies = {
       identityReservations: {
-        findState: async (email) => email.includes('staff') ? 'staff' : 'customer',
+        findState: async (email: string) => email.includes('staff') ? 'staff' as const : 'customer' as const,
       },
       staffMfaRequired: async () => false,
-    }))
+    }
+    const app = new Elysia()
+      .use(createAuthPlugin(auth, 'customer', httpDependencies))
+      .use(createAuthPlugin(staffAuth, 'staff', httpDependencies))
 
     for (const [email, shouldChallenge] of [
       ['mfa-policy-staff@example.com', false],
       ['mfa-policy-customer@example.com', true],
     ] as const) {
-      const response = await app.handle(new Request(`${config.betterAuthUrl}/api/v1/auth/sign-in/email`, {
+      const staff = email.includes('staff')
+      const response = await app.handle(new Request(`${config.betterAuthUrl}/api/v1/${staff ? 'staff-auth' : 'auth'}/sign-in/email`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          origin: config.adminUrl,
+          origin: staff ? config.adminUrl : config.storefrontUrl,
         },
         body: JSON.stringify({ email, password }),
       }))
@@ -78,7 +84,8 @@ describe('staff MFA enforcement switch', () => {
 
       expect(response.status).toBe(200)
       expect(body.twoFactorRedirect === true).toBe(shouldChallenge)
-      if (email.includes('staff')) {
+      if (staff) {
+        expect(response.headers.getSetCookie().some((cookie) => cookie.startsWith('suannn-staff.session_token='))).toBe(true)
         const [persisted] = await database.db.select({ enabled: user.twoFactorEnabled })
           .from(user).where(eq(user.email, email)).limit(1)
         expect(persisted?.enabled).toBe(true)

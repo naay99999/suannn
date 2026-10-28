@@ -122,7 +122,8 @@ function createHarness(role = 'owner') {
     },
   } as unknown as Auth
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     storeAnnouncement,
     staffMfaRequired: async () => true,
     identityReservations: { findState: async () => null },

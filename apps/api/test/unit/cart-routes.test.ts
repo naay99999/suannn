@@ -70,7 +70,8 @@ async function createHarness(options: { denyRateLimit?: boolean; secureCookies?:
     },
   } as unknown as RateLimiter
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     audit: {} as AuditService,
     customerSignup: {} as CustomerSignupService,
     customerProfile: {} as CustomerProfileService,

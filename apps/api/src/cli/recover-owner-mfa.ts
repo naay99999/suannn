@@ -35,7 +35,7 @@ if (import.meta.main) {
   const auth = createAuth(config, database.db, {
     emailSender,
     runInBackground: (task) => backgroundTasks.push(task),
-  })
+  }, 'staff')
   const audit = new AuditService(new AuditRepository(database.db))
   const service = new RuntimeStaffMfaService({
     auth,

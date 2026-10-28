@@ -51,7 +51,7 @@ if (import.meta.main) {
   }
   const auth = createAuth(config, database.db, {
     emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task),
-  })
+  }, 'staff')
   const service = new StaffInvitationService({
     auth,
     claims: new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool),

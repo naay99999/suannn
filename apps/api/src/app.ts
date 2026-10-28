@@ -72,7 +72,8 @@ import { createRequestContextPlugin } from './plugins/request-context'
 import { apiTags, authOpenApiComponents, documentAuthPaths, type AuthPath } from './plugins/openapi'
 
 export interface AppDependencies {
-  auth: Auth
+  customerAuth: Auth
+  staffAuth: Auth
   audit: AuditService
   customerSignup: CustomerSignupService
   customerProfile: CustomerProfileService
@@ -111,7 +112,12 @@ export interface AppDependencies {
 }
 
 export async function createApp(config: AppConfig, dependencies: AppDependencies) {
-  const authOpenApiSchema = await dependencies.auth.api.generateOpenAPISchema()
+  const customerAuthOpenApi = await dependencies.customerAuth.api.generateOpenAPISchema()
+  const staffAuthOpenApi = await dependencies.staffAuth.api.generateOpenAPISchema()
+  const authHttpDependencies = {
+    identityReservations: dependencies.identityReservations,
+    staffMfaRequired: dependencies.staffMfaRequired,
+  }
 
   return new Elysia({ name: 'api' })
     .use(openapi({
@@ -124,12 +130,18 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
       documentation: {
         info: {
           title: 'Suannn API',
-          description: 'Suannn API v1. Browser clients authenticate with Better Auth session cookies. Staff operations require an active staff session and the stated permission. List endpoints return { items, nextCursor }; pass nextCursor as cursor for the next page. Application route errors use { code, message }; Better Auth routes use their documented error responses. Responses include X-Request-ID.',
+          description: 'Suannn API v1. Browser clients authenticate with Better Auth session cookies: customers through /api/v1/auth (better-auth.session_token) and staff through /api/v1/staff-auth (suannn-staff.session_token). The two sessions are independent and each surface ignores the other. Staff operations require an active staff session and the stated permission. List endpoints return { items, nextCursor }; pass nextCursor as cursor for the next page. Application route errors use { code, message }; Better Auth routes use their documented error responses. Responses include X-Request-ID.',
           version: 'v1',
         },
         tags: apiTags,
-        components: authOpenApiComponents(authOpenApiSchema.components as Record<string, unknown>) as never,
-        paths: documentAuthPaths(authOpenApiSchema.paths as Record<string, AuthPath>) as never,
+        components: authOpenApiComponents({
+          ...staffAuthOpenApi.components,
+          ...customerAuthOpenApi.components,
+        } as Record<string, unknown>) as never,
+        paths: {
+          ...documentAuthPaths('customer', customerAuthOpenApi.paths as Record<string, AuthPath>),
+          ...documentAuthPaths('staff', staffAuthOpenApi.paths as Record<string, AuthPath>),
+        } as never,
       },
     }))
     .use(createCorsPlugin(config))
@@ -137,57 +149,56 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
     .use(createStripeWebhookModule(dependencies.stripeEvents))
-    .use(createAuthPlugin(dependencies.auth, 'customer', {
-      identityReservations: dependencies.identityReservations,
-      staffMfaRequired: dependencies.staffMfaRequired,
-    }))
+    .use(new Elysia({ name: 'better-auth-surfaces' })
+      .use(createAuthPlugin(dependencies.customerAuth, 'customer', authHttpDependencies))
+      .use(createAuthPlugin(dependencies.staffAuth, 'staff', authHttpDependencies)))
     .use(createCustomerAuthModule(config, dependencies.customerSignup))
-    .use(createCustomerProfileModule(config, dependencies.auth, dependencies.customerProfile))
-    .use(createCustomerAddressModule(config, dependencies.auth, dependencies.customerAddresses))
-    .use(createCustomerEmailChangeModule(config, dependencies.auth, dependencies.customerEmailChange, dependencies.limiter))
-    .use(createCustomerAccountDeletionModule(config, dependencies.auth, dependencies.customerAccountDeletion, dependencies.limiter))
+    .use(createCustomerProfileModule(config, dependencies.customerAuth, dependencies.customerProfile))
+    .use(createCustomerAddressModule(config, dependencies.customerAuth, dependencies.customerAddresses))
+    .use(createCustomerEmailChangeModule(config, dependencies.customerAuth, dependencies.customerEmailChange, dependencies.limiter))
+    .use(createCustomerAccountDeletionModule(config, dependencies.customerAuth, dependencies.customerAccountDeletion, dependencies.limiter))
     .use(createStaffInvitationModule(
       config,
-      dependencies.auth,
+      dependencies.staffAuth,
       dependencies.staffInvitations,
       dependencies.limiter,
     ))
     .use(createStaffInvitationAcceptanceModule(config, dependencies.staffInvitations, dependencies.limiter))
-    .use(createStaffMfaModule(config, dependencies.auth, dependencies.staffMfa, dependencies.limiter))
-    .use(createStaffSessionModule(config, dependencies.auth, dependencies.staff, dependencies.limiter))
-    .use(createStaffModule(config, dependencies.auth, dependencies.staff, dependencies.limiter))
-    .use(createAuditModule(dependencies.auth, dependencies.audit))
-    .use(createSystemSettingsModule(config, dependencies.auth, dependencies.systemSettings))
+    .use(createStaffMfaModule(config, dependencies.staffAuth, dependencies.staffMfa, dependencies.limiter))
+    .use(createStaffSessionModule(config, dependencies.staffAuth, dependencies.staff, dependencies.limiter))
+    .use(createStaffModule(config, dependencies.staffAuth, dependencies.staff, dependencies.limiter))
+    .use(createAuditModule(dependencies.staffAuth, dependencies.audit))
+    .use(createSystemSettingsModule(config, dependencies.staffAuth, dependencies.systemSettings))
     .use(createStoreProductsModule(dependencies.products))
     .use(new Elysia({ name: 'store-farms-and-catalog-feed' })
       .use(createStoreFarmsModule(dependencies.farms))
       .use(createStoreCatalogFeedModule(config, dependencies.catalogFeed, dependencies.limiter)))
     .use(new Elysia({ name: 'store-announcement-and-consent' })
       .use(createStoreAnnouncementModule(dependencies.storeAnnouncement))
-      .use(createStoreConsentModule(config, dependencies.auth, dependencies.consent, dependencies.limiter)))
+      .use(createStoreConsentModule(config, dependencies.customerAuth, dependencies.consent, dependencies.limiter)))
     .use(new Elysia({ name: 'admin-farms-and-media' })
-      .use(createAdminFarmsModule(config, dependencies.auth, dependencies.farms))
-      .use(createAdminMediaModule(config, dependencies.auth, dependencies.media, dependencies.limiter)))
+      .use(createAdminFarmsModule(config, dependencies.staffAuth, dependencies.farms))
+      .use(createAdminMediaModule(config, dependencies.staffAuth, dependencies.media, dependencies.limiter)))
     .use(new Elysia({ name: 'store-cart-and-discount' })
-      .use(createStoreCartModule(config, dependencies.auth, dependencies.cart, dependencies.limiter, dependencies.discounts))
-      .use(createStoreCartDiscountModule(config, dependencies.auth, dependencies.cart, dependencies.discounts, dependencies.limiter)))
-    .use(createStoreCheckoutModule(config, dependencies.auth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter, dependencies.consent))
-    .use(createStoreOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.limiter))
+      .use(createStoreCartModule(config, dependencies.customerAuth, dependencies.cart, dependencies.limiter, dependencies.discounts))
+      .use(createStoreCartDiscountModule(config, dependencies.customerAuth, dependencies.cart, dependencies.discounts, dependencies.limiter)))
+    .use(createStoreCheckoutModule(config, dependencies.customerAuth, dependencies.quote, dependencies.checkout, dependencies.stripeCheckout, dependencies.limiter, dependencies.consent))
+    .use(createStoreOrdersModule(config, dependencies.customerAuth, dependencies.orders, dependencies.limiter))
     .use(new Elysia({ name: 'admin-orders-and-dashboard' })
-      .use(createAdminOrdersModule(config, dependencies.auth, dependencies.orders, dependencies.stripeRefunds))
-      .use(createAdminDashboardModule(dependencies.auth, dependencies.dashboard))
-      .use(createAdminCustomersModule(dependencies.auth, dependencies.customers)))
+      .use(createAdminOrdersModule(config, dependencies.staffAuth, dependencies.orders, dependencies.stripeRefunds))
+      .use(createAdminDashboardModule(dependencies.staffAuth, dependencies.dashboard))
+      .use(createAdminCustomersModule(dependencies.staffAuth, dependencies.customers)))
     .use(new Elysia({ name: 'admin-checkout-and-receipt-settings' })
-      .use(createAdminCommerceSettingsModule(config, dependencies.auth, dependencies.commerceSettings))
-      .use(createAdminReceiptSettingsModule(config, dependencies.auth, dependencies.receiptSettings)))
+      .use(createAdminCommerceSettingsModule(config, dependencies.staffAuth, dependencies.commerceSettings))
+      .use(createAdminReceiptSettingsModule(config, dependencies.staffAuth, dependencies.receiptSettings)))
     .use(new Elysia({ name: 'admin-announcement-and-tracking' })
-      .use(createAdminStoreAnnouncementModule(config, dependencies.auth, dependencies.storeAnnouncement))
-      .use(createAdminTrackingStatusModule(dependencies.auth, dependencies.trackingStatus))
-      .use(createAdminMarketingModule(config, dependencies.auth, dependencies.marketing, dependencies.limiter))
-      .use(createAdminCatalogFeedModule(dependencies.auth, dependencies.catalogFeed))
-      .use(createAdminDiscountsModule(config, dependencies.auth, dependencies.discounts)))
-    .use(createAdminProductsModule(config, dependencies.auth, dependencies.products))
-    .use(createAdminInventoryModule(config, dependencies.auth, dependencies.inventory))
+      .use(createAdminStoreAnnouncementModule(config, dependencies.staffAuth, dependencies.storeAnnouncement))
+      .use(createAdminTrackingStatusModule(dependencies.staffAuth, dependencies.trackingStatus))
+      .use(createAdminMarketingModule(config, dependencies.staffAuth, dependencies.marketing, dependencies.limiter))
+      .use(createAdminCatalogFeedModule(dependencies.staffAuth, dependencies.catalogFeed))
+      .use(createAdminDiscountsModule(config, dependencies.staffAuth, dependencies.discounts)))
+    .use(createAdminProductsModule(config, dependencies.staffAuth, dependencies.products))
+    .use(createAdminInventoryModule(config, dependencies.staffAuth, dependencies.inventory))
     .use(createSystemModule(dependencies.readiness))
 }
 

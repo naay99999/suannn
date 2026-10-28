@@ -100,7 +100,8 @@ function createTestApp(overrides: Record<string, (...args: never[]) => unknown> 
   const inventory = createInventoryService(overrides)
   const { auth, calls: authCalls } = createAuth()
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     audit: {},
     customerSignup: {},
     customerProfile: {},

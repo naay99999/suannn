@@ -36,7 +36,7 @@ const auth = createAuth(config, database.db, {
   runInBackground(task) {
     backgroundTasks.push(task)
   },
-})
+}, 'staff')
 const now = new Date('2026-09-22T00:00:00.000Z')
 let unlockDatabase: (() => Promise<void>) | undefined
 let nextToken = 0
@@ -159,7 +159,7 @@ describe('staff invitation lifecycle', () => {
     const sessions = await database.db.select().from(session)
       .where(eq(session.userId, createdUser!.id))
 
-    expect(result.headers.get('set-cookie')).toBeTruthy()
+    expect(result.headers.get('set-cookie')).toContain('suannn-staff.session_token=')
     expect(createdUser).toMatchObject({
       accountType: 'staff',
       role: 'support',

@@ -54,7 +54,8 @@ async function createHarness(role = 'owner', allowSync = true, settingsOverride?
   } as unknown as Auth
   const limiterCalls: unknown[] = []
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     marketing,
     limiter: {
       consume: async (input: unknown) => {

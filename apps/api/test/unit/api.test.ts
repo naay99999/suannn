@@ -53,6 +53,7 @@ const database = createDatabase(config.databaseUrl)
 const audit = new AuditService(new AuditRepository(database.db))
 const emailSender = { send: async () => ({ id: 'test-email' }) }
 const auth = createAuth(config, database.db, { emailSender, runInBackground: (task) => void task, audit })
+const staffAuth = createAuth(config, database.db, { emailSender, runInBackground: (task) => void task, audit }, 'staff')
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository())
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
 let databaseIsReady = true
@@ -61,7 +62,8 @@ const cart = new CartService(new CartRepository(database.db, inventoryReadReposi
 const commerceSettings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const storeAnnouncement = new StoreAnnouncementService(new StoreAnnouncementRepository(database.db, audit))
 const app = await createApp(config, {
-  auth,
+  customerAuth: auth,
+  staffAuth,
   audit,
   customerSignup: new CustomerSignupService({
     auth,
@@ -82,7 +84,7 @@ const app = await createApp(config, {
     audit, repository: new CustomerAccountDeletionRepository(database.db), claims,
   }),
   staffInvitations: new StaffInvitationService({
-    auth,
+    auth: staffAuth,
     claims,
     repository: new StaffInvitationRepository(database.db),
     emailSender,
@@ -91,7 +93,7 @@ const app = await createApp(config, {
     audit,
   }),
   staffMfa: new StaffMfaService({
-    auth,
+    auth: staffAuth,
     store: new DatabaseStaffMfaStore(database.db, audit),
   }),
   staff: new StaffService(new StaffRepository(database.db, audit)),
@@ -211,7 +213,7 @@ describe('API routes', () => {
       tags: Array<{ name: string }>
       components: {
         schemas: Record<string, unknown>
-        securitySchemes: Record<string, { type: string, in?: string, name?: string }>
+        securitySchemes: Record<string, { type: string, in?: string, name?: string, description?: string }>
       }
       paths: Record<string, Record<string, {
         summary?: string, description?: string, tags?: string[]
@@ -306,8 +308,19 @@ describe('API routes', () => {
     ])
     expect(specification.paths['/api/v1/auth/sign-in/email'].post.security).toEqual([])
     expect(specification.paths['/api/v1/auth/list-sessions'].get.security).toEqual([{ sessionCookie: [] }])
-    expect(specification.paths['/api/v1/auth/two-factor/verify-totp'].post.security)
+    expect(specification.paths['/api/v1/staff-auth/two-factor/verify-totp'].post.security)
       .toEqual([{ twoFactorChallenge: [] }])
+    expect(specification.paths['/api/v1/auth/two-factor/verify-totp']).toBeUndefined()
+    expect(specification.paths['/api/v1/auth/revoke-sessions']).toBeUndefined()
+    expect(specification.paths['/api/v1/staff-auth/sign-in/email'].post.tags).toEqual(['Sign-in'])
+    expect(specification.paths['/api/v1/staff-auth/get-session'].get.tags).toEqual(['Sessions'])
+    expect(specification.paths['/api/v1/staff-auth/revoke-sessions'].post.security).toEqual([{ sessionCookie: [] }])
+    expect(specification.paths['/api/v1/staff-auth/reset-password'].post.tags).toEqual(['Account Recovery'])
+    expect(specification.paths['/api/v1/staff-auth/request-password-reset']).toBeUndefined()
+    expect(specification.paths['/api/v1/staff-auth/send-verification-email']).toBeUndefined()
+    expect(specification.paths['/api/v1/staff-auth/change-password']).toBeUndefined()
+    expect(specification.components.securitySchemes.sessionCookie.description).toContain('suannn-staff.session_token')
+    expect(specification.components.securitySchemes.twoFactorChallenge).toMatchObject({ name: 'suannn-staff.two_factor' })
 
     const authenticationOperations = Object.entries(specification.paths)
       .filter(([path]) => path.startsWith('/api/v1/auth/'))
@@ -390,7 +403,7 @@ describe('API routes', () => {
     }).content['application/json'].schema
     expect(signInError.properties.code).toBeDefined()
     expect(signInError.properties.message).toBeDefined()
-    const totpBody = (specification.paths['/api/v1/auth/two-factor/verify-totp'].post as {
+    const totpBody = (specification.paths['/api/v1/staff-auth/two-factor/verify-totp'].post as {
       requestBody: { content: { 'application/json': { schema: { properties: Record<string, unknown> } } } }
     }).requestBody
     expect(totpBody.content['application/json'].schema.properties.trustDevice).toBeUndefined()
@@ -399,7 +412,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(143)
+    expect(operations).toHaveLength(149)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

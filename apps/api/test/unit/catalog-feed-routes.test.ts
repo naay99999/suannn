@@ -54,7 +54,8 @@ async function createHarness(feed: AppDependencies['catalogFeed'], role = 'owner
   } as unknown as Auth
   const limiterCalls: unknown[] = []
   const dependencies = {
-    auth,
+    customerAuth: auth,
+    staffAuth: auth,
     catalogFeed: feed,
     limiter: {
       consume: async (input: unknown) => {

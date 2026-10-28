@@ -117,9 +117,21 @@ bun --filter api auth:bootstrap-owner -- owner@example.com
 bun --filter api auth:recover-owner-mfa -- <owner-user-id>
 ```
 
-Customers call `POST /api/v1/auth/sign-up`, then sign in through the allowed Better Auth email endpoint. Staff are invitation-only: accept at `POST /api/v1/auth/staff/invitations/accept`, enroll at `POST /api/v1/auth/staff/onboarding/totp`, and verify at `POST /api/v1/auth/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
+Customers and staff use two separate Better Auth instances over the same tables, so one browser can hold a customer session (storefront) and a staff session (admin) at the same time:
+
+| | Customer instance | Staff instance |
+|---|---|---|
+| Base path | `/api/v1/auth` | `/api/v1/staff-auth` |
+| Session cookie | `better-auth.session_token` | `suannn-staff.session_token` |
+| Two-factor challenge cookie | — | `suannn-staff.two_factor` |
+| Read by | `/api/v1/auth/*`, `/api/v1/customer/*`, `/api/v1/store/*` (cart, checkout, orders, consent) | `/api/v1/staff-auth/*`, `/api/v1/auth/staff/*`, `/api/v1/staff/*`, `/api/v1/admin/*`, `/api/v1/audit/*`, `/api/v1/settings/*` |
+
+HTTPS deployments add the `__Secure-` prefix to each cookie name. Each instance accepts only its own account type: signing in with the other type returns `401 INVALID_EMAIL_OR_PASSWORD`, and a session of the other type reads as no session. A staff cookie on a store route is therefore a guest, and a customer cookie on an admin route gets 401. Signing out of one surface never ends the other session. The two instances keep separate Better Auth rate-limit buckets.
+
+Customers call `POST /api/v1/auth/sign-up`, then sign in through `POST /api/v1/auth/sign-in/email`. Staff sign in through `POST /api/v1/staff-auth/sign-in/email` and complete MFA at `/api/v1/staff-auth/two-factor/verify-totp` or `verify-backup-code`. Staff cannot request a password reset over HTTP: the customer `request-password-reset` sends nothing for a staff email, so a staff member who forgets their password must ask an owner or admin. Staff are invitation-only: accept at `POST /api/v1/auth/staff/invitations/accept`, enroll at `POST /api/v1/auth/staff/onboarding/totp`, and verify at `POST /api/v1/auth/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
 
 Staff self-service authentication routes, including MFA backup-code regeneration and the current staff member's sessions, live under `/api/v1/auth/staff/`. Administrative operations on other staff members and invitations remain under `/api/v1/staff/`.
+Invitation acceptance sets the staff session cookie (`suannn-staff.session_token`). The `bootstrap-owner` and `recover-owner-mfa` CLIs use the staff instance.
 The former `/api/v1/staff/invitations/accept`, `/api/v1/staff/onboarding*`, `/api/v1/staff/mfa/backup-codes/regenerate`, and `/api/v1/staff/sessions*` self-service paths are removed; clients must use the new paths.
 
 Email delivery is best-effort in V1; verification/reset can be requested again and invitations can be resent. A durable transactional outbox is deferred.
@@ -133,7 +145,8 @@ Audit records are application-append-only and security mutations write their aud
 - `GET /api/v1` returns the API welcome response.
 - `GET /api/v1/health` returns `{ "status": "ok" }` for liveness checks.
 - `GET /api/v1/ready` returns `{ "status": "ready" }` only when PostgreSQL is reachable, the commerce-settings row exists, and the current order shipment schema is installed; otherwise it returns 503 with `{ "code": "NOT_READY", "message" }`. Route traffic to a new API version only after it returns 200.
-- `/api/v1/auth/*` exposes only the pinned sign-in, sign-out, recovery, verification, session, and MFA-challenge allowlist. Raw Admin and MFA-enrollment endpoints remain denied.
+- `/api/v1/auth/*` (customer instance) exposes only the pinned sign-in, sign-out, recovery, verification, profile, and session allowlist.
+- `/api/v1/staff-auth/*` (staff instance) exposes only sign-in, sign-out, get-session, revoke-sessions, the MFA challenge (`two-factor/verify-totp`, `two-factor/verify-backup-code`), and `reset-password` for admin-issued links. Raw Admin and MFA-enrollment endpoints remain denied on both.
 
 Errors use `{ "code", "message" }` and never expose internal stack traces to clients.
 
@@ -207,7 +220,7 @@ The API process expires overdue reservations in bounded batches at least once pe
 
 ## Cart, checkout, orders, and commerce settings
 
-Apply the commerce migrations before deploying these endpoints. `COMMERCE_SECRET` is required at startup and must remain stable so guest order links can be verified and regenerated for checkout replays and confirmation delivery. Storefront cart cookies are `HttpOnly`, `SameSite=Lax`, scoped to the cart API, and `Secure` in production. Credentialed CORS and browser writes must use the exact configured `STOREFRONT_URL`; admin browser mutations use the exact `ADMIN_URL`. Production `CORS_ORIGINS` must include both exact origins. Send Better Auth cookies with credentials from their corresponding frontend.
+Apply the commerce migrations before deploying these endpoints. `COMMERCE_SECRET` is required at startup and must remain stable so guest order links can be verified and regenerated for checkout replays and confirmation delivery. Storefront cart cookies are `HttpOnly`, `SameSite=Lax`, scoped to the cart API, and `Secure` in production. Credentialed CORS and browser writes must use the exact configured `STOREFRONT_URL`; admin browser mutations use the exact `ADMIN_URL`. Production `CORS_ORIGINS` must include both exact origins. Send Better Auth cookies with credentials from their corresponding frontend: the storefront uses `/api/v1/auth` and admin uses `/api/v1/staff-auth`.
 
 Checkout remains disabled until staff set a shipping fee. Configure the fee with `PUT /api/v1/admin/commerce-settings` while `checkoutEnabled` is false, then make a separate update with `checkoutEnabled: true`. The setting starts with no fee; the API does not assume free shipping. The API will reject checkout quotes while checkout is disabled or the fee is unset.
 

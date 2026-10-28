@@ -1,8 +1,6 @@
 import { authSurfaces, type AuthSurface } from './auth/auth'
 import { isAllowedAuthRequest } from './auth/http-policy'
 
-const authSurfaceList: AuthSurface[] = ['customer', 'staff']
-
 type AuthOperation = Record<string, unknown>
 export type AuthPath = Record<string, AuthOperation>
 
@@ -129,11 +127,11 @@ export function authOpenApiComponents(components: Record<string, unknown>) {
     securitySchemes: {
       sessionCookie: {
         type: 'apiKey', in: 'cookie', name: 'better-auth.session_token',
-        description: 'Better Auth session cookie. HTTPS deployments may use the __Secure- prefix.',
+        description: 'Better Auth session cookie. Customer and store routes (/api/v1/auth, /api/v1/customer, /api/v1/store) read better-auth.session_token; staff and admin routes (/api/v1/staff-auth, /api/v1/auth/staff, /api/v1/staff, /api/v1/admin, audit, settings) read suannn-staff.session_token. Each surface ignores the other cookie. HTTPS deployments may use the __Secure- prefix.',
       },
       twoFactorChallenge: {
-        type: 'apiKey', in: 'cookie', name: 'better-auth.two_factor',
-        description: 'Short-lived Better Auth two-factor challenge cookie. HTTPS deployments may use the __Secure- prefix.',
+        type: 'apiKey', in: 'cookie', name: 'suannn-staff.two_factor',
+        description: 'Short-lived staff two-factor challenge cookie. HTTPS deployments may use the __Secure- prefix.',
       },
       orderAccessToken: {
         type: 'apiKey', in: 'header', name: 'X-Order-Access-Token',
@@ -143,14 +141,15 @@ export function authOpenApiComponents(components: Record<string, unknown>) {
   }
 }
 
-export function documentAuthPaths(paths: Record<string, AuthPath>) {
+export function documentAuthPaths(surface: AuthSurface, paths: Record<string, AuthPath>) {
+  const { basePath } = authSurfaces[surface]
+
   return Object.fromEntries(Object.entries(paths).flatMap(([path, operations]) => {
     const allowed = Object.fromEntries(Object.entries(operations).flatMap(([method, operation]) => {
-      // Union of both surfaces under the customer base path until the staff instance is mounted.
-      const allowedOnAnySurface = authSurfaceList.some((surface) => isAllowedAuthRequest(new Request(
-        `http://localhost${authSurfaces[surface].basePath}${path}`, { method: method.toUpperCase() },
-      ), surface))
-      if (!('responses' in operation) || !allowedOnAnySurface) return []
+      const reachable = isAllowedAuthRequest(new Request(
+        `http://localhost${basePath}${path}`, { method: method.toUpperCase() },
+      ), surface)
+      if (!('responses' in operation) || !reachable) return []
 
       const documentation = authDocumentation[`${method.toUpperCase()} ${path}`]
       if (!documentation) throw new Error(`Missing OpenAPI metadata for ${method.toUpperCase()} ${path}`)
@@ -178,6 +177,6 @@ export function documentAuthPaths(paths: Record<string, AuthPath>) {
 
       return [[method, documented]]
     }))
-    return Object.keys(allowed).length > 0 ? [[`/api/v1/auth${path}`, allowed]] : []
+    return Object.keys(allowed).length > 0 ? [[`${basePath}${path}`, allowed]] : []
   }))
 }

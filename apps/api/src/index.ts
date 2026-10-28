@@ -1,7 +1,7 @@
 import { createApp } from './app'
 import { loadConfig } from './config/env'
 import { createDatabase, createIdentityLockPool } from './database/client'
-import { createAuth } from './plugins/auth/auth'
+import { createAuth, type AuthDependencies } from './plugins/auth/auth'
 import { AuditRepository } from './modules/audit/repository'
 import { AuditService } from './modules/audit/service'
 import { CustomerSignupService } from './modules/auth/customer/service'
@@ -19,6 +19,7 @@ import { IdentityClaimRepository } from './modules/identity-claims/repository'
 import { IdentityClaimService } from './modules/identity-claims/service'
 import { ApplicationRateLimitRepository } from './modules/rate-limit/repository'
 import { RateLimiter } from './modules/rate-limit/service'
+import { createBetterAuthRateLimitStorage } from './modules/rate-limit/better-auth-storage'
 import { StaffInvitationRepository } from './modules/auth/invitations/repository'
 import { StaffInvitationService } from './modules/auth/invitations/service'
 import { StaffRepository } from './modules/auth/staff/repository'
@@ -168,18 +169,24 @@ const adSpendAlerts = new AdSpendAlerts(database.db, configuredAdPlatforms, conf
 const trackingStatus = new TrackingStatusService(new TrackingStatusRepository(database.db), config.tracking, configuredAdPlatforms)
 const staffMfaRequired = () => systemSettingsRepository.getStaffMfaRequired()
 const customerEmailVerificationRequired = () => systemSettingsRepository.getCustomerEmailVerificationRequired()
-const auth = createAuth(config, database.db, {
+const rateLimitRepository = new ApplicationRateLimitRepository(database.db)
+const authDependencies: AuthDependencies = {
   emailSender, runInBackground, enqueueEmailTask: (task) => emailQueue.enqueue(task), audit, staffMfaRequired,
   customerEmailVerificationRequired,
-})
-const rateLimitRepository = new ApplicationRateLimitRepository(database.db)
+}
+const customerAuth = createAuth(config, database.db, authDependencies)
+const staffAuth = createAuth(config, database.db, {
+  ...authDependencies,
+  rateLimitStorage: createBetterAuthRateLimitStorage(rateLimitRepository, 'staff-auth'),
+}, 'staff')
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
 const limiter = new RateLimiter(rateLimitRepository)
 const app = await createApp(config, {
-  auth,
+  customerAuth,
+  staffAuth,
   audit,
   customerSignup: new CustomerSignupService({
-    auth, claims, limiter, audit, requireTrustedClientIp: config.requireTrustedClientIp,
+    auth: customerAuth, claims, limiter, audit, requireTrustedClientIp: config.requireTrustedClientIp,
     emailVerificationRequired: customerEmailVerificationRequired,
     verificationCallbackUrl: new URL('/sign-in?verified=1', config.storefrontUrl).toString(),
   }),
@@ -199,7 +206,7 @@ const app = await createApp(config, {
     claims,
   }),
   staffInvitations: new StaffInvitationService({
-    auth,
+    auth: staffAuth,
     claims,
     repository: new StaffInvitationRepository(database.db),
     emailSender,
@@ -209,7 +216,7 @@ const app = await createApp(config, {
     staffMfaRequired,
   }),
   staffMfa: new StaffMfaService({
-    auth,
+    auth: staffAuth,
     store: new DatabaseStaffMfaStore(database.db, audit, staffMfaRequired),
     emailSender,
     runInBackground: (task) => emailQueue.enqueue(task),

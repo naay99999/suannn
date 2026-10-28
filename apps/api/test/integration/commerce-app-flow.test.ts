@@ -58,12 +58,14 @@ const database = createTestDatabase()
 const config = loadConfig({ ...testEnv, DATABASE_URL: database.url })
 const audit = new AuditService(new AuditRepository(database.db))
 const emailSender = { send: async () => ({ id: 'flow-test-email' }) }
-const auth = createAuth(config, database.db, {
+const authDependencies = {
   emailSender,
-  runInBackground: (task) => void task.catch(() => undefined),
+  runInBackground: (task: Promise<unknown>) => void task.catch(() => undefined),
   audit,
   staffMfaRequired: async () => false,
-})
+}
+const auth = createAuth(config, database.db, authDependencies)
+const staffAuth = createAuth(config, database.db, authDependencies, 'staff')
 const identityLockPool = createIdentityLockPool(database.url)
 const claims = new IdentityClaimService(database.db, new IdentityClaimRepository(), () => new Date(), identityLockPool)
 const limiter = new RateLimiter(new ApplicationRateLimitRepository(database.db))
@@ -71,7 +73,8 @@ const inventoryRead = new InventoryReadRepository(database.db)
 const cart = new CartService(new CartRepository(database.db, inventoryRead, new MediaUrls(null)))
 const settings = new CommerceSettingsService(new CommerceSettingsRepository(database.db, audit))
 const app = await createApp(config, {
-  auth,
+  customerAuth: auth,
+  staffAuth,
   audit,
   customerSignup: new CustomerSignupService({ auth, claims, limiter, audit }),
   customerProfile: new CustomerProfileService(new CustomerProfileRepository(database.db)),
@@ -84,11 +87,11 @@ const app = await createApp(config, {
     audit, repository: new CustomerAccountDeletionRepository(database.db), claims,
   }),
   staffInvitations: new StaffInvitationService({
-    auth, claims, repository: new StaffInvitationRepository(database.db),
+    auth: staffAuth, claims, repository: new StaffInvitationRepository(database.db),
     emailSender, runInBackground: (task) => void task().catch(() => undefined),
     adminUrl: config.adminUrl, audit,
   }),
-  staffMfa: new StaffMfaService({ auth, store: new DatabaseStaffMfaStore(database.db, audit) }),
+  staffMfa: new StaffMfaService({ auth: staffAuth, store: new DatabaseStaffMfaStore(database.db, audit) }),
   staff: new StaffService(new StaffRepository(database.db, audit, async () => false)),
   systemSettings: new SystemSettingsService(new SystemSettingsRepository(database.db, audit)),
   products: new ProductService(new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
@@ -351,10 +354,12 @@ it('composes customer sign-in, saved address, order, staff fulfillment, and COD 
   expect((await request(`/store/orders/${result.order.id}`, { cookie: otherCookie })).status).toBe(403)
   expect(other.user.id).not.toBe(customer.user.id)
 
-  const staffSignIn = await auth.api.signInEmail({
+  const staffSignIn = await staffAuth.api.signInEmail({
     body: { email: 'flow-staff@example.test', password }, returnHeaders: true,
   })
   const staffCookie = (staffSignIn.headers.get('set-cookie') ?? '').split(';')[0]!
+  expect(staffCookie).toContain('suannn-staff.session_token=')
+  expect((await request('/admin/orders?limit=25', { cookie: customerCookie })).status).toBe(401)
   const listed = await request('/admin/orders?limit=25', { cookie: staffCookie })
   expect(listed.status).toBe(200)
   const orderPage = await listed.json() as { items: Array<{ id: string; orderNumber: string }>; nextCursor: string | null }

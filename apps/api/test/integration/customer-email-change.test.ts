@@ -452,7 +452,7 @@ it('reacquires the replacement email lock if the pending request changes while w
   expect((await f.read()).user.email).toBe(replacement)
 })
 
-it('rejects staff sessions at the confirmation route', async () => {
+it('treats a staff session as anonymous at the confirmation route', async () => {
   await database.db.update(user).set({ accountType: 'staff', role: 'support', emailVerified: true, staffActivatedAt: new Date() }).where(eq(user.id, customerId))
   await database.db.update(session).set({ lastActivityAt: new Date(), absoluteExpiresAt: new Date(Date.now() + 3_600_000) }).where(eq(session.userId, customerId))
   try {
@@ -460,8 +460,8 @@ it('rejects staff sessions at the confirmation route', async () => {
       method: 'POST', headers: { cookie, origin: config.storefrontUrl, 'content-type': 'application/json' },
       body: JSON.stringify({ code: '01234567' }),
     }))
-    expect(response.status).toBe(403)
-    expect(await response.json()).toEqual({ code: 'CUSTOMER_ACCOUNT_REQUIRED', message: 'Customer account required' })
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ code: 'AUTHENTICATION_REQUIRED', message: 'Authentication required' })
   } finally {
     await database.db.update(user).set({ accountType: 'customer', role: 'customer', emailVerified: false, staffActivatedAt: null }).where(eq(user.id, customerId))
     await database.db.update(session).set({ lastActivityAt: null, absoluteExpiresAt: null }).where(eq(session.userId, customerId))

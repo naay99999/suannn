@@ -45,7 +45,7 @@ function createHarness(options: { denyRateLimit?: boolean } = {}) {
   }
   const empty = {} as never
   const dependencies = {
-    auth, audit: empty, customerSignup: empty, customerProfile: empty, customerAddresses: empty,
+    customerAuth: auth, staffAuth: auth, audit: empty, customerSignup: empty, customerProfile: empty, customerAddresses: empty,
     customerEmailChange: empty, staffInvitations: empty, staffMfa: empty, staff: empty, systemSettings: empty,
     products: empty, inventory: empty, consent,
     staffMfaRequired: async () => true,

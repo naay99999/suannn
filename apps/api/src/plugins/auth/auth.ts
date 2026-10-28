@@ -38,7 +38,7 @@ export const authSurfaces: Record<AuthSurface, { basePath: string; cookiePrefix:
   staff: { basePath: '/api/v1/staff-auth', cookiePrefix: 'suannn-staff' },
 }
 
-type BetterAuthRateLimitStorage = NonNullable<NonNullable<BetterAuthOptions['rateLimit']>['customStorage']>
+export type BetterAuthRateLimitStorage = NonNullable<NonNullable<BetterAuthOptions['rateLimit']>['customStorage']>
 
 export interface AuthDependencies {
   emailSender: EmailSender
