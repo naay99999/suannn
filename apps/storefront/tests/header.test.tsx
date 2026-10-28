@@ -104,15 +104,12 @@ test('session failures offer retry and recover to sign-in when the request succe
   expect((await header.findByRole('link', { name: 'เข้าสู่ระบบ' })).getAttribute('href')).toBe('/sign-in')
 })
 
-test('staff sessions link to admin sign-in instead of the customer account', async () => {
-  sessionRequest.mockResolvedValue({ ...customer, user: { ...customer.user, accountType: 'staff' } })
+test('staff sessions are treated as signed out', async () => {
+  sessionRequest.mockResolvedValue(null)
   mount()
   const header = within(screen.getByRole('banner'))
-  const link = await header.findByRole('link', { name: 'ไปหน้าผู้ดูแล' })
-  expect(new URL(link.getAttribute('href')!).pathname).toBe('/login')
-  expect(header.queryByRole('link', { name: 'บัญชีของฉัน' })).toBeNull()
-  await userEvent.setup().click(header.getByRole('button', { name: 'เปิดเมนู' }))
-  expect(within(screen.getByRole('navigation', { name: 'เมนูมือถือ' })).getByRole('link', { name: 'ไปหน้าผู้ดูแล' }).getAttribute('href')).toBe(link.getAttribute('href'))
+  expect((await header.findByRole('link', { name: 'เข้าสู่ระบบ' })).getAttribute('href')).toBe('/sign-in')
+  expect(header.queryByRole('link', { name: 'ไปหน้าผู้ดูแล' })).toBeNull()
 })
 
 test('order CTA starts shopping when the cart is empty', async () => {

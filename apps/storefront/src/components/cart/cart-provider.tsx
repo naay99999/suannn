@@ -38,7 +38,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session.isSuccess) return
-    const sessionId = session.data?.user.accountType === 'customer' ? session.data.session.id : null
+    const sessionId = session.data?.session.id ?? null
     if (!sessionId) {
       clearStoreCartQuery(queryClient)
       return
@@ -72,7 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   const mutationError = setMutation.error ?? removeMutation.error
-  const sessionId = session.data?.user.accountType === 'customer' ? session.data.session.id : null
+  const sessionId = session.data?.session.id ?? null
   const error = (sessionId && mergeError?.sessionId === sessionId ? mergeError.message : null)
     ?? (cartQuery.error ? 'โหลดตะกร้าไม่ได้ กรุณาลองอีกครั้ง' : mutationError ? requestMessage(mutationError) : null)
   const notice = sessionId && mergeNotice?.sessionId === sessionId ? mergeNotice.message : null

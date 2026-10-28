@@ -18,8 +18,7 @@ import { CartProvider } from '@/components/cart/cart-provider'
 import { CartTrigger, SideCart } from '@/components/cart/side-cart'
 import { getCartSummary } from '@/lib/cart'
 import { authSessionQuery } from '@/lib/auth-session'
-import { staffSignInUrl } from '@/lib/auth-navigation'
-import type { CustomerSession, StaffSession } from '@/lib/auth-client'
+import type { CustomerSession } from '@/lib/auth-client'
 
 const navigation = [
   { label: 'หน้าแรก', to: '/', end: true },
@@ -55,7 +54,7 @@ function HeaderOrderAction({ className, onNavigate }: { className: string, onNav
 }
 
 function HeaderAccountAction({ session, className, compact = false, onNavigate }: {
-  session: UseQueryResult<CustomerSession | StaffSession | null>
+  session: UseQueryResult<CustomerSession | null>
   className: string
   compact?: boolean
   onNavigate?: () => void
@@ -77,14 +76,6 @@ function HeaderAccountAction({ session, className, compact = false, onNavigate }
       <Button {...variant} className={className} title="ตรวจสอบบัญชีไม่ได้ กดลองอีกครั้ง" aria-label={compact ? 'ตรวจสอบบัญชีอีกครั้ง' : undefined} onClick={() => void session.refetch()}>
         {compact ? <HugeiconsIcon icon={UserIcon} /> : 'ตรวจสอบบัญชีอีกครั้ง'}
       </Button>
-    )
-  }
-
-  if (session.data?.user.accountType === 'staff') {
-    return (
-      <a className={cn(buttonVariants(variant), className)} href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')} aria-label={compact ? 'ไปหน้าผู้ดูแล' : undefined} onClick={onNavigate}>
-        {compact ? <HugeiconsIcon icon={UserIcon} /> : <>ไปหน้าผู้ดูแล <HugeiconsIcon icon={ArrowUpRight01Icon} data-icon="inline-end" /></>}
-      </a>
     )
   }
 

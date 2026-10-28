@@ -7,7 +7,7 @@ import { Button } from '@workspace/ui/components/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/field'
 import { Input } from '@workspace/ui/components/input'
 import { AuthRequestError, sendVerificationEmail, signIn } from '@/lib/auth-client'
-import { safeCustomerReturnPath, staffSignInUrl } from '@/lib/auth-navigation'
+import { safeCustomerReturnPath } from '@/lib/auth-navigation'
 import { authSessionQuery, refreshAuthSession } from '@/lib/auth-session'
 import { mergeCustomerCartOnce } from '@/lib/store-cart'
 import { signInSchema, type SignInValues } from './auth-schemas'
@@ -23,7 +23,6 @@ export function Component() {
   const queryClient = useQueryClient()
   const session = useQuery(authSessionQuery)
   const [requestError, setRequestError] = useState('')
-  const [staffFlow, setStaffFlow] = useState(false)
   const [pending, setPending] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState('')
   const [resendState, setResendState] = useState<'idle' | 'pending' | 'sent' | 'failed'>('idle')
@@ -42,20 +41,17 @@ export function Component() {
   async function submit(values: SignInValues) {
     setPending(true)
     setRequestError('')
-    setStaffFlow(false)
     setUnverifiedEmail('')
     setResendState('idle')
     try {
       const result = await signIn(values.email, values.password)
       if (result === 'challenge') {
-        setRequestError('บัญชีนี้ต้องยืนยันตัวตนสำหรับผู้ดูแลระบบ กรุณาเข้าสู่ระบบผ่านหน้าผู้ดูแล')
-        setStaffFlow(true)
+        setRequestError('เข้าสู่ระบบไม่ได้ กรุณาลองใหม่')
         return
       }
       const next = await refreshAuthSession(queryClient)
-      if (next?.user.accountType !== 'customer') {
-        setRequestError('บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบผ่านหน้าผู้ดูแล')
-        setStaffFlow(true)
+      if (!next) {
+        setRequestError('เข้าสู่ระบบไม่ได้ กรุณาลองใหม่')
         return
       }
       void mergeCustomerCartOnce(next.session.id, queryClient).catch(() => undefined)
@@ -109,7 +105,6 @@ export function Component() {
               {resendState === 'failed' && <p role="alert" className="text-sm text-destructive">ส่งอีเมลยืนยันไม่ได้ กรุณาลองใหม่ภายหลัง</p>}
             </div>
           )}
-          {staffFlow && <a className="text-sm font-semibold text-primary-ink underline underline-offset-4" href={staffSignInUrl(import.meta.env.VITE_ADMIN_URL || 'http://localhost:5184')}>ไปหน้าเข้าสู่ระบบผู้ดูแล</a>}
           <Button type="submit" size="storefront" className="w-full" disabled={pending}><ButtonSpinner show={pending} />{pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}</Button>
         </FieldGroup>
       </form>

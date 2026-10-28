@@ -11,10 +11,9 @@ const session = {
   },
 }
 
-test('distinguishes anonymous, customer and staff sessions', () => {
+test('distinguishes anonymous and customer sessions', () => {
   expect(classifyCustomerSession(null)).toBe('anonymous')
   expect(classifyCustomerSession(session)).toBe('customer')
-  expect(classifyCustomerSession({ ...session, user: { ...session.user, accountType: 'staff' } })).toBe('staff')
 })
 
 test('scopes account query keys by customer identity', () => {

@@ -16,13 +16,11 @@ export interface AuthSession {
     email: string
     emailVerified: boolean
     image: string | null
-    accountType: 'customer' | 'staff'
+    accountType: 'customer'
   }
 }
 
-export type CustomerSession = AuthSession & { user: AuthSession['user'] & { accountType: 'customer' } }
-export type StaffSession = AuthSession & { user: AuthSession['user'] & { accountType: 'staff' } }
-
+export type CustomerSession = AuthSession
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -42,7 +40,8 @@ function responseError(status: number, value: unknown) {
   return new AuthRequestError(status, code, message)
 }
 
-function parseSession(value: unknown): CustomerSession | StaffSession | null {
+// The storefront auth instance only issues customer sessions; a staff account type is treated as signed out.
+function parseSession(value: unknown): CustomerSession | null {
   if (value === null) return null
   if (!isRecord(value) || !isRecord(value.session) || !isRecord(value.user)) {
     throw new AuthRequestError(502, 'INVALID_SESSION_RESPONSE', 'ไม่สามารถตรวจสอบบัญชีได้')
@@ -55,13 +54,14 @@ function parseSession(value: unknown): CustomerSession | StaffSession | null {
     || (user.accountType !== 'customer' && user.accountType !== 'staff')) {
     throw new AuthRequestError(502, 'INVALID_SESSION_RESPONSE', 'ไม่สามารถตรวจสอบบัญชีได้')
   }
+  if (user.accountType === 'staff') return null
   return {
     session: { id: session.id, expiresAt: session.expiresAt },
     user: {
       id: user.id, name: user.name, email: user.email,
-      emailVerified: user.emailVerified, image: user.image, accountType: user.accountType,
+      emailVerified: user.emailVerified, image: user.image, accountType: 'customer',
     },
-  } as CustomerSession | StaffSession
+  }
 }
 
 // Looks up the global fetch per request so wrappers installed after import (tests, instrumentation) apply.
@@ -94,7 +94,7 @@ export function createAuthClient(baseUrl: string, fetcher: Fetcher = (input, ini
   }
 
   return {
-    async getSession(): Promise<CustomerSession | StaffSession | null> {
+    async getSession(): Promise<CustomerSession | null> {
       try {
         return parseSession(await request('get-session'))
       } catch (error) {

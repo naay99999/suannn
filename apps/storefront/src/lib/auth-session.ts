@@ -1,12 +1,11 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
-import { getSession, type CustomerSession, type StaffSession } from './auth-client'
+import { getSession, type CustomerSession } from './auth-client'
 import { storeCartQueryKey } from './store-cart'
 
-export type CustomerAuthState = 'anonymous' | 'customer' | 'staff'
+export type CustomerAuthState = 'anonymous' | 'customer'
 
-export function classifyCustomerSession(session: CustomerSession | StaffSession | null): CustomerAuthState {
-  if (!session) return 'anonymous'
-  return session.user.accountType === 'customer' ? 'customer' : 'staff'
+export function classifyCustomerSession(session: CustomerSession | null): CustomerAuthState {
+  return session ? 'customer' : 'anonymous'
 }
 
 export function accountQueryPrefix(userId: string) {
@@ -24,8 +23,8 @@ export function clearStoreCartQuery(queryClient: QueryClient) {
   void queryClient.resetQueries({ queryKey: storeCartQueryKey })
 }
 
-export function reconcileCustomerQueries(queryClient: QueryClient, session: CustomerSession | StaffSession | null) {
-  const userId = session?.user.accountType === 'customer' ? session.user.id : null
+export function reconcileCustomerQueries(queryClient: QueryClient, session: CustomerSession | null) {
+  const userId = session?.user.id ?? null
   queryClient.removeQueries({
     predicate: query => query.queryKey[0] === 'customer-account' && query.queryKey[1] !== userId,
   })
@@ -39,7 +38,7 @@ export const authSessionQuery = queryOptions({
   retry: false,
 })
 
-export async function refreshAuthSession(queryClient: QueryClient): Promise<CustomerSession | StaffSession | null> {
+export async function refreshAuthSession(queryClient: QueryClient): Promise<CustomerSession | null> {
   await queryClient.invalidateQueries({ queryKey: authSessionQuery.queryKey })
   return queryClient.fetchQuery(authSessionQuery)
 }

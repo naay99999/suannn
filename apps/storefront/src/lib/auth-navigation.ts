@@ -26,7 +26,3 @@ export function safeCustomerReturnPath(value: string | null): string {
   if (parsed.pathname === '/checkout' || /^\/account(?:\/|$)/.test(parsed.pathname)) return `${parsed.pathname}${parsed.search}`
   return '/account'
 }
-
-export function staffSignInUrl(adminUrl: string): string {
-  return new URL('/login', adminUrl).toString()
-}

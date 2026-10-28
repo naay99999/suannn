@@ -38,10 +38,10 @@ describe('storefront auth client', () => {
     expect(await client.getSession()).toBeNull()
   })
 
-  test('retains a staff session for the guard to reject', async () => {
+  test('treats a staff account type as signed out', async () => {
     const staff = { ...customerSession, user: { ...customerSession.user, accountType: 'staff' } }
     const client = createAuthClient('http://localhost:6767', jsonFetch(staff).fetcher)
-    expect((await client.getSession())?.user.accountType).toBe('staff')
+    expect(await client.getSession()).toBeNull()
   })
 
   test('keeps session expiry distinct from a network error', async () => {
