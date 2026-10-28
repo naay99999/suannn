@@ -4,7 +4,7 @@ Production runs on a VPS managed by [Dokploy](https://dokploy.com). GitHub Actio
 
 ```
 push to main/staging ──► CI (.github/workflows/ci.yml), in parallel:
-                           ├─ check        lint, typecheck, unit tests, builds
+                           ├─ check        lint+typecheck, api, storefront, admin tests, builds (parallel)
                            ├─ integration  API integration tests (main and PRs only)
                            └─ images       build api / migrate / web ──► ghcr.io/naay99999/suannn-*:<sha>
                                 │ all passed

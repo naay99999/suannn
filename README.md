@@ -43,7 +43,7 @@ Production runs the same images through Dokploy; see [`docs/deployment.md`](docs
 bun run check
 ```
 
-This runs linting, type checking, all tests, and production frontend builds. `bun run check:fast` skips the API integration tests. CI runs the fast check and the integration suite as parallel jobs for pull requests and `main`; on `staging` it skips the integration suite, which the lefthook pre-push hook (`lefthook.yml`, installed by `bun install`) runs locally instead. See [`docs/deployment.md`](docs/deployment.md).
+This runs linting, type checking, all tests, and production frontend builds. `bun run check:fast` skips the API integration tests. CI runs the same steps as parallel jobs (lint and typecheck, each test suite, builds, and the integration suite) for pull requests and `main`; on `staging` it skips the integration suite, which the lefthook pre-push hook (`lefthook.yml`, installed by `bun install`) runs locally instead. See [`docs/deployment.md`](docs/deployment.md).
 
 ## API configuration
 

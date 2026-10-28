@@ -21,7 +21,22 @@ permissions:
 
 jobs:
   check:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: lint and typecheck
+            run: bun run lint && bun run typecheck
+          - name: api unit tests
+            run: bun --filter api test:unit
+          - name: storefront tests
+            run: bun --filter storefront test
+          - name: admin tests
+            run: bun --filter admin test
+          - name: frontend builds
+            run: bun run build
     env:
       VITE_API_URL: http://localhost:6767
     steps:
@@ -30,7 +45,7 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bun run check:fast
+      - run: ${{ matrix.run }}
 
   integration:
     if: github.ref_name != 'staging'
