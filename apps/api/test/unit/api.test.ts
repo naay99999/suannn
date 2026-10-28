@@ -505,7 +505,7 @@ describe('API routes', () => {
       },
     } as unknown as CustomerSignupService
     const routeApp = new Elysia()
-      .use(createAuthPlugin(auth))
+      .use(createAuthPlugin(auth, 'customer'))
       .use(createCustomerAuthModule(config, service))
     const response = await routeApp.handle(new Request('http://localhost/api/v1/auth/sign-up', {
       method: 'POST',
@@ -616,7 +616,7 @@ describe('API routes', () => {
 
   it('rejects protected routes without a session', async () => {
     const protectedApp = new Elysia()
-      .use(createAuthPlugin(auth))
+      .use(createAuthPlugin(auth, 'customer'))
       .get('/private', () => ({ status: 'ok' }), { auth: true })
     const response = await protectedApp.handle(new Request('http://localhost/private'))
 

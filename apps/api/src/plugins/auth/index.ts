@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
-import { withStaffMfaBypass, type Auth } from './auth'
+import { getCookies } from 'better-auth/cookies'
+import { authSurfaces, withStaffMfaBypass, type Auth, type AuthSurface } from './auth'
 import { normalizeEmail } from '../../shared/email'
 import { authRelativePath, isAllowedAuthRequest } from './http-policy'
 import { hasPermissions, type PermissionRequirement, type Role } from './access-control'
@@ -23,8 +24,48 @@ const defaultDependencies: AuthHttpDependencies = {
 
 type PreparedAuthRequest = { request: Request; bypassStaffMfa: boolean } | Response
 
-function jsonResponse(status: number, body: Record<string, string>) {
+const invalidCredentials = { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' }
+
+// Better Auth's success body for request-password-reset, also used for unknown emails.
+const passwordResetAccepted = {
+  status: true,
+  message: 'If this email exists in our system, check your email for the reset link',
+}
+
+const otherAccountType: Record<AuthSurface, 'customer' | 'staff'> = {
+  customer: 'staff',
+  staff: 'customer',
+}
+
+const staffCookiePrefix = authSurfaces.staff.cookiePrefix.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&')
+const staffTwoFactorCookie = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${staffCookiePrefix}\\.two_factor=`)
+
+function jsonResponse(status: number, body: Record<string, unknown>) {
   return Response.json(body, { status })
+}
+
+type CookieDefinition = ReturnType<typeof getCookies>['sessionToken']
+
+function expiredCookie({ name, attributes }: CookieDefinition) {
+  const parts = [`${name}=`, 'Max-Age=0', `Path=${attributes.path ?? '/'}`]
+  if (attributes.domain) parts.push(`Domain=${attributes.domain}`)
+  if (attributes.httpOnly) parts.push('HttpOnly')
+  if (attributes.secure) parts.push('Secure')
+  if (attributes.sameSite) {
+    const sameSite = String(attributes.sameSite)
+    parts.push(`SameSite=${sameSite.charAt(0).toUpperCase()}${sameSite.slice(1).toLowerCase()}`)
+  }
+  return parts.join('; ')
+}
+
+// Mirrors Better Auth's sign-out response without touching the session table.
+function signedOutResponse(auth: Auth) {
+  const cookies = getCookies(auth.options)
+  const headers = new Headers()
+  for (const cookie of [cookies.sessionToken, cookies.sessionData, cookies.dontRememberToken]) {
+    headers.append('set-cookie', expiredCookie(cookie))
+  }
+  return Response.json({ success: true }, { status: 200, headers })
 }
 
 async function readJsonObject(request: Request): Promise<Record<string, unknown> | Response> {
@@ -45,14 +86,15 @@ async function readJsonObject(request: Request): Promise<Record<string, unknown>
 
 async function prepareAuthRequest(
   auth: Auth,
+  surface: AuthSurface,
   request: Request,
   dependencies: AuthHttpDependencies,
 ): Promise<PreparedAuthRequest> {
-  if (!isAllowedAuthRequest(request)) {
+  if (!isAllowedAuthRequest(request, surface)) {
     return jsonResponse(404, { code: 'NOT_FOUND', message: 'Not found' })
   }
 
-  const path = authRelativePath(request)
+  const path = authRelativePath(request, surface)
   let bypassStaffMfa = false
 
   if (request.method === 'POST' && path === '/sign-in/email') {
@@ -63,20 +105,51 @@ async function prepareAuthRequest(
       const email = normalizeEmail(body.email)
       const state = await dependencies.identityReservations.findState(email)
 
-      if (state === 'pending_staff' || state === 'pending_customer') {
-        return jsonResponse(401, {
-          code: 'INVALID_EMAIL_OR_PASSWORD',
-          message: 'Invalid email or password',
-        })
+      if (state === 'pending_staff' || state === 'pending_customer' || state === otherAccountType[surface]) {
+        return jsonResponse(401, invalidCredentials)
       }
 
-      bypassStaffMfa = state === 'staff' && !await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))
+      bypassStaffMfa = surface === 'staff' && state === 'staff'
+        && !await (dependencies.staffMfaRequired?.() ?? Promise.resolve(true))
 
       return { request: new Request(request, {
         method: request.method,
         body: JSON.stringify({ ...body, email }),
       }), bypassStaffMfa }
     }
+  }
+
+  if (surface === 'customer' && request.method === 'POST' && path === '/request-password-reset') {
+    const body = await readJsonObject(request)
+    if (body instanceof Response) return body
+
+    if (typeof body.email === 'string') {
+      const state = await dependencies.identityReservations.findState(normalizeEmail(body.email))
+
+      // Staff resets are issued only by staff management; answer like an unknown email.
+      if (state === 'staff' || state === 'pending_staff') {
+        return jsonResponse(200, passwordResetAccepted)
+      }
+    }
+  }
+
+  if (request.method === 'POST' && path === '/sign-out') {
+    let current: Awaited<ReturnType<typeof auth.api.getSession>> | undefined
+    try {
+      current = await auth.api.getSession({ headers: request.headers })
+    } catch {
+      // A same-surface session that fails policy validation; Better Auth clears it.
+      current = undefined
+    }
+
+    // Better Auth deletes by token; a token from the other surface must not reach it.
+    if (current === null) {
+      return signedOutResponse(auth)
+    }
+  }
+
+  if (surface !== 'staff') {
+    return { request, bypassStaffMfa }
   }
 
   if (request.method === 'POST' && (
@@ -86,7 +159,7 @@ async function prepareAuthRequest(
     const body = await readJsonObject(request)
     if (body instanceof Response) return body
     const cookie = request.headers.get('cookie') ?? ''
-    const hasChallengeCookie = /(?:^|;\s*)(?:__Secure-)?better-auth\.two_factor=/.test(cookie)
+    const hasChallengeCookie = staffTwoFactorCookie.test(cookie)
     const activeSession = await auth.api.getSession({ headers: request.headers })
 
     if (body.trustDevice === true || !hasChallengeCookie || activeSession) {
@@ -219,12 +292,13 @@ export function createAuthMacros(auth: Auth) {
 
 export function createAuthPlugin(
   auth: Auth,
+  surface: AuthSurface,
   dependencies: AuthHttpDependencies = defaultDependencies,
 ) {
-  return new Elysia({ name: 'better-auth' })
+  return new Elysia({ name: `better-auth-${surface}` })
     .use(createAuthMacros(auth))
-    .all('/api/v1/auth/*', async ({ request }) => {
-      const prepared = await prepareAuthRequest(auth, request, dependencies)
+    .all(`${authSurfaces[surface].basePath}/*`, async ({ request }) => {
+      const prepared = await prepareAuthRequest(auth, surface, request, dependencies)
 
       if (prepared instanceof Response) return prepared
       if (prepared.bypassStaffMfa) {

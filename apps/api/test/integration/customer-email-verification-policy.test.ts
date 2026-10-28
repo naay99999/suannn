@@ -35,7 +35,7 @@ describe('customer email verification switch', () => {
     runInBackground: (task) => void task,
     customerEmailVerificationRequired: () => settings.getCustomerEmailVerificationRequired(),
   })
-  const app = new Elysia().use(createAuthPlugin(auth, {
+  const app = new Elysia().use(createAuthPlugin(auth, 'customer', {
     identityReservations: { findState: async () => 'customer' },
   }))
 

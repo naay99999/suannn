@@ -55,7 +55,7 @@ describe('staff MFA enforcement switch', () => {
       })
     }
 
-    const app = new Elysia().use(createAuthPlugin(auth, {
+    const app = new Elysia().use(createAuthPlugin(auth, 'customer', {
       identityReservations: {
         findState: async (email) => email.includes('staff') ? 'staff' : 'customer',
       },

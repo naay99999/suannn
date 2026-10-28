@@ -110,7 +110,7 @@ describe('staff session policy', () => {
       api: { getSession: async () => current },
     } as unknown as Auth
     const app = new Elysia()
-      .use(createAuthPlugin(auth))
+      .use(createAuthPlugin(auth, 'customer'))
       .get('/staff', () => ({ ok: true }), { staffAuth: true })
       .get('/notes', () => ({ ok: true }), { permission: { order: ['add-note'] } })
       .get('/refund', () => ({ ok: true }), { permission: { order: ['refund'] } })
@@ -140,7 +140,7 @@ describe('staff session policy', () => {
         api: { getSession: async () => current },
       } as unknown as Auth
       const app = new Elysia()
-        .use(createAuthPlugin(auth))
+        .use(createAuthPlugin(auth, 'customer'))
         .get('/staff', () => ({ ok: true }), { staffAuth: true })
 
       expect((await app.handle(new Request('http://localhost/staff'))).status).toBe(401)
@@ -205,7 +205,7 @@ describe('staff session policy', () => {
         api: { getSession: async () => current },
       } as unknown as Auth
       const app = new Elysia()
-        .use(createAuthPlugin(auth))
+        .use(createAuthPlugin(auth, 'customer'))
         .get('/customer', () => ({ ok: true }), { verifiedCustomer: true })
 
       expect((await app.handle(new Request('http://localhost/customer'))).status)

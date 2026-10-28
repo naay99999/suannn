@@ -137,7 +137,7 @@ export async function createApp(config: AppConfig, dependencies: AppDependencies
     .use(createErrorHandlingPlugin())
     .use(createRequestLoggingPlugin())
     .use(createStripeWebhookModule(dependencies.stripeEvents))
-    .use(createAuthPlugin(dependencies.auth, {
+    .use(createAuthPlugin(dependencies.auth, 'customer', {
       identityReservations: dependencies.identityReservations,
       staffMfaRequired: dependencies.staffMfaRequired,
     }))
