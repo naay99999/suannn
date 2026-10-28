@@ -325,7 +325,10 @@ test('a taken code shows its message once, on the code field only', async () => 
   await waitFor(() => expect(document.getElementById('discount-code-error')?.textContent ?? '').not.toBe(''))
   const message = document.getElementById('discount-code-error')!.textContent!
   expect(screen.getAllByText(message)).toHaveLength(1)
-  expect(screen.queryByRole('alert')).toBeNull()
+  // The code field error is the only alert. queryByRole took over a minute here (computed
+  // styles for every node) and treated that field error as hidden, so query the DOM directly.
+  const alerts = Array.from(document.querySelectorAll('[role="alert"]'))
+  expect(alerts.map((alert) => alert.id)).toEqual(['discount-code-error'])
 })
 
 test('bangkokIsoToInput renders UTC instants as Bangkok wall time', () => {
