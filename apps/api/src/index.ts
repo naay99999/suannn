@@ -222,7 +222,10 @@ const app = await createApp(config, {
     runInBackground: (task) => emailQueue.enqueue(task),
     adminUrl: config.adminUrl,
   }),
-  staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
+  staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired), (email) =>
+    staffAuth.api.requestPasswordReset({
+      body: { email, redirectTo: new URL('/reset-password', config.adminUrl).toString() },
+    }).then(() => undefined)),
   systemSettings,
   products,
   farms,

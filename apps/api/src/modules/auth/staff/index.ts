@@ -103,6 +103,20 @@ export function createStaffModule(
         tags: ['Staff MFA'], security: [{ sessionCookie: [] }],
       },
     })
+    .post('/:id/password-reset', ({ params, staff, user, requestContext }) =>
+      service.requestPasswordReset({ id: user.id, role: staff.role, auditContext: {
+        requestId: requestContext.requestId, ipAddress: requestContext.clientIp, userAgent: requestContext.userAgent,
+      } }, params.id), {
+      permission: { staff: ['reset-password'] },
+      browserMutation: 'admin',
+      applicationRateLimit: { namespace: 'staff-password-reset', limit: 5, windowSeconds: 300 },
+      params: 'http.idParams', response: { 200: 'http.empty', 401: 'http.error', 403: 'http.error', 404: 'http.error', 409: 'http.error', 422: 'http.error', 429: 'http.error' },
+      detail: {
+        summary: 'Send staff password reset link',
+        description: 'Requires staff:reset-password permission. Emails the target staff member a password reset link; completing it revokes their sessions. Admins cannot target owners or themselves.',
+        tags: ['Staff Members'], security: [{ sessionCookie: [] }],
+      },
+    })
 }
 
 export function createStaffSessionModule(

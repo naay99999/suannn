@@ -96,7 +96,7 @@ const app = await createApp(config, {
     auth: staffAuth,
     store: new DatabaseStaffMfaStore(database.db, audit),
   }),
-  staff: new StaffService(new StaffRepository(database.db, audit)),
+  staff: new StaffService(new StaffRepository(database.db, audit), async () => undefined),
   systemSettings: {
     getSecuritySettings: async () => ({ staffMfaRequired: true }),
     setStaffMfaRequired: async (staffMfaRequired: boolean) => ({ staffMfaRequired }),
@@ -369,6 +369,7 @@ describe('API routes', () => {
     expect(specification.paths['/api/v1/staff/onboarding/totp/verify']).toBeUndefined()
     expect(specification.paths['/api/v1/staff/{id}/sessions/revoke']?.post.tags).toEqual(['Staff Sessions'])
     expect(specification.paths['/api/v1/staff/{id}/mfa/reset']?.post.tags).toEqual(['Staff MFA'])
+    expect(specification.paths['/api/v1/staff/{id}/password-reset']?.post.summary).toBe('Send staff password reset link')
     expect(specification.paths['/api/v1/audit/'].get).toMatchObject({
       summary: 'List audit events',
       tags: ['Audit'],
@@ -412,7 +413,7 @@ describe('API routes', () => {
       Object.entries(path).filter(([method]) => ['get', 'post', 'patch', 'put', 'delete'].includes(method))
         .map(([, operation]) => operation))
     const declaredTags = new Set(specification.tags.map(({ name }) => name))
-    expect(operations).toHaveLength(149)
+    expect(operations).toHaveLength(150)
     for (const operation of operations) {
       expect(operation.summary).toBeTruthy()
       expect(operation.description).toBeTruthy()

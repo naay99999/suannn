@@ -92,7 +92,7 @@ const app = await createApp(config, {
     adminUrl: config.adminUrl, audit,
   }),
   staffMfa: new StaffMfaService({ auth: staffAuth, store: new DatabaseStaffMfaStore(database.db, audit) }),
-  staff: new StaffService(new StaffRepository(database.db, audit, async () => false)),
+  staff: new StaffService(new StaffRepository(database.db, audit, async () => false), async () => undefined),
   systemSettings: new SystemSettingsService(new SystemSettingsRepository(database.db, audit)),
   products: new ProductService(new ProductRepository(database.db, audit, inventoryRead, new MediaUrls(null))),
   discounts: new DiscountService(new DiscountRepository(database.db, audit)),

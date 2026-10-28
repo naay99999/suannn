@@ -132,6 +132,16 @@ export class StaffRepository implements StaffRepositoryContract {
     })
   }
 
+  async recordPasswordResetRequest(actor: StaffActor, targetUserId: string) {
+    return this.db.transaction(async (tx) => {
+      const targetRole = await this.lockTargetRole(tx, targetUserId)
+      this.assertActorMayTarget(actor, targetUserId, targetRole)
+      const [target] = await tx.select({ email: user.email }).from(user).where(eq(user.id, targetUserId)).limit(1)
+      await this.audit.record(tx, this.event(actor.id, 'staff.password-reset-requested', targetUserId, {}, actor.auditContext))
+      return { email: target!.email }
+    })
+  }
+
   async listOwnSessions(userId: string, query: { limit: number; cursor?: string }) {
     const cursor = decodeCursor(query.cursor, ['createdAt', 'id'])
     const now = new Date()
@@ -209,7 +219,7 @@ export class StaffRepository implements StaffRepositoryContract {
   private event(
     actorUserId: string,
     action: 'staff.role-changed' | 'staff.suspended' | 'staff.reactivated'
-      | 'staff.sessions-revoked' | 'staff.mfa-reset',
+      | 'staff.sessions-revoked' | 'staff.mfa-reset' | 'staff.password-reset-requested',
     targetId: string,
     metadata: Record<string, unknown>,
     auditContext?: AuditContext,

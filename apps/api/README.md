@@ -115,6 +115,7 @@ bun --filter api db:generate
 bun --filter api db:migrate
 bun --filter api auth:bootstrap-owner -- owner@example.com
 bun --filter api auth:recover-owner-mfa -- <owner-user-id>
+bun --filter api auth:recover-owner-password -- <owner-email>
 ```
 
 Customers and staff use two separate Better Auth instances over the same tables, so one browser can hold a customer session (storefront) and a staff session (admin) at the same time:
@@ -128,7 +129,7 @@ Customers and staff use two separate Better Auth instances over the same tables,
 
 HTTPS deployments add the `__Secure-` prefix to each cookie name. Each instance accepts only its own account type: signing in with the other type returns `401 INVALID_EMAIL_OR_PASSWORD`, and a session of the other type reads as no session. A staff cookie on a store route is therefore a guest, and a customer cookie on an admin route gets 401. Signing out of one surface never ends the other session. The two instances keep separate Better Auth rate-limit buckets.
 
-Customers call `POST /api/v1/auth/sign-up`, then sign in through `POST /api/v1/auth/sign-in/email`. Staff sign in through `POST /api/v1/staff-auth/sign-in/email` and complete MFA at `/api/v1/staff-auth/two-factor/verify-totp` or `verify-backup-code`. Staff cannot request a password reset over HTTP: the customer `request-password-reset` sends nothing for a staff email, so a staff member who forgets their password must ask an owner or admin. Staff are invitation-only: accept at `POST /api/v1/auth/staff/invitations/accept`, enroll at `POST /api/v1/auth/staff/onboarding/totp`, and verify at `POST /api/v1/auth/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
+Customers call `POST /api/v1/auth/sign-up`, then sign in through `POST /api/v1/auth/sign-in/email`. Staff sign in through `POST /api/v1/staff-auth/sign-in/email` and complete MFA at `/api/v1/staff-auth/two-factor/verify-totp` or `verify-backup-code`. Staff cannot request a password reset over HTTP: the customer `request-password-reset` sends nothing for a staff email, so a staff member who forgets their password must ask an owner or admin, who sends a reset link with `POST /api/v1/staff/:id/password-reset` (permission `staff:reset-password`; admins cannot target owners or themselves; audited as `staff.password-reset-requested`). The staff member completes it through `GET /api/v1/staff-auth/reset-password/:token` and `POST /api/v1/staff-auth/reset-password`, which revokes their sessions. If the only owner is locked out, run `bun --filter api auth:recover-owner-password -- <owner-email>` (active owners only; audited with no actor). Staff are invitation-only: accept at `POST /api/v1/auth/staff/invitations/accept`, enroll at `POST /api/v1/auth/staff/onboarding/totp`, and verify at `POST /api/v1/auth/staff/onboarding/totp/verify`. Restricted onboarding sessions cannot use normal staff APIs.
 
 Staff self-service authentication routes, including MFA backup-code regeneration and the current staff member's sessions, live under `/api/v1/auth/staff/`. Administrative operations on other staff members and invitations remain under `/api/v1/staff/`.
 Invitation acceptance sets the staff session cookie (`suannn-staff.session_token`). The `bootstrap-owner` and `recover-owner-mfa` CLIs use the staff instance.

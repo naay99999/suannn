@@ -35,12 +35,16 @@ export interface StaffRepositoryContract {
   setSuspended(actor: StaffActor, targetUserId: string, suspended: boolean, reason?: string): Promise<void>
   revokeSessions(actor: StaffActor, targetUserId: string): Promise<void>
   resetMfa(actor: StaffActor, targetUserId: string): Promise<void>
+  recordPasswordResetRequest(actor: StaffActor, targetUserId: string): Promise<{ email: string }>
   listOwnSessions(userId: string, query: { limit: number; cursor?: string }): Promise<{ items: StaffSession[]; nextCursor: string | null }>
   revokeOwnSession(userId: string, sessionId: string, auditContext?: AuditContext): Promise<void>
 }
 
 export class StaffService {
-  constructor(private readonly repository: StaffRepositoryContract) {}
+  constructor(
+    private readonly repository: StaffRepositoryContract,
+    private readonly sendPasswordReset: (email: string) => Promise<void>,
+  ) {}
 
   list(query: { limit: number; cursor?: string }) {
     return this.repository.list(query)
@@ -74,6 +78,13 @@ export class StaffService {
     if (actor.id === targetUserId) throw new Error('SELF_MFA_RESET')
     await this.assertMayTarget(actor, targetUserId)
     await this.repository.resetMfa(actor, targetUserId)
+  }
+
+  async requestPasswordReset(actor: StaffActor, targetUserId: string) {
+    if (actor.id === targetUserId) throw new Error('SELF_PASSWORD_RESET')
+    await this.assertMayTarget(actor, targetUserId)
+    const { email } = await this.repository.recordPasswordResetRequest(actor, targetUserId)
+    await this.sendPasswordReset(email)
   }
 
   listOwnSessions(userId: string, query: { limit: number; cursor?: string }) {

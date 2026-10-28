@@ -13,6 +13,7 @@ export const auditMetadataKeys = {
   'staff.reactivated': [],
   'staff.sessions-revoked': [],
   'staff.mfa-reset': [],
+  'staff.password-reset-requested': [],
   'staff.mfa-activated': [],
   'staff.backup-codes-regenerated': [],
   'settings.staff-mfa-policy-changed': ['previousRequired', 'required'],

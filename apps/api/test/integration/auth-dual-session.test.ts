@@ -101,7 +101,7 @@ const app = await createApp(config, {
   }),
   staffInvitations,
   staffMfa: new StaffMfaService({ auth: staffAuth, store: new DatabaseStaffMfaStore(database.db, audit, staffMfaRequired) }),
-  staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired)),
+  staff: new StaffService(new StaffRepository(database.db, audit, staffMfaRequired), async () => undefined),
   systemSettings: new SystemSettingsService(systemSettingsRepository),
   products,
   discounts: new DiscountService(new DiscountRepository(database.db, audit)),

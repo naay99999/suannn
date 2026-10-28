@@ -188,6 +188,7 @@ const legacyDomainErrors: Record<string, { status: number; message: string }> = 
   SELF_ROLE_CHANGE: { status: 403, message: 'Cannot change your own role' },
   SELF_SUSPEND: { status: 403, message: 'Cannot suspend yourself' },
   SELF_MFA_RESET: { status: 403, message: 'Cannot reset your own MFA' },
+  SELF_PASSWORD_RESET: { status: 403, message: 'Cannot reset your own password' },
   STAFF_NOT_FOUND: { status: 404, message: 'Staff member not found' },
   SESSION_NOT_FOUND: { status: 404, message: 'Session not found' },
   OWNER_INVARIANT: { status: 409, message: 'At least one active owner is required' },

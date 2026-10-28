@@ -9,7 +9,7 @@ export const permissions = {
   inventory: ['read', 'adjust'],
   order: ['read', 'update-address', 'add-note', 'cancel', 'fulfill', 'refund', 'collect', 'manage-access'],
   customer: ['read'],
-  staff: ['read', 'invite', 'change-role', 'suspend', 'revoke-session', 'reset-mfa'],
+  staff: ['read', 'invite', 'change-role', 'suspend', 'revoke-session', 'reset-mfa', 'reset-password'],
   audit: ['read'],
   settings: ['read', 'update', 'manage-owner'],
   marketing: ['read', 'update'],
