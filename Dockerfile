@@ -34,7 +34,31 @@ ENV VITE_API_URL=$VITE_API_URL VITE_ADMIN_URL=$VITE_ADMIN_URL VITE_SITE_URL=$VIT
 RUN bun --filter storefront build && bun --filter admin build
 
 FROM caddy:2-alpine AS web
-COPY deploy/Caddyfile /etc/caddy/Caddyfile
+# Serves both SPAs; TLS terminates at the ingress (Traefik on Dokploy).
+# try_files falls back to index.html so client-side routes survive a reload.
+COPY <<'EOF' /etc/caddy/Caddyfile
+{
+	auto_https off
+	admin off
+}
+
+(spa) {
+	encode zstd gzip
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	try_files {path} /index.html
+	file_server
+}
+
+:4183 {
+	root * /srv/storefront
+	import spa
+}
+
+:4184 {
+	root * /srv/admin
+	import spa
+}
+EOF
 COPY --from=build-web /app/apps/storefront/dist /srv/storefront
 COPY --from=build-web /app/apps/admin/dist /srv/admin
 EXPOSE 4183 4184
