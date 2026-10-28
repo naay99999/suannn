@@ -142,23 +142,23 @@ function renderReservation(initialEntry: string) {
   return { queryClient, router, ...rendered }
 }
 
+// Fake-timer helpers use only synchronous act. Async act flushes leftover work through
+// timers.setImmediate, which Bun holds until useRealTimers, so on a slow runner the test
+// hung until it timed out. Promises settle outside act; timers and renders flush inside it.
+async function settlePromises() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve()
+}
+
 async function advanceTimers(milliseconds: number) {
-  await act(async () => {
-    jest.advanceTimersByTime(milliseconds)
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
-    jest.advanceTimersByTime(0)
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
-  })
+  act(() => { jest.advanceTimersByTime(milliseconds) })
+  await flushAsyncWork()
 }
 
 async function flushAsyncWork() {
-  await act(async () => {
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
-    jest.advanceTimersByTime(0)
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
-    jest.advanceTimersByTime(0)
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
-  })
+  for (let round = 0; round < 3; round += 1) {
+    await settlePromises()
+    act(() => { jest.advanceTimersByTime(0) })
+  }
 }
 
 function setDocumentVisibility(value: DocumentVisibilityState) {
