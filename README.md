@@ -43,7 +43,7 @@ Production runs the same images through Dokploy; see [`docs/deployment.md`](docs
 bun run check
 ```
 
-This runs linting, type checking, API integration tests, and production frontend builds. GitHub Actions runs the same command for pull requests and pushes to `main`.
+This runs linting, type checking, all tests, and production frontend builds. `bun run check:fast` skips the API integration tests. CI runs the fast check and the integration suite as parallel jobs for pull requests and `main`; on `staging` it skips the integration suite, which the pre-push hook (`bun run hooks:install`) runs locally instead. See [`docs/deployment.md`](docs/deployment.md).
 
 ## API configuration
 

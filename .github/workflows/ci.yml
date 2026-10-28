@@ -1,0 +1,150 @@
+name: CI
+
+# Pull requests and main run the full suite. A push to staging skips the integration
+# suite (the pre-push hook runs it locally) so it deploys sooner.
+# On main and staging the images build alongside the checks under a commit-SHA tag only.
+# After every check passes, deploy moves the branch tag (main or staging) to that commit
+# and asks Dokploy to redeploy. main uses the `production` GitHub environment and
+# staging the `staging` one, so each holds its own URL variables and Dokploy secrets.
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_URL: http://localhost:6767
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run check:fast
+
+  integration:
+    if: github.ref_name != 'staging'
+    runs-on: ubuntu-latest
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/suannn_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: suannn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d suannn_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run test:integration
+
+  images:
+    if: github.event_name != 'pull_request' && contains(fromJSON('["main","staging"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, migrate, web]
+    steps:
+      - name: Require public URL variables
+        if: matrix.target == 'web'
+        env:
+          API_URL: ${{ vars.API_URL }}
+          ADMIN_URL: ${{ vars.ADMIN_URL }}
+          STOREFRONT_URL: ${{ vars.STOREFRONT_URL }}
+        run: |
+          for name in API_URL ADMIN_URL STOREFRONT_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Variable $name is not set; the web image would embed a localhost URL."
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: true
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+            VITE_ADMIN_URL=${{ vars.ADMIN_URL }}
+            VITE_SITE_URL=${{ vars.STOREFRONT_URL }}
+            VITE_POSTHOG_KEY=${{ vars.POSTHOG_KEY }}
+            VITE_POSTHOG_HOST=${{ vars.POSTHOG_HOST }}
+            VITE_META_PIXEL_ID=${{ vars.META_PIXEL_ID }}
+            VITE_TIKTOK_PIXEL_CODE=${{ vars.TIKTOK_PIXEL_CODE }}
+            VITE_GOOGLE_ADS_ID=${{ vars.GOOGLE_ADS_ID }}
+          tags: ghcr.io/${{ github.repository }}-${{ matrix.target }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,scope=${{ matrix.target }},mode=max
+
+  deploy:
+    needs: [check, integration, images]
+    # integration is skipped on staging; every job that ran must have passed.
+    if: >-
+      !cancelled() &&
+      needs.check.result == 'success' &&
+      needs.images.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.integration.result)
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move the branch tag to this commit
+        run: |
+          for target in api migrate web; do
+            image="ghcr.io/${{ github.repository }}-$target"
+            docker buildx imagetools create -t "$image:${{ github.ref_name }}" "$image:${{ github.sha }}"
+          done
+      - name: Trigger Dokploy deploy
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
+            echo "::notice::Dokploy secrets are not set; images were tagged but no deploy was triggered."
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST "${DOKPLOY_URL%/}/api/compose.deploy" \
+            -H "x-api-key: $DOKPLOY_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"

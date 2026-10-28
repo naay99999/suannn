@@ -3,12 +3,15 @@
 Production runs on a VPS managed by [Dokploy](https://dokploy.com). GitHub Actions builds the images; Dokploy pulls them, runs the stack from `compose.prod.yaml`, and terminates TLS with Traefik.
 
 ```
-push to main ──► Quality (lint, typecheck, tests, builds)
-                    │ success
-                    ▼
-                 Release ──► build api / migrate / web images ──► ghcr.io/naay99999/suannn-*
-                    │
-                    ▼ POST /api/compose.deploy
+push to main/staging ──► CI (.github/workflows/ci.yml), in parallel:
+                           ├─ check        lint, typecheck, unit tests, builds
+                           ├─ integration  API integration tests (main and PRs only)
+                           └─ images       build api / migrate / web ──► ghcr.io/naay99999/suannn-*:<sha>
+                                │ all passed
+                                ▼
+                         deploy ──► tag :<sha> as :main or :staging
+                                │
+                                ▼ POST /api/compose.deploy
                  Dokploy ──► Traefik (TLS)
                               ├─ example.com        → web:4183  (storefront)
                               ├─ admin.example.com  → web:4184  (admin)
@@ -34,7 +37,7 @@ Repository **variables** (Settings → Secrets and variables → Actions → Var
 | `ADMIN_URL` | `https://admin.example.com` |
 | `STOREFRONT_URL` | `https://example.com` (canonical URLs, Open Graph, sitemap) |
 
-Release fails if any of these three is missing, so a web image never ships with a localhost URL.
+The image build fails if any of these three is missing, so a web image never ships with a localhost URL.
 
 Optional storefront tracking variables. They are public browser IDs, so variables rather than secrets; leave one unset to disable it:
 
@@ -46,7 +49,7 @@ Optional storefront tracking variables. They are public browser IDs, so variable
 | `TIKTOK_PIXEL_CODE` | `VITE_TIKTOK_PIXEL_CODE` |
 | `GOOGLE_ADS_ID` | `VITE_GOOGLE_ADS_ID` (`AW-…`) |
 
-Repository or `production` environment **secrets**, used to trigger the deploy. Release still pushes images when they are absent:
+Repository or `production` environment **secrets**, used to trigger the deploy. CI still pushes and tags images when they are absent:
 
 | Secret | Value |
 |---|---|
@@ -59,7 +62,7 @@ GHCR packages start private. Either make the three `suannn-*` packages public or
 ### Dokploy
 
 1. Create a **PostgreSQL** database service and configure scheduled backups. Copy its internal connection URL.
-2. Create a **Docker Compose** app from this repository with compose path `compose.prod.yaml`. Leave Dokploy's own auto-deploy off; the Release workflow triggers deploys.
+2. Create a **Docker Compose** app from this repository with compose path `compose.prod.yaml`. Leave Dokploy's own auto-deploy off; the CI workflow triggers deploys.
 3. Set its environment. `.env.example` in the repository root is the full template with every variable `compose.prod.yaml` reads; the essentials are:
 
    ```dotenv
@@ -111,7 +114,7 @@ With `NODE_ENV=production` the API only accepts a restricted `rk_live_` key. Reg
 
 ## Staging
 
-A staging stack is the same `compose.prod.yaml` deployed from the `staging` branch. Release builds `:staging` images under the `staging` GitHub environment (main uses `production`), so put that stack's `API_URL`, `ADMIN_URL`, `STOREFRONT_URL`, and `DOKPLOY_*` values on the `staging` environment in GitHub. In the Dokploy compose app set:
+A staging stack is the same `compose.prod.yaml` deployed from the `staging` branch. CI builds `:staging` images under the `staging` GitHub environment (main uses `production`), so put that stack's `API_URL`, `ADMIN_URL`, `STOREFRONT_URL`, and `DOKPLOY_*` values on the `staging` environment in GitHub. In the Dokploy compose app set:
 
 ```dotenv
 DEPLOY_ENV=staging   # keeps production hardening but requires a Stripe rk_test_ key
@@ -120,8 +123,16 @@ IMAGE_TAG=staging
 
 Use a test-mode Stripe webhook endpoint on the staging API host and its signing secret.
 
+CI skips the integration suite on staging pushes to deploy sooner. Install the pre-push hook once per clone so it runs locally before pushing to `staging` or `main`:
+
+```bash
+bun run hooks:install   # sets core.hooksPath to scripts/git-hooks
+```
+
+The hook uses `TEST_DATABASE_URL`, defaulting to `postgresql://$(whoami)@127.0.0.1:5432/suannn_test`. Skip it once with `git push --no-verify`.
+
 ## Routine deploys
 
-Merge to `main`. Quality runs, Release pushes `:main` and `:<sha>` tags and triggers Dokploy, which pulls the new images, runs `migrate`, then restarts `api` and `web`. Run Release manually from the Actions tab to redeploy without a new commit.
+Merge to `main`. CI runs the full suite while it builds `:<sha>` images; when everything passes it tags them `:main` and triggers Dokploy, which pulls the new images, runs `migrate`, then restarts `api` and `web`. Run CI manually from the Actions tab (on `main` or `staging`) to redeploy without a new commit.
 
 To roll back, set `IMAGE_TAG=<previous sha>` in the Dokploy environment and redeploy. Migrations are forward-only, so roll back only across releases without schema changes.

@@ -17,6 +17,10 @@
     "typecheck": "bun --filter storefront typecheck && bun --filter admin typecheck && bun --filter api typecheck && bun --filter @workspace/ui typecheck",
     "test": "bun --filter api test && bun --filter storefront test && bun --filter admin test",
     "build": "bun --filter storefront build && bun --filter admin build",
-    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+    "test:unit": "bun --filter api test:unit && bun --filter storefront test && bun --filter admin test",
+    "test:integration": "bun --filter api test:integration",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build",
+    "check:fast": "bun run lint && bun run typecheck && bun run test:unit && bun run build",
+    "hooks:install": "git config core.hooksPath scripts/git-hooks"
   }
 }

@@ -10,7 +10,8 @@ Further references: `apps/api/README.md` (env vars, migration order, Stripe, aut
 ## Commands not covered above
 
 ```bash
-bun run check                          # lint + typecheck + all tests + frontend builds (what CI runs)
+bun run check                          # lint + typecheck + all tests + frontend builds
+bun run check:fast                     # same without API integration tests (CI on staging)
 bun --filter api typecheck             # API has no build step; typecheck instead
 bun --filter storefront test           # bun test, preload tests/setup.ts
 bun --filter admin test                # bun test, preload test/setup.ts

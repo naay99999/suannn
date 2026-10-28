@@ -1,5 +1,5 @@
 # Production stack for Dokploy (Docker Compose app type).
-# Images are built and pushed by .github/workflows/release.yml.
+# Images are built and pushed by .github/workflows/ci.yml.
 # Domains and TLS are configured in the Dokploy UI; see docs/deployment.md.
 
 services:
